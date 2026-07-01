@@ -21,6 +21,7 @@ const moneySetupSchema = z.object({
   incomeSources: z.array(incomeSourceSchema).optional().default([]),
   useHouseholdBalance: z.boolean(),
   requiredRecurringIds: z.array(z.string()),
+  hasNoRequiredFixedExpenses: z.boolean().optional().default(false),
   essentialCategoryIds: z.array(z.string()),
   updatedAt: z.string().nullable(),
 });

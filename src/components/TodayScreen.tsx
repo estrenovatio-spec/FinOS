@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/categories";
 import { todayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import { calculateSafeSpending } from "@/lib/safe-spending";
 import {
   hasPartnerBudget,
   partnerDisplayName,
@@ -31,6 +32,15 @@ function remainingDays(periodTo: string): number {
   const end = new Date(`${periodTo}T12:00:00`).getTime();
   if (!Number.isFinite(end)) return 1;
   return Math.max(1, Math.ceil((end - today) / (24 * 60 * 60 * 1000)) + 1);
+}
+
+function dayCountLabel(days: number, locale: "ru" | "en"): string {
+  if (locale === "en") return `${days} ${days === 1 ? "day" : "days"}`;
+  if (days % 10 === 1 && days % 100 !== 11) return `${days} день`;
+  if (days % 10 >= 2 && days % 10 <= 4 && (days % 100 < 12 || days % 100 > 14)) {
+    return `${days} дня`;
+  }
+  return `${days} дн.`;
 }
 
 function compactInsight(
@@ -88,6 +98,7 @@ function isMoneySetupComplete(
   const hasIncomeAmount = setup.expectedIncomeAmount != null && setup.expectedIncomeAmount > 0;
   const hasExpensesLayer =
     setup.requiredRecurringIds.length > 0 ||
+    setup.hasNoRequiredFixedExpenses ||
     setup.essentialCategoryIds.length > 0 ||
     recurringExpenseCount === 0;
 
@@ -102,6 +113,7 @@ export function TodayScreen() {
   const categories = useStore((s) => s.categories);
   const moneySetup = useStore((s) => s.moneySetup);
   const recurringTransactions = useStore((s) => s.recurringTransactions);
+  const categoryBudgets = useStore((s) => s.categoryBudgets);
   const recentTransactions = useFilteredTransactions("all");
   const allViewerTransactions = useViewerMappedTransactions(false);
   const balances = useHouseholdBalances();
@@ -118,6 +130,8 @@ export function TodayScreen() {
   ).length;
   const moneySetupComplete = isMoneySetupComplete(moneySetup, recurringExpenseCount);
   const showHouseholdToggle = hasPartner || household?.mode === "shared";
+  const availableNowForSafeSpending =
+    moneySetup.useHouseholdBalance && showHouseholdToggle ? balances.all : balances.me;
 
   const daysLeft = remainingDays(period.to);
   const periodIncome = totals.me.income + totals.partner.income;
@@ -161,6 +175,78 @@ export function TodayScreen() {
   );
 
   const insight = compactInsight(locale, latestTransaction);
+  const safeSpending = useMemo(
+    () =>
+      calculateSafeSpending({
+        availableNow: availableNowForSafeSpending,
+        moneySetup,
+        recurringTransactions,
+        categoryBudgets,
+        categories,
+        today: todayIsoDate(),
+      }),
+    [
+      availableNowForSafeSpending,
+      categoryBudgets,
+      categories,
+      moneySetup,
+      recurringTransactions,
+    ],
+  );
+  const safeSpendingCopy = useMemo(() => {
+    if (safeSpending.status === "ready") {
+      return {
+        title: locale === "ru" ? "Безопасно сегодня" : "Safe today",
+        amount:
+          safeSpending.safeToday != null
+            ? `${formatMoney(safeSpending.safeToday, locale)} ${locale === "ru" ? "₽" : "RUB"}`
+            : null,
+        note:
+          locale === "ru"
+            ? `До ближайшего дохода: ${dayCountLabel(safeSpending.daysUntilIncome ?? 1, locale)}`
+            : `Until next income: ${dayCountLabel(safeSpending.daysUntilIncome ?? 1, locale)}`,
+        helper:
+          locale === "ru"
+            ? "Учтены обязательные платежи и необходимые категории."
+            : "Required payments and essential categories are included.",
+      };
+    }
+
+    const messageByStatus = {
+      missing_income:
+        locale === "ru"
+          ? "Добавьте дату ближайшего дохода, чтобы посчитать безопасный день."
+          : "Add the next income date to calculate a safe day.",
+      missing_balance:
+        locale === "ru"
+          ? "Недостаточно данных по доступному остатку."
+          : "Not enough data about available balance.",
+      missing_required_expenses:
+        locale === "ru"
+          ? "Отметьте обязательные платежи или подтвердите, что их нет."
+          : "Mark required payments or return to limit setup.",
+      missing_essential_budgets:
+        locale === "ru"
+          ? "Добавьте лимиты на необходимые категории: продукты, транспорт, здоровье."
+          : "Add limits for essential categories: groceries, transport, health.",
+      invalid_period:
+        locale === "ru"
+          ? "Проверьте дату ближайшего дохода."
+          : "Check the next income date.",
+      not_enough_data:
+        locale === "ru"
+          ? "Добавьте финансовую базу, чтобы посчитать безопасный день."
+          : "Add your money setup to calculate a safe day.",
+      ready: "",
+    } as const;
+
+    return {
+      title: locale === "ru" ? "Безопасный день" : "Safe day",
+      amount: null,
+      note: messageByStatus[safeSpending.status],
+      helper: null,
+    };
+  }, [locale, safeSpending]);
   const firstDayInsight = useMemo(() => {
     if (todayCount < 3) return null;
 
@@ -377,33 +463,60 @@ export function TodayScreen() {
       </Card>
 
       <Card className="border-border/20 bg-muted/10 shadow-none">
-        <CardContent className="flex items-center justify-between gap-3 p-2.5">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">
+        <CardContent className="space-y-2 p-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              {safeSpending.status === "ready" ? (
+                <>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {safeSpendingCopy.title}
+                  </p>
+                  {safeSpendingCopy.amount ? (
+                    <p className="text-lg font-semibold tracking-tight text-foreground">
+                      {safeSpendingCopy.amount}
+                    </p>
+                  ) : null}
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    {safeSpendingCopy.note}
+                  </p>
+                  {safeSpendingCopy.helper ? (
+                    <p className="text-[11px] leading-snug text-muted-foreground/80">
+                      {safeSpendingCopy.helper}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+              <p className="text-sm font-medium text-foreground">
+                {moneySetupComplete
+                  ? locale === "ru"
+                    ? "Финансовая база настроена"
+                    : "Money setup saved"
+                  : locale === "ru"
+                    ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
+                    : "Add your income date and required expenses to calculate a safe limit."}
+              </p>
+              {safeSpending.status !== "ready" ? (
+                <p className="text-xs leading-snug text-muted-foreground">
+                  {safeSpendingCopy.note}
+                </p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={moneySetupComplete ? "ghost" : "default"}
+              className="shrink-0"
+              onClick={() => setMoneySetupOpen(true)}
+            >
               {moneySetupComplete
                 ? locale === "ru"
-                  ? "Финансовая база настроена"
-                  : "Money setup saved"
+                  ? "Изменить"
+                  : "Edit"
                 : locale === "ru"
-                  ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
-                  : "Add your income date and required expenses to calculate a safe limit."}
-            </p>
+                  ? "Настроить лимит"
+                  : "Set up limit"}
+            </Button>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant={moneySetupComplete ? "ghost" : "default"}
-            className="shrink-0"
-            onClick={() => setMoneySetupOpen(true)}
-          >
-            {moneySetupComplete
-              ? locale === "ru"
-                ? "Изменить"
-                : "Edit"
-              : locale === "ru"
-                ? "Настроить лимит"
-                : "Set up limit"}
-          </Button>
         </CardContent>
       </Card>
 

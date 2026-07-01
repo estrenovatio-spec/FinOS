@@ -124,6 +124,7 @@ export function MoneySetupDialog({
   const [incomeSources, setIncomeSources] = useState<IncomeSourceDraft[]>([]);
   const [confirmResetIncomeSources, setConfirmResetIncomeSources] = useState(false);
   const [requiredRecurringIds, setRequiredRecurringIds] = useState<string[]>([]);
+  const [hasNoRequiredFixedExpenses, setHasNoRequiredFixedExpenses] = useState(false);
   const [essentialCategoryIds, setEssentialCategoryIds] = useState<string[]>([]);
   const [useHouseholdBalance, setUseHouseholdBalance] = useState(false);
 
@@ -173,6 +174,7 @@ export function MoneySetupDialog({
     setIncomeSources(moneySetup.incomeSources.map(toIncomeSourceDraft));
     setConfirmResetIncomeSources(false);
     setRequiredRecurringIds(moneySetup.requiredRecurringIds);
+    setHasNoRequiredFixedExpenses(moneySetup.hasNoRequiredFixedExpenses);
     setEssentialCategoryIds(moneySetup.essentialCategoryIds);
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
   }, [moneySetup, open]);
@@ -235,7 +237,8 @@ export function MoneySetupDialog({
       nextIncomeDate: nextIncomeDate || null,
       expectedIncomeAmount: parseAmount(expectedIncomeAmount),
       incomeSources: normalizedIncomeSources,
-      requiredRecurringIds,
+      requiredRecurringIds: hasNoRequiredFixedExpenses ? [] : requiredRecurringIds,
+      hasNoRequiredFixedExpenses,
       essentialCategoryIds,
       useHouseholdBalance: showHouseholdToggle ? useHouseholdBalance : false,
     });
@@ -481,8 +484,35 @@ export function MoneySetupDialog({
               </p>
             </div>
 
+            <label className="flex items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={hasNoRequiredFixedExpenses}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHasNoRequiredFixedExpenses(checked);
+                  if (checked) {
+                    setRequiredRecurringIds([]);
+                  }
+                }}
+              />
+              <span>
+                <span className="block font-medium text-foreground">
+                  {locale === "ru"
+                    ? "У меня нет обязательных регулярных платежей"
+                    : "I do not have required recurring payments"}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {locale === "ru"
+                    ? "Если аренды, ипотеки, кредитов и других обязательных списаний нет, можно подтвердить это здесь."
+                    : "If you do not have rent, loans, or other must-pay recurring charges, confirm it here."}
+                </span>
+              </span>
+            </label>
+
             {recurringOptions.length > 0 ? (
-              <div className="space-y-2">
+              <div className={`space-y-2 ${hasNoRequiredFixedExpenses ? "opacity-60" : ""}`}>
                 {recurringOptions.map((item) => (
                   <label
                     key={item.id}
@@ -491,8 +521,12 @@ export function MoneySetupDialog({
                     <input
                       type="checkbox"
                       className="mt-1"
+                      disabled={hasNoRequiredFixedExpenses}
                       checked={requiredRecurringIds.includes(item.id)}
-                      onChange={() => setRequiredRecurringIds((prev) => toggleId(prev, item.id))}
+                      onChange={() => {
+                        setHasNoRequiredFixedExpenses(false);
+                        setRequiredRecurringIds((prev) => toggleId(prev, item.id));
+                      }}
                     />
                     <span className="min-w-0">
                       <span className="block font-medium text-foreground">{item.note}</span>

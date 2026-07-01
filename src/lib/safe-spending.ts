@@ -124,6 +124,7 @@ export function calculateSafeSpending(
     today,
     availableNow: input.availableNow,
     requiredRecurringIds: input.moneySetup.requiredRecurringIds,
+    hasNoRequiredFixedExpenses: input.moneySetup.hasNoRequiredFixedExpenses,
     essentialCategoryIds: input.moneySetup.essentialCategoryIds,
   };
 
@@ -173,7 +174,7 @@ export function calculateSafeSpending(
   }
 
   const requiredIds = new Set(input.moneySetup.requiredRecurringIds);
-  if (requiredIds.size === 0) {
+  if (requiredIds.size === 0 && input.moneySetup.hasNoRequiredFixedExpenses !== true) {
     reasons.push("required_recurring_ids_not_configured");
     return buildResult(base, "missing_required_expenses");
   }

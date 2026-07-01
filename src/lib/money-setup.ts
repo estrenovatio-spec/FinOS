@@ -29,6 +29,7 @@ export interface MoneySetup {
   incomeSources: MoneySetupIncomeSource[];
   useHouseholdBalance: boolean;
   requiredRecurringIds: string[];
+  hasNoRequiredFixedExpenses: boolean;
   essentialCategoryIds: string[];
   updatedAt: string | null;
 }
@@ -40,6 +41,7 @@ export function emptyMoneySetup(): MoneySetup {
     incomeSources: [],
     useHouseholdBalance: false,
     requiredRecurringIds: [],
+    hasNoRequiredFixedExpenses: false,
     essentialCategoryIds: [],
     updatedAt: null,
   };
@@ -121,6 +123,7 @@ export function normalizeMoneySetup(raw: unknown): MoneySetup {
     incomeSources: asIncomeSources(setup.incomeSources),
     useHouseholdBalance: Boolean(setup.useHouseholdBalance),
     requiredRecurringIds: asStringArray(setup.requiredRecurringIds),
+    hasNoRequiredFixedExpenses: Boolean(setup.hasNoRequiredFixedExpenses),
     essentialCategoryIds: asStringArray(setup.essentialCategoryIds),
     updatedAt:
       typeof setup.updatedAt === "string" && setup.updatedAt.trim()
@@ -140,6 +143,8 @@ export function pruneMoneySetupIds(
   return {
     ...setup,
     requiredRecurringIds: setup.requiredRecurringIds.filter((id) => recurringIds.has(id)),
+    hasNoRequiredFixedExpenses:
+      setup.requiredRecurringIds.length > 0 ? false : setup.hasNoRequiredFixedExpenses,
     essentialCategoryIds: setup.essentialCategoryIds.filter((id) => categoryIds.has(id)),
   };
 }
