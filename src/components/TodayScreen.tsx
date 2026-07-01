@@ -6,7 +6,7 @@ import { BalanceQuickEdit } from "@/components/BalanceQuickEdit";
 import { MoneySetupDialog } from "@/components/MoneySetupDialog";
 import { TransactionList } from "@/components/TransactionList";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/categories";
 import { todayIsoDate } from "@/lib/format-date";
@@ -42,6 +42,16 @@ function dayCountLabel(days: number, locale: "ru" | "en"): string {
   }
   return `${days} дн.`;
 }
+
+type TodaySafeSpendingCopy = {
+  title: string;
+  amount: string | null;
+  note: string;
+  helper: string | null;
+  scopeNote: string | null;
+  ctaLabel: string;
+  ctaVariant: ButtonProps["variant"];
+};
 
 function compactInsight(
   locale: "ru" | "en",
@@ -193,7 +203,7 @@ export function TodayScreen() {
       recurringTransactions,
     ],
   );
-  const safeSpendingCopy = useMemo(() => {
+  const safeSpendingCopy = useMemo<TodaySafeSpendingCopy>(() => {
     if (safeSpending.status === "ready") {
       return {
         title: locale === "ru" ? "Безопасно сегодня" : "Safe today",
@@ -209,44 +219,120 @@ export function TodayScreen() {
           locale === "ru"
             ? "Учтены обязательные платежи и необходимые категории."
             : "Required payments and essential categories are included.",
+        scopeNote:
+          moneySetup.useHouseholdBalance && showHouseholdToggle
+            ? locale === "ru"
+              ? "Рассчитано по семейному балансу."
+              : "Calculated from the family balance."
+            : locale === "ru"
+              ? "Рассчитано по личному балансу."
+              : "Calculated from the personal balance.",
+        ctaLabel: moneySetupComplete
+          ? locale === "ru"
+            ? "Изменить"
+            : "Edit"
+          : locale === "ru"
+            ? "Настроить лимит"
+            : "Set up limit",
+        ctaVariant: moneySetupComplete ? "ghost" : "default",
       };
     }
 
-    const messageByStatus = {
+    const copyByStatus = {
       missing_income:
-        locale === "ru"
-          ? "Добавьте дату ближайшего дохода, чтобы посчитать безопасный день."
-          : "Add the next income date to calculate a safe day.",
+        {
+          title: locale === "ru" ? "Безопасный день" : "Safe day",
+          note:
+            locale === "ru"
+              ? "Добавьте дату ближайшего дохода, чтобы посчитать безопасный день."
+              : "Add the next income date to calculate a safe day.",
+          scopeNote: null,
+          ctaLabel: locale === "ru" ? "Настроить лимит" : "Set up limit",
+          ctaVariant: "default",
+        },
       missing_balance:
-        locale === "ru"
-          ? "Недостаточно данных по доступному остатку."
-          : "Not enough data about available balance.",
+        {
+          title: locale === "ru" ? "Безопасный день" : "Safe day",
+          note:
+            locale === "ru"
+              ? "Недостаточно данных по доступному остатку."
+              : "Not enough data about available balance.",
+          scopeNote: null,
+          ctaLabel: moneySetupComplete
+            ? locale === "ru"
+              ? "Изменить"
+              : "Edit"
+            : locale === "ru"
+              ? "Настроить лимит"
+              : "Set up limit",
+          ctaVariant: moneySetupComplete ? "ghost" : "default",
+        },
       missing_required_expenses:
-        locale === "ru"
-          ? "Отметьте обязательные платежи или подтвердите, что их нет."
-          : "Mark required payments or return to limit setup.",
+        {
+          title: locale === "ru" ? "Безопасный день" : "Safe day",
+          note:
+            locale === "ru"
+              ? "Отметьте обязательные платежи или подтвердите, что их нет."
+              : "Mark required payments or return to limit setup.",
+          scopeNote: null,
+          ctaLabel: locale === "ru" ? "Настроить лимит" : "Set up limit",
+          ctaVariant: "default",
+        },
       missing_essential_budgets:
-        locale === "ru"
-          ? "Добавьте лимиты на необходимые категории: продукты, транспорт, здоровье."
-          : "Add limits for essential categories: groceries, transport, health.",
+        {
+          title:
+            locale === "ru"
+              ? "Не хватает лимитов на базовые расходы"
+              : "Missing limits for essential spending",
+          note:
+            locale === "ru"
+              ? "Чтобы посчитать безопасный день, укажите месячные лимиты на необходимые категории: продукты, транспорт, здоровье."
+              : "To calculate a safe day, add monthly limits for essential categories: groceries, transport, health.",
+          scopeNote: null,
+          ctaLabel: locale === "ru" ? "Добавить лимиты" : "Add limits",
+          ctaVariant: "default",
+        },
       invalid_period:
-        locale === "ru"
-          ? "Проверьте дату ближайшего дохода."
-          : "Check the next income date.",
+        {
+          title: locale === "ru" ? "Безопасный день" : "Safe day",
+          note:
+            locale === "ru"
+              ? "Проверьте дату ближайшего дохода."
+              : "Check the next income date.",
+          scopeNote: null,
+          ctaLabel: locale === "ru" ? "Настроить лимит" : "Set up limit",
+          ctaVariant: "default",
+        },
       not_enough_data:
-        locale === "ru"
-          ? "Добавьте финансовую базу, чтобы посчитать безопасный день."
-          : "Add your money setup to calculate a safe day.",
-      ready: "",
+        {
+          title: locale === "ru" ? "Безопасный день" : "Safe day",
+          note:
+            locale === "ru"
+              ? "Добавьте финансовую базу, чтобы посчитать безопасный день."
+              : "Add your money setup to calculate a safe day.",
+          scopeNote: null,
+          ctaLabel: locale === "ru" ? "Настроить лимит" : "Set up limit",
+          ctaVariant: "default",
+        },
+      ready: {
+        title: "",
+        note: "",
+        scopeNote: null,
+        ctaLabel: "",
+        ctaVariant: "default",
+      },
     } as const;
 
     return {
-      title: locale === "ru" ? "Безопасный день" : "Safe day",
+      title: copyByStatus[safeSpending.status].title,
       amount: null,
-      note: messageByStatus[safeSpending.status],
+      note: copyByStatus[safeSpending.status].note,
       helper: null,
+      scopeNote: copyByStatus[safeSpending.status].scopeNote,
+      ctaLabel: copyByStatus[safeSpending.status].ctaLabel,
+      ctaVariant: copyByStatus[safeSpending.status].ctaVariant,
     };
-  }, [locale, safeSpending]);
+  }, [locale, moneySetup.useHouseholdBalance, moneySetupComplete, safeSpending, showHouseholdToggle]);
   const firstDayInsight = useMemo(() => {
     if (todayCount < 3) return null;
 
@@ -484,17 +570,28 @@ export function TodayScreen() {
                       {safeSpendingCopy.helper}
                     </p>
                   ) : null}
+                  {safeSpendingCopy.scopeNote ? (
+                    <p className="text-[11px] leading-snug text-muted-foreground/80">
+                      {safeSpendingCopy.scopeNote}
+                    </p>
+                  ) : null}
                 </>
               ) : null}
-              <p className="text-sm font-medium text-foreground">
-                {moneySetupComplete
-                  ? locale === "ru"
-                    ? "Финансовая база настроена"
-                    : "Money setup saved"
-                  : locale === "ru"
-                    ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
-                    : "Add your income date and required expenses to calculate a safe limit."}
-              </p>
+              {safeSpending.status !== "ready" ? (
+                <p className="text-sm font-medium text-foreground">
+                  {safeSpending.status === "missing_essential_budgets"
+                    ? locale === "ru"
+                      ? "Не хватает лимитов на базовые расходы"
+                      : "Missing limits for essential spending"
+                    : moneySetupComplete
+                    ? locale === "ru"
+                      ? "Финансовая база настроена"
+                      : "Money setup saved"
+                    : locale === "ru"
+                      ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
+                      : "Add your income date and required expenses to calculate a safe limit."}
+                </p>
+              ) : null}
               {safeSpending.status !== "ready" ? (
                 <p className="text-xs leading-snug text-muted-foreground">
                   {safeSpendingCopy.note}
@@ -504,17 +601,11 @@ export function TodayScreen() {
             <Button
               type="button"
               size="sm"
-              variant={moneySetupComplete ? "ghost" : "default"}
+              variant={safeSpendingCopy.ctaVariant}
               className="shrink-0"
               onClick={() => setMoneySetupOpen(true)}
             >
-              {moneySetupComplete
-                ? locale === "ru"
-                  ? "Изменить"
-                  : "Edit"
-                : locale === "ru"
-                  ? "Настроить лимит"
-                  : "Set up limit"}
+              {safeSpendingCopy.ctaLabel}
             </Button>
           </div>
         </CardContent>
