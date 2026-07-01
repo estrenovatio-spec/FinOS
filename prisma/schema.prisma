@@ -1,0 +1,357 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  telegramId      BigInt    @unique
+  firstName       String?
+  username        String?
+  trialGrantedAt              DateTime?
+  subscriptionReminderSentAt  DateTime?
+  educationPaidAt             DateTime?
+  googleSheetsOpenLogged      Boolean   @default(false)
+  referralCode                String?   @unique
+  referredByUserId            String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  referredBy           User?      @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referrals            User[]     @relation("UserReferrals")
+  memberships          HouseholdMember[]
+  subscription         Subscription?
+  payments             Payment[]
+  promoRedemptions     PromoRedemption[]
+  referralsMade        Referral[] @relation("Referrer")
+  referralReceived     Referral?  @relation("Referred")
+  referralActivityDays ReferralActivityDay[]
+  aiAnalysisReports    AiAnalysisReport[]
+  businessLedger       UserBusinessLedger?
+  webLoginTokens       WebLoginToken[]
+}
+
+model WebLoginToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum AiAnalysisKind {
+  weekly
+  monthly
+}
+
+model AiAnalysisReport {
+  id          String         @id @default(cuid())
+  userId      String
+  kind        AiAnalysisKind
+  periodStart String
+  periodEnd   String
+  locale      String         @default("ru")
+  tips        Json
+  fallback    Boolean        @default(false)
+  summaryJson Json?
+  createdAt   DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt(sort: Desc)])
+}
+
+enum ReferralStatus {
+  pending
+  rewarded
+}
+
+model Referral {
+  id                 String         @id @default(cuid())
+  referrerUserId     String
+  referredUserId     String         @unique
+  referrerBonusDays  Int
+  referredBonusDays  Int
+  status             ReferralStatus @default(pending)
+  rewardedAt         DateTime?
+  createdAt          DateTime       @default(now())
+
+  referrer User @relation("Referrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referred User @relation("Referred", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerUserId])
+  @@index([status])
+}
+
+/** Distinct calendar days with at least one expense/income entry (for referral qualify). */
+model ReferralActivityDay {
+  id           String   @id @default(cuid())
+  userId       String
+  activityDate String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activityDate])
+  @@index([userId])
+}
+
+model PromoCode {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  label      String?
+  bonusDays  Int
+  maxUses    Int?
+  usesCount  Int       @default(0)
+  validFrom  DateTime?
+  validUntil DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  redemptions PromoRedemption[]
+}
+
+model PromoRedemption {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  userId      String
+  redeemedAt  DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, userId])
+  @@index([userId])
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  userId           String             @unique
+  status           SubscriptionStatus @default(expired)
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                String    @id @default(cuid())
+  userId            String
+  yookassaPaymentId String    @unique
+  amount            Float
+  currency          String    @default("RUB")
+  status            String    @default("pending")
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum SubscriptionStatus {
+  active
+  expired
+  canceled
+}
+
+model Household {
+  id             String        @id @default(cuid())
+  name           String        @default("Семейный бюджет")
+  inviteCode     String        @unique
+  mode           HouseholdMode @default(SOLO)
+  partnerLabel   String?
+  /** userId → дельта к сумме по операциям («реально в кармане») */
+  balanceOffsets Json          @default("{}")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  members      HouseholdMember[]
+  transactions Transaction[]
+  categories   Category[]
+  savingsGoals SavingsGoal[]
+  categoryBudgets CategoryBudget[]
+  recurringTransactions RecurringTransaction[]
+  vehicles                Vehicle[]
+  vehicleGarageMode       VehicleGarageMode @default(both)
+  vehicleMemberPrefs      Json              @default("{}")
+}
+
+enum VehicleGarageMode {
+  both
+  split
+}
+
+model HouseholdMember {
+  id          String     @id @default(cuid())
+  householdId String
+  userId      String
+  role        MemberRole @default(MEMBER)
+  createdAt   DateTime   @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@index([userId])
+}
+
+model Transaction {
+  id         String   @id
+  householdId String
+  amount     Float
+  type       TxType
+  categoryId String
+  currency   String   @default("RUB")
+  note       String   @default("")
+  date       String
+  owner      String   @default("me")
+  goalId String?
+  goalAmount Float?
+  createdBy  String?
+  confirmed  Boolean  @default(true)
+  recurringId String?
+  odometerKm  Int?
+  fuelLiters  Float?
+  vehicleId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, date])
+}
+
+model Vehicle {
+  id                    String   @id
+  householdId           String
+  name                  String
+  lastServiceOdometerKm Int      @default(0)
+  serviceIntervalKm     Int      @default(10000)
+  currentOdometerKm     Int?
+  serviceAlertsShown    Json     @default("{}")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+}
+
+model Category {
+  householdId String
+  id          String
+  type        TxType
+  labelRu     String
+  labelEn     String
+  keywords    String[] @default([])
+  isSystem    Boolean  @default(true)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@id([householdId, id])
+  @@index([householdId])
+}
+
+enum HouseholdMode {
+  SOLO
+  SHARED
+}
+
+enum MemberRole {
+  OWNER
+  MEMBER
+}
+
+enum TxType {
+  income
+  expense
+}
+
+enum SavingsGoalKind {
+  custom
+  emergency
+}
+
+enum RecurringFrequency {
+  weekly
+  monthly
+  yearly
+}
+
+model SavingsGoal {
+  id              String          @id
+  householdId     String
+  name            String
+  targetAmount    Float
+  savedAmount     Float           @default(0)
+  deadline            String?
+  monthlyContribution Float?
+  kind                SavingsGoalKind @default(custom)
+  emergencyMonths Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, id])
+  @@index([householdId])
+}
+
+model CategoryBudget {
+  id            String   @id @default(cuid())
+  householdId   String
+  categoryId    String
+  monthlyLimit  Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, categoryId])
+  @@index([householdId])
+}
+
+model RecurringTransaction {
+  id          String             @id
+  householdId String
+  amount      Float
+  type        TxType
+  categoryId  String
+  note        String             @default("")
+  owner       String             @default("me")
+  frequency   RecurringFrequency
+  intervalMonths Int?
+  dayOfMonth  Int?
+  nextRunDate String
+  enabled     Boolean            @default(true)
+  skippedDates String[]          @default([])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+}
+
+/** Личные бизнес-данные пользователя (JSON: units, transactions, assets). */
+model UserBusinessLedger {
+  userId    String   @id
+  payload   Json     @default("{}")
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

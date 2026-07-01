@@ -1,0 +1,61 @@
+{
+  "name": "voicebudget",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "dev:clean": "rm -rf .next && next dev",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
+    "db:push": "node scripts/with-env-local.cjs npx prisma db push",
+    "db:backup": "node scripts/with-env-local.cjs node scripts/backup-db.mjs",
+    "env:check": "node scripts/check-env.cjs",
+    "db:setup-sql": "node -e \"console.log('Откройте prisma/setup-tables.sql в Supabase → SQL Editor → Run')\"",
+    "start": "next start",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:preview": "bash scripts/deploy-preview.sh"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@radix-ui/react-dialog": "^1.1.4",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-tabs": "^1.1.2",
+    "@telegram-apps/sdk-react": "^2.0.25",
+    "@vercel/functions": "^2.2.13",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.469.0",
+    "next": "^16.2.7",
+    "ogg-opus-decoder": "^1.7.3",
+    "openai": "^4.77.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.0",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss-animate": "^1.0.7",
+    "wavefile": "^11.0.0",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.21",
+    "eslint-config-prettier": "^9.1.0",
+    "postcss": "^8.4.49",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "prisma": "^6.19.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vercel": "^54.6.1"
+  }
+}

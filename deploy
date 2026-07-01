@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Запуск без глобального npm: bash deploy
+# (файл называется deploy — Vercel CLI иногда путает с папкой; используйте bash deploy)
+exec "$(dirname "$0")/scripts/deploy.sh" "$@"

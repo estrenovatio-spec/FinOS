@@ -1,0 +1,16 @@
+.DS_Store
+.git
+.next
+.node
+.npm-cache
+.vercel-cli-home
+node_modules
+/backups
+*.log
+*.rtf
+.env.local
+.env.local.save
+.env.local.rtf
+.env.vercel.check
+.env.vercel.prod
+tsconfig.tsbuildinfo
