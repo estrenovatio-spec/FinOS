@@ -4,10 +4,21 @@ import { dbUnavailable, forbidden, mapCloudGuardError, unauthorized } from "@/li
 import { requireSession } from "@/lib/api/household-auth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { buildSyncPayload, patchHouseholdMoneySetup } from "@/lib/household/service";
+import { MONEY_SETUP_INCOME_SOURCE_KINDS } from "@/lib/money-setup";
+
+const incomeSourceSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  expectedDate: z.string().nullable(),
+  expectedAmount: z.number().finite().nullable(),
+  kind: z.enum(MONEY_SETUP_INCOME_SOURCE_KINDS),
+  isPrimary: z.boolean().optional(),
+});
 
 const moneySetupSchema = z.object({
   nextIncomeDate: z.string().nullable(),
   expectedIncomeAmount: z.number().finite().nullable(),
+  incomeSources: z.array(incomeSourceSchema).optional().default([]),
   useHouseholdBalance: z.boolean(),
   requiredRecurringIds: z.array(z.string()),
   essentialCategoryIds: z.array(z.string()),
