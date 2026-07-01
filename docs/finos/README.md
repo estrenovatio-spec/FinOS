@@ -112,3 +112,9 @@ FinOS — Financial Operating System.
 Дополнительно читать:
 
 - `docs/finos/07-first-user-onboarding.md`
+
+## RFC по Money Setup и Safe Spending
+
+- `docs/finos/rfc-001-safe-spending-data-model.md`
+- `docs/finos/rfc-002-money-setup-data-model.md`
+- `docs/finos/rfc-003-income-sources-for-safe-spending.md`
