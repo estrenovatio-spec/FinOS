@@ -122,6 +122,7 @@ export function MoneySetupDialog({
   const [expectedIncomeAmount, setExpectedIncomeAmount] = useState("");
   const [showIncomeSources, setShowIncomeSources] = useState(false);
   const [incomeSources, setIncomeSources] = useState<IncomeSourceDraft[]>([]);
+  const [confirmResetIncomeSources, setConfirmResetIncomeSources] = useState(false);
   const [requiredRecurringIds, setRequiredRecurringIds] = useState<string[]>([]);
   const [essentialCategoryIds, setEssentialCategoryIds] = useState<string[]>([]);
   const [useHouseholdBalance, setUseHouseholdBalance] = useState(false);
@@ -170,6 +171,7 @@ export function MoneySetupDialog({
     );
     setShowIncomeSources(moneySetup.incomeSources.length > 0);
     setIncomeSources(moneySetup.incomeSources.map(toIncomeSourceDraft));
+    setConfirmResetIncomeSources(false);
     setRequiredRecurringIds(moneySetup.requiredRecurringIds);
     setEssentialCategoryIds(moneySetup.essentialCategoryIds);
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
@@ -202,6 +204,21 @@ export function MoneySetupDialog({
       if (next.some((item) => item.isPrimary)) return next;
       return next.map((item, index) => ({ ...item, isPrimary: index === 0 }));
     });
+  };
+
+  const requestSingleIncomeMode = () => {
+    if (incomeSources.length === 0) {
+      setShowIncomeSources(false);
+      setConfirmResetIncomeSources(false);
+      return;
+    }
+    setConfirmResetIncomeSources(true);
+  };
+
+  const confirmSingleIncomeMode = () => {
+    setIncomeSources([]);
+    setShowIncomeSources(false);
+    setConfirmResetIncomeSources(false);
   };
 
   const handleSave = () => {
@@ -241,30 +258,34 @@ export function MoneySetupDialog({
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto px-4 py-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground">
-              {locale === "ru" ? "Следующий доход" : "Next income"}
-            </label>
-            <Input
-              type="date"
-              value={nextIncomeDate}
-              onChange={(event) => setNextIncomeDate(event.target.value)}
-            />
-          </div>
+          {!showIncomeSources ? (
+            <>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-foreground">
+                  {locale === "ru" ? "Следующий доход" : "Next income"}
+                </label>
+                <Input
+                  type="date"
+                  value={nextIncomeDate}
+                  onChange={(event) => setNextIncomeDate(event.target.value)}
+                />
+              </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground">
-              {locale === "ru" ? "Примерная сумма дохода" : "Estimated income amount"}
-            </label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              placeholder={locale === "ru" ? "Например, 120000" : "For example, 120000"}
-              value={expectedIncomeAmount}
-              onChange={(event) => setExpectedIncomeAmount(event.target.value)}
-            />
-          </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-foreground">
+                  {locale === "ru" ? "Примерная сумма дохода" : "Estimated income amount"}
+                </label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  placeholder={locale === "ru" ? "Например, 120000" : "For example, 120000"}
+                  value={expectedIncomeAmount}
+                  onChange={(event) => setExpectedIncomeAmount(event.target.value)}
+                />
+              </div>
+            </>
+          ) : null}
 
           <div className="space-y-2">
             {!showIncomeSources ? (
@@ -286,10 +307,55 @@ export function MoneySetupDialog({
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {locale === "ru"
-                      ? "Если доход приходит частями, добавьте их отдельно."
-                      : "Add each payout separately if income arrives in parts."}
+                      ? "Доход приходит несколькими частями. Добавьте ожидаемые поступления отдельно: аванс, зарплата, аренда, подработка."
+                      : "Income arrives in several parts. Add expected payouts separately: advance, salary, rent, freelance."}
                   </p>
                 </div>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto justify-start px-0 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  onClick={requestSingleIncomeMode}
+                >
+                  {locale === "ru" ? "Вернуться к одному доходу" : "Back to single income"}
+                </Button>
+
+                {confirmResetIncomeSources ? (
+                  <div className="space-y-2 rounded-md border border-border/70 bg-background px-3 py-3">
+                    <p className="text-sm font-medium text-foreground">
+                      {locale === "ru"
+                        ? "Вернуться к одному доходу?"
+                        : "Return to single income?"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {locale === "ru"
+                        ? "Сохранённые выплаты будут убраны из расчёта. Вы сможете добавить их заново позже."
+                        : "Saved payouts will be removed from the calculation. You can add them again later."}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => setConfirmResetIncomeSources(false)}
+                      >
+                        {locale === "ru" ? "Отмена" : "Cancel"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="flex-1"
+                        onClick={confirmSingleIncomeMode}
+                      >
+                        {locale === "ru"
+                          ? "Вернуться к одному доходу"
+                          : "Back to single income"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {incomeSources.length > 0 ? (
                   <div className="space-y-3">
