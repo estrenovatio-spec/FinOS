@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PRODUCTION деплой — попадает клиентам (voicebudget.vercel.app + @Fin_BU_bot).
+# PRODUCTION деплой — попадает клиентам текущего Vercel-проекта.
 # Для теста без клиентов используйте: npm run deploy:preview
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +25,10 @@ echo "→ Деплой на Vercel (сборка на сервере, не prebu
 OUT="$(npx vercel deploy --prod --yes 2>&1)"
 echo "$OUT"
 INSPECT="$(echo "$OUT" | sed -n 's/.*Inspect[[:space:]]*\(.*\)/\1/p' | head -1)"
+PRODUCTION_URL="$(echo "$OUT" | sed -n 's/.*Aliased[[:space:]]*\(https:\/\/[^[:space:]]*\).*/\1/p' | tail -1)"
+if [[ -z "${PRODUCTION_URL:-}" ]]; then
+  PRODUCTION_URL="$(echo "$OUT" | sed -n 's/.*Production[[:space:]]*\(https:\/\/[^[:space:]]*\).*/\1/p' | tail -1)"
+fi
 if echo "$OUT" | grep -q 'BLOCKED'; then
   echo ""
   echo "⚠️  Vercel вернул BLOCKED — новая версия НЕ вышла в production."
@@ -33,6 +37,8 @@ fi
 if [[ -n "${INSPECT:-}" ]]; then
   echo ""
   echo "→ Статус: $INSPECT"
-  echo "   Production: https://voicebudget.vercel.app"
-  echo "→ Проверка БД: curl -s https://voicebudget.vercel.app/api/status | grep dbTables"
+  if [[ -n "${PRODUCTION_URL:-}" ]]; then
+    echo "   Production: $PRODUCTION_URL"
+    echo "→ Проверка БД: curl -s ${PRODUCTION_URL}/api/status | grep dbTables"
+  fi
 fi

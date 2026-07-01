@@ -24,10 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   const configured = getPublicSiteUrl();
-  const base =
-    configured !== "https://voicebudget.vercel.app"
-      ? configured
-      : `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+  const base = configured || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
   const webhookUrl = `${base}/api/telegram/webhook`;
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
 

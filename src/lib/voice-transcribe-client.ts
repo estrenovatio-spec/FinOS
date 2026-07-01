@@ -5,7 +5,10 @@ import { cleanTranscript } from "@/lib/transcript-guard";
 type TranscribeError = "stt_not_configured" | "stt_failed";
 
 const STT_MS = 28_000;
-export const VOICE_BROWSER_URL = "https://voicebudget.vercel.app/";
+const DEFAULT_VOICE_BROWSER_URL = "https://fin-os-ashen.vercel.app";
+export const VOICE_BROWSER_URL = `${(
+  process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_VOICE_BROWSER_URL
+).replace(/\/$/, "")}/`;
 
 function extensionForFile(file: File): string {
   const hint = `${file.type} ${file.name}`.toLowerCase();
@@ -101,10 +104,11 @@ export async function copyVoiceBrowserLink(): Promise<boolean> {
 /** В Telegram openLink на свой домен не выходит наружу — intent + копирование ссылки */
 export async function openVoiceInExternalBrowser(): Promise<"chrome_intent" | "copied" | "failed"> {
   const url = VOICE_BROWSER_URL;
+  const host = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   if (/android/i.test(navigator.userAgent)) {
     try {
-      const intent = `intent://voicebudget.vercel.app/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      const intent = `intent://${host}/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
       window.location.href = intent;
       return "chrome_intent";
     } catch {

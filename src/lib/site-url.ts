@@ -1,6 +1,6 @@
 import { envString } from "@/lib/payments/env-flags";
 
-const DEFAULT_SITE_URL = "https://voicebudget.vercel.app";
+const DEFAULT_SITE_URL = "https://fin-os-ashen.vercel.app";
 
 function vercelEnv(): string | undefined {
   return process.env.VERCEL_ENV?.trim();
