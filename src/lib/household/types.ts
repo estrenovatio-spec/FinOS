@@ -1,4 +1,5 @@
 import type { BalanceOffsetsByUser } from "@/lib/balance-offsets";
+import type { MoneySetup } from "@/lib/money-setup";
 import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, RecurringTransaction, SavingsGoal } from "@/types/planning";
 import type { DebtItem } from "@/types/planning";
@@ -24,6 +25,7 @@ export interface SyncPayload {
   categoryBudgets: CategoryBudget[];
   recurringTransactions: RecurringTransaction[];
   debts?: DebtItem[];
+  moneySetup?: MoneySetup;
   /** Корректировки баланса по userId (синхронизация «реально в кармане») */
   balanceOffsets?: BalanceOffsetsByUser;
   vehicles?: import("@/types/vehicle").Vehicle[];

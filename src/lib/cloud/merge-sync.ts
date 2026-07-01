@@ -1,5 +1,6 @@
 import { migrateCategoryId, sanitizeCategories } from "@/lib/categories";
 import type { SyncPayload } from "@/lib/household/types";
+import { normalizeMoneySetup, type MoneySetup } from "@/lib/money-setup";
 import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
 
@@ -230,6 +231,7 @@ export interface MergedSyncResult {
   categoryBudgets: CategoryBudget[];
   recurringTransactions: RecurringTransaction[];
   debts: DebtItem[];
+  moneySetup: MoneySetup;
   localOnlyTransactionIds: string[];
   localOnlyCategories: CategoryDefinition[];
   localOnlyGoalIds: string[];
@@ -243,6 +245,7 @@ export interface PlanningLocalState {
   categoryBudgets: CategoryBudget[];
   recurringTransactions: RecurringTransaction[];
   debts: DebtItem[];
+  moneySetup?: MoneySetup;
 }
 
 export interface PreviouslySyncedPlanning {
@@ -297,6 +300,7 @@ export function mergeSyncPayload(
     deletedRecurringIds,
   );
   const debts = mergeDebts(localPlanning.debts, remote.debts ?? [], lastSyncedAt, deletedDebtIds);
+  const moneySetup = normalizeMoneySetup(remote.moneySetup ?? localPlanning.moneySetup);
 
   const localOnlyTransactionIds = localTransactions
     .map((t) => t.id)
@@ -345,6 +349,7 @@ export function mergeSyncPayload(
     categoryBudgets,
     recurringTransactions,
     debts,
+    moneySetup,
     localOnlyTransactionIds,
     localOnlyCategories,
     localOnlyGoalIds,

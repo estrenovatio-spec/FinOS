@@ -250,6 +250,7 @@ export function ArchiveRestorePanel() {
       categoryBudgets: local.categoryBudgets,
       recurringTransactions: local.recurringTransactions,
       debts: local.debts,
+      moneySetup: local.moneySetup,
       balanceOffsets: {},
       vehicles: local.vehicles,
       vehiclePrefs: local.vehiclePrefs,

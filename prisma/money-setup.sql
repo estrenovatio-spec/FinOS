@@ -1,0 +1,2 @@
+ALTER TABLE "Household"
+ADD COLUMN IF NOT EXISTS "moneySetup" JSONB NOT NULL DEFAULT '{}'::jsonb;

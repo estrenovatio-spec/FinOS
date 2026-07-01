@@ -1,4 +1,5 @@
 import type { HouseholdPublic, SyncPayload } from "@/lib/household/types";
+import type { MoneySetup } from "@/lib/money-setup";
 import type { AccessSummaryPublic, SubscriptionPublic } from "@/lib/payments/types";
 import type { ReferralProfilePublic } from "@/lib/referrals/service";
 import type { CategoryDefinition, Transaction } from "@/types";
@@ -231,6 +232,18 @@ export async function apiPatchBalanceOffset(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ targetUserId, offset }),
+  });
+  return parseJson<{ ok: boolean; sync: SyncPayload }>(res);
+}
+
+export async function apiPatchMoneySetup(token: string, moneySetup: MoneySetup) {
+  const res = await apiFetch("/api/household/money-setup", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ moneySetup }),
   });
   return parseJson<{ ok: boolean; sync: SyncPayload }>(res);
 }

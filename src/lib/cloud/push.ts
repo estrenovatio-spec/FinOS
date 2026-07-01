@@ -8,6 +8,7 @@ import {
   apiDeleteGoal,
   apiDeleteRecurring,
   apiDeleteTransaction,
+  apiPatchMoneySetup,
   apiPatchPartnerLabel,
   apiUpdateTransaction,
   apiUpsertCategory,
@@ -26,6 +27,7 @@ import { decodeUserIdFromHouseholdToken } from "@/lib/cloud/viewer-identity";
 import { hasCloudAuth } from "@/lib/cloud/auth-payload";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useStore } from "@/store/useStore";
+import type { MoneySetup } from "@/lib/money-setup";
 import type { BudgetOwner, CategoryDefinition, Transaction, TxType } from "@/types";
 
 function noteCloudWriteError(message: string): void {
@@ -224,6 +226,18 @@ export async function cloudPushPartnerLabel(name: string | null): Promise<void> 
   if (!t) return;
   try {
     await apiPatchPartnerLabel(t, name);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function cloudPushMoneySetup(setup: MoneySetup): Promise<void> {
+  const t = await resolveWritableToken();
+  if (!t) return;
+  try {
+    const res = await apiPatchMoneySetup(t, setup);
+    applyHouseholdSync(res.sync, t);
+    useCloudStore.getState().touchSync();
   } catch {
     /* ignore */
   }

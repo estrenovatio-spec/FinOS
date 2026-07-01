@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { parseBalanceOffsets } from "@/lib/balance-offsets";
 import { prisma } from "@/lib/db";
 import { isMissingDbObject } from "@/lib/household/db-capabilities";
+import { emptyMoneySetup, normalizeMoneySetup, pruneMoneySetupIds } from "@/lib/money-setup";
 import { defaultVehicleGaragePrefs } from "@/lib/vehicle";
 import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
@@ -61,6 +63,7 @@ function normalizeBackupPayload(raw: unknown): HouseholdBackupPayload | null {
     categoryBudgets: asArray<CategoryBudget>(o.categoryBudgets),
     recurringTransactions: asArray<RecurringTransaction>(o.recurringTransactions),
     debts: asArray<DebtItem>(o.debts),
+    moneySetup: normalizeMoneySetup(o.moneySetup),
     balanceOffsets: parseBalanceOffsets(o.balanceOffsets),
     vehicles: asArray<Vehicle>(o.vehicles),
     vehiclePrefs: (o.vehiclePrefs ?? defaultVehicleGaragePrefs()) as VehicleGaragePrefs,
@@ -85,6 +88,7 @@ function hasMeaningfulHouseholdPayload(payload: HouseholdBackupPayload): boolean
     payload.categoryBudgets.length > 0 ||
     payload.recurringTransactions.length > 0 ||
     payload.debts.length > 0 ||
+    normalizeMoneySetup(payload.moneySetup).updatedAt !== null ||
     Object.keys(payload.balanceOffsets ?? {}).length > 0 ||
     (payload.vehicles?.length ?? 0) > 0
   );
@@ -210,6 +214,7 @@ async function restoreHouseholdFromPayload(
         partnerLabel: payload.household.partnerLabel,
         mode: payload.household.mode === "shared" ? "SHARED" : "SOLO",
         balanceOffsets: payload.balanceOffsets ?? {},
+        moneySetup: (payload.moneySetup ?? emptyMoneySetup()) as unknown as Prisma.InputJsonValue,
       },
     });
   } catch (e) {
@@ -312,6 +317,20 @@ async function restoreHouseholdFromPayload(
         skippedDates: item.skippedDates ?? [],
       },
     }).catch(() => null);
+  }
+
+  const prunedMoneySetup = pruneMoneySetupIds(
+    normalizeMoneySetup(payload.moneySetup),
+    payload.recurringTransactions,
+    payload.categories,
+  );
+  try {
+    await prisma.household.update({
+      where: { id: householdId },
+      data: { moneySetup: prunedMoneySetup as unknown as Prisma.InputJsonValue },
+    });
+  } catch (e) {
+    if (!isMissingDbObject(e)) throw e;
   }
 
   const { upsertDebtForHousehold } = await import("@/lib/household/debts-db");

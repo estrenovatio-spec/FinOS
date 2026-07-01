@@ -53,6 +53,12 @@ import { buildGoalDepositTransaction } from "@/lib/planning/goal-transfer";
 import { normalizeAppCurrency } from "@/lib/app-currency";
 import { roundMoneyUp } from "@/lib/format-money";
 import {
+  emptyMoneySetup,
+  normalizeMoneySetup,
+  pruneMoneySetupIds,
+  type MoneySetup,
+} from "@/lib/money-setup";
+import {
   cloudPushCategory,
   cloudPushCategoryBudget,
   cloudPushCategoryBudgetDelete,
@@ -61,6 +67,7 @@ import {
   cloudPushCategoryDelete,
   cloudPushGoal,
   cloudPushGoalDelete,
+  cloudPushMoneySetup,
   cloudPushRecurring,
   cloudPushRecurringDelete,
   cloudPushPartnerTransferPair,
@@ -168,6 +175,7 @@ interface StoreState {
   categoryBudgets: CategoryBudget[];
   recurringTransactions: RecurringTransaction[];
   debts: DebtItem[];
+  moneySetup: MoneySetup;
   deletedCategoryArchive: {
     id: string;
     deletedAt: string;
@@ -191,6 +199,8 @@ interface StoreState {
   /** Блок «Цели и планирование» свёрнут */
   planningPanelCollapsed: boolean;
   setPlanningPanelCollapsed: (collapsed: boolean) => void;
+  setMoneySetup: (setup: MoneySetup) => void;
+  updateMoneySetup: (patch: Partial<MoneySetup>) => void;
   addTransaction: (
     data: ParsedTransaction,
     transcript?: string,
@@ -505,6 +515,7 @@ export const useStore = create<StoreState>()(
       categoryBudgets: [],
       recurringTransactions: [],
       debts: [],
+      moneySetup: emptyMoneySetup(),
       deletedCategoryArchive: [],
       vehicles: [],
       vehiclePrefs: defaultVehicleGaragePrefs(),
@@ -521,6 +532,26 @@ export const useStore = create<StoreState>()(
       },
       planningPanelCollapsed: false,
       setPlanningPanelCollapsed: (collapsed) => set({ planningPanelCollapsed: collapsed }),
+      setMoneySetup: (setup) => {
+        const pruned = pruneMoneySetupIds(
+          normalizeMoneySetup(setup),
+          get().recurringTransactions,
+          get().categories,
+        );
+        const next: MoneySetup = {
+          ...pruned,
+          updatedAt: new Date().toISOString(),
+        };
+        set({ moneySetup: next });
+        void cloudPushMoneySetup(next);
+      },
+      updateMoneySetup: (patch) => {
+        const merged = {
+          ...get().moneySetup,
+          ...patch,
+        };
+        get().setMoneySetup(merged);
+      },
       cashOffsetMe: 0,
       cashOffsetPartner: 0,
       addTransaction: (data, transcript, opts) => {
@@ -1055,9 +1086,18 @@ export const useStore = create<StoreState>()(
           transactions: state.transactions.map((tx) =>
             tx.categoryId === id ? { ...tx, categoryId: fallback } : tx,
           ),
+          moneySetup: {
+            ...pruneMoneySetupIds(
+              state.moneySetup,
+              state.recurringTransactions,
+              state.categories.filter((c) => c.id !== id),
+            ),
+            updatedAt: new Date().toISOString(),
+          },
         }));
         useCloudStore.getState().removeFromLastSyncedRemoteCategoryIds(id);
         void cloudPushCategoryDelete(id);
+        void cloudPushMoneySetup(get().moneySetup);
         return true;
       },
       restoreArchivedCategory: (archiveId) => {
@@ -1302,9 +1342,18 @@ export const useStore = create<StoreState>()(
       removeRecurring: (id) => {
         set((state) => ({
           recurringTransactions: state.recurringTransactions.filter((r) => r.id !== id),
+          moneySetup: {
+            ...pruneMoneySetupIds(
+              state.moneySetup,
+              state.recurringTransactions.filter((r) => r.id !== id),
+              state.categories,
+            ),
+            updatedAt: new Date().toISOString(),
+          },
         }));
         useCloudStore.getState().markRecurringDeleted(id);
         void cloudPushRecurringDelete(id);
+        void cloudPushMoneySetup(get().moneySetup);
       },
       addDebt: (data) => {
         const id = makeId();
@@ -1496,7 +1545,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: "voicebudget-store",
-      version: 22,
+      version: 23,
       migrate: (persisted, version) => {
         const raw = (persisted ?? {}) as Record<string, unknown>;
         const categories = sanitizeCategories(raw.categories);
@@ -1621,6 +1670,7 @@ export const useStore = create<StoreState>()(
                   priority: d.priority === "high" ? "high" : "normal",
                 }))
             : [],
+          moneySetup: normalizeMoneySetup(raw.moneySetup),
           deletedCategoryArchive: Array.isArray(raw.deletedCategoryArchive)
             ? (raw.deletedCategoryArchive as StoreState["deletedCategoryArchive"])
                 .filter(
@@ -1690,6 +1740,11 @@ export const useStore = create<StoreState>()(
               categoryId: migrateCategoryId(withO.categoryId),
             };
           });
+          state.moneySetup = pruneMoneySetupIds(
+            normalizeMoneySetup(state.moneySetup),
+            state.recurringTransactions ?? [],
+            state.categories ?? [],
+          );
         }
         void import("@/lib/cloud/apply-balance-offsets").then(({ applyBalanceOffsetsFromCloud }) => {
           applyBalanceOffsetsFromCloud();

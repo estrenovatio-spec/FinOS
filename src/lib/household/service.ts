@@ -1,7 +1,13 @@
-import type { HouseholdMode } from "@prisma/client";
+import type { HouseholdMode, Prisma } from "@prisma/client";
 import { normalizeAppCurrency } from "@/lib/app-currency";
 import { getDefaultCategories, getFallbackCategoryId } from "@/lib/categories";
 import { prisma } from "@/lib/db";
+import {
+  emptyMoneySetup,
+  normalizeMoneySetup,
+  pruneMoneySetupIds,
+  type MoneySetup,
+} from "@/lib/money-setup";
 import { assertActiveSubscription, assertHouseholdSubscription } from "@/lib/payments/subscription";
 import { applyGoalMonthlyToGoal } from "@/lib/planning/analytics";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
@@ -149,6 +155,52 @@ async function readHouseholdBalanceOffsets(householdId: string): Promise<Balance
   }
 }
 
+async function readHouseholdMoneySetup(householdId: string): Promise<MoneySetup> {
+  try {
+    const row = await prisma.household.findUnique({
+      where: { id: householdId },
+      select: { moneySetup: true },
+    });
+    return normalizeMoneySetup(row?.moneySetup);
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    try {
+      const rows = await prisma.$queryRaw<{ moneySetup: unknown }[]>`
+        SELECT "moneySetup" FROM "Household" WHERE id = ${householdId} LIMIT 1
+      `;
+      return normalizeMoneySetup(rows[0]?.moneySetup);
+    } catch {
+      return emptyMoneySetup();
+    }
+  }
+}
+
+async function writeHouseholdMoneySetup(householdId: string, setup: MoneySetup): Promise<void> {
+  try {
+    await prisma.household.update({
+      where: { id: householdId },
+      data: { moneySetup: setup as unknown as Prisma.InputJsonValue },
+    });
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    await prisma.$executeRaw`
+      UPDATE "Household"
+      SET "moneySetup" = ${JSON.stringify(setup)}::jsonb
+      WHERE id = ${householdId}
+    `;
+  }
+}
+
+function withMoneySetupUpdatedAt(
+  setup: MoneySetup,
+  updatedAt: string | null = new Date().toISOString(),
+): MoneySetup {
+  return {
+    ...setup,
+    updatedAt,
+  };
+}
+
 export async function patchHouseholdBalanceOffset(
   userId: string,
   householdId: string,
@@ -192,6 +244,26 @@ export async function saveVehicleGarageForHousehold(
 ) {
   await assertMember(userId, householdId);
   return saveVehicleGarage(householdId, vehicles, vehiclePrefs);
+}
+
+export async function patchHouseholdMoneySetup(
+  userId: string,
+  householdId: string,
+  setup: MoneySetup,
+): Promise<MoneySetup> {
+  await assertMember(userId, householdId);
+  const [planning, categories] = await Promise.all([
+    fetchPlanningForHousehold(householdId),
+    prisma.category.findMany({ where: { householdId } }).then((rows) => rows.map(dbCategoryToApp)),
+  ]);
+  const pruned = pruneMoneySetupIds(
+    normalizeMoneySetup(setup),
+    planning.recurringTransactions,
+    categories,
+  );
+  const next = withMoneySetupUpdatedAt(pruned);
+  await writeHouseholdMoneySetup(householdId, next);
+  return next;
 }
 
 async function uniqueInviteCode(): Promise<string> {
@@ -402,10 +474,45 @@ export async function buildSyncPayload(
 ): Promise<SyncPayload> {
   await refreshHouseholdCategories(householdId);
 
-  const household = await prisma.household.findUniqueOrThrow({
-    where: { id: householdId },
-    include: { members: true },
-  });
+  let household:
+    | {
+        id: string;
+        name: string;
+        mode: HouseholdMode;
+        inviteCode: string;
+        partnerLabel: string | null;
+        members: { userId: string }[];
+      }
+    | null = null;
+
+  try {
+    household = await prisma.household.findUniqueOrThrow({
+      where: { id: householdId },
+      include: { members: { select: { userId: true } } },
+    });
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    const rows = await prisma.$queryRaw<
+      {
+        id: string;
+        name: string;
+        mode: HouseholdMode;
+        inviteCode: string;
+        partnerLabel: string | null;
+      }[]
+    >`
+      SELECT id, name, mode, "inviteCode", "partnerLabel"
+      FROM "Household"
+      WHERE id = ${householdId}
+      LIMIT 1
+    `;
+    if (!rows[0]) throw err;
+    const members = await prisma.householdMember.findMany({
+      where: { householdId },
+      select: { userId: true },
+    });
+    household = { ...rows[0], members };
+  }
 
   const [transactions, categories, planning, debts, garage] = await Promise.all([
     fetchTransactionsForHousehold(householdId),
@@ -416,13 +523,24 @@ export async function buildSyncPayload(
   ]);
 
   const balanceOffsets = await readHouseholdBalanceOffsets(householdId);
+  const normalizedCategories = categories.map(dbCategoryToApp);
+  const rawMoneySetup = await readHouseholdMoneySetup(householdId);
+  const moneySetup = pruneMoneySetupIds(
+    normalizeMoneySetup(rawMoneySetup),
+    planning.recurringTransactions,
+    normalizedCategories,
+  );
+  if (JSON.stringify(moneySetup) !== JSON.stringify(rawMoneySetup)) {
+    await writeHouseholdMoneySetup(householdId, moneySetup);
+  }
 
   return {
     household: toPublicHousehold(household, household.members.length),
     memberUserIds: household.members.map((m) => m.userId),
     ...(viewerUserId ? { viewerUserId } : {}),
     transactions,
-    categories: categories.map(dbCategoryToApp),
+    categories: normalizedCategories,
+    moneySetup,
     balanceOffsets,
     vehicles: garage.vehicles,
     vehiclePrefs: garage.vehiclePrefs,
@@ -576,6 +694,20 @@ export async function importLocalSnapshot(
       const { recordActivityAndTryQualify } = await import("@/lib/referrals/qualify");
       await recordActivityAndTryQualify(userId, tx.date);
     }
+  }
+
+  const [nextPlanning, nextCategories, currentMoneySetup] = await Promise.all([
+    fetchPlanningForHousehold(householdId),
+    prisma.category.findMany({ where: { householdId } }).then((rows) => rows.map(dbCategoryToApp)),
+    readHouseholdMoneySetup(householdId),
+  ]);
+  const prunedMoneySetup = pruneMoneySetupIds(
+    currentMoneySetup,
+    nextPlanning.recurringTransactions,
+    nextCategories,
+  );
+  if (JSON.stringify(prunedMoneySetup) !== JSON.stringify(currentMoneySetup)) {
+    await writeHouseholdMoneySetup(householdId, prunedMoneySetup);
   }
 
   return buildSyncPayload(householdId, userId);

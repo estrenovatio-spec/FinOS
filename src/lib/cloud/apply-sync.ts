@@ -1,6 +1,7 @@
 import { defaultVehicleGaragePrefs, resolveRemoteGarage } from "@/lib/vehicle";
 import { applyGoalMonthlyToGoal } from "@/lib/planning/analytics";
 import { mergeSyncPayload } from "@/lib/cloud/merge-sync";
+import { emptyMoneySetup, normalizeMoneySetup, pruneMoneySetupIds } from "@/lib/money-setup";
 import {
   cloudPushCategory,
   cloudPushCategoryBudget,
@@ -22,6 +23,7 @@ function emptyPlanningDefaults(sync: SyncPayload): SyncPayload {
     categoryBudgets: sync.categoryBudgets ?? [],
     recurringTransactions: sync.recurringTransactions ?? [],
     debts: sync.debts ?? [],
+    moneySetup: sync.moneySetup ?? emptyMoneySetup(),
   };
 }
 
@@ -59,6 +61,11 @@ export function applyHouseholdSync(
     local.vehicles,
     local.vehiclePrefs ?? defaultVehicleGaragePrefs(),
   );
+  const prunedMoneySetup = pruneMoneySetupIds(
+    normalizeMoneySetup(remote.moneySetup),
+    remote.recurringTransactions ?? [],
+    remote.categories,
+  );
 
   if (opts?.replace) {
     const savingsGoals = remote.savingsGoals.map((g) => applyGoalMonthlyToGoal(g));
@@ -84,6 +91,7 @@ export function applyHouseholdSync(
       categoryBudgets: remote.categoryBudgets ?? [],
       recurringTransactions: remote.recurringTransactions ?? [],
       debts: remote.debts ?? [],
+      moneySetup: prunedMoneySetup,
       vehicles: garage.vehicles,
       vehiclePrefs: garage.vehiclePrefs,
     });
@@ -101,6 +109,7 @@ export function applyHouseholdSync(
       categoryBudgets: local.categoryBudgets,
       recurringTransactions: local.recurringTransactions,
       debts: local.debts,
+      moneySetup: local.moneySetup,
     },
     remote,
     cloud.lastSyncedAt,
@@ -125,6 +134,11 @@ export function applyHouseholdSync(
     categoryBudgets: merged.categoryBudgets,
     recurringTransactions: merged.recurringTransactions,
     debts: merged.debts,
+    moneySetup: pruneMoneySetupIds(
+      normalizeMoneySetup(remote.moneySetup ?? merged.moneySetup ?? emptyMoneySetup()),
+      merged.recurringTransactions,
+      merged.categories,
+    ),
     vehicles: garage.vehicles,
     vehiclePrefs: garage.vehiclePrefs,
     // Имена в балансе (userName / partnerName) — только на этом телефоне, не из облака.

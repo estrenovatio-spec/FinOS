@@ -176,6 +176,7 @@ model Household {
   partnerLabel   String?
   /** userId → дельта к сумме по операциям («реально в кармане») */
   balanceOffsets Json          @default("{}")
+  moneySetup     Json          @default("{}")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
