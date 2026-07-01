@@ -1,0 +1,266 @@
+import { todayIsoDate } from "@/lib/format-date";
+import type { MoneySetup } from "@/lib/money-setup";
+import type { CategoryDefinition } from "@/types";
+import type { CategoryBudget, RecurringTransaction } from "@/types/planning";
+
+export type SafeSpendingStatus =
+  | "ready"
+  | "missing_income"
+  | "missing_balance"
+  | "missing_required_expenses"
+  | "missing_essential_budgets"
+  | "invalid_period"
+  | "not_enough_data";
+
+export type SafeSpendingResult = {
+  status: SafeSpendingStatus;
+  safeToday: number | null;
+  daysUntilIncome: number | null;
+  nextIncomeDate: string | null;
+  expectedIncomeAmount: number | null;
+  requiredFixedUntilIncome: number;
+  essentialReserveUntilIncome: number;
+  availableForDailySpending: number | null;
+  reasons: string[];
+  debug?: Record<string, unknown>;
+};
+
+export type CalculateSafeSpendingInput = {
+  availableNow: number;
+  moneySetup: MoneySetup;
+  recurringTransactions: RecurringTransaction[];
+  categoryBudgets: CategoryBudget[];
+  categories: CategoryDefinition[];
+  today?: string;
+};
+
+function startOfDayMs(iso: string): number | null {
+  if (typeof iso !== "string" || !iso.trim()) return null;
+  const ms = new Date(`${iso.slice(0, 10)}T12:00:00`).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function isIsoOnOrAfter(date: string, min: string): boolean {
+  return date.slice(0, 10) >= min.slice(0, 10);
+}
+
+function isIsoWithinInclusive(date: string, from: string, to: string): boolean {
+  const day = date.slice(0, 10);
+  return day >= from.slice(0, 10) && day <= to.slice(0, 10);
+}
+
+function pickNearestIncome(
+  moneySetup: MoneySetup,
+  today: string,
+  reasons: string[],
+): { nextIncomeDate: string | null; expectedIncomeAmount: number | null; debug: Record<string, unknown> } {
+  if (moneySetup.incomeSources.length > 0) {
+    const dated = moneySetup.incomeSources.filter(
+      (source) =>
+        typeof source.expectedDate === "string" &&
+        source.expectedDate.trim() &&
+        isIsoOnOrAfter(source.expectedDate, today),
+    );
+
+    if (dated.length === 0) {
+      reasons.push("income_sources_present_but_no_future_income_date");
+      return {
+        nextIncomeDate: null,
+        expectedIncomeAmount: null,
+        debug: {
+          incomeMode: "sources",
+          incomeSourcesCount: moneySetup.incomeSources.length,
+          usableIncomeSources: 0,
+        },
+      };
+    }
+
+    dated.sort((a, b) => a.expectedDate!.localeCompare(b.expectedDate!));
+    const nearestDate = dated[0]!.expectedDate!;
+    const sameDay = dated.filter((source) => source.expectedDate === nearestDate);
+    const expectedIncomeAmount = sameDay.reduce(
+      (sum, source) => sum + (source.expectedAmount ?? 0),
+      0,
+    );
+
+    return {
+      nextIncomeDate: nearestDate,
+      expectedIncomeAmount,
+      debug: {
+        incomeMode: "sources",
+        incomeSourcesCount: moneySetup.incomeSources.length,
+        usableIncomeSources: dated.length,
+        matchedIncomeSourceIds: sameDay.map((source) => source.id),
+      },
+    };
+  }
+
+  return {
+    nextIncomeDate: moneySetup.nextIncomeDate,
+    expectedIncomeAmount: moneySetup.expectedIncomeAmount,
+    debug: {
+      incomeMode: "legacy",
+      incomeSourcesCount: 0,
+    },
+  };
+}
+
+function buildResult(
+  base: Omit<SafeSpendingResult, "status">,
+  status: SafeSpendingStatus,
+): SafeSpendingResult {
+  return {
+    ...base,
+    status,
+  };
+}
+
+export function calculateSafeSpending(
+  input: CalculateSafeSpendingInput,
+): SafeSpendingResult {
+  const reasons: string[] = [];
+  const today = (input.today ?? todayIsoDate()).slice(0, 10);
+  const debug: Record<string, unknown> = {
+    today,
+    availableNow: input.availableNow,
+    requiredRecurringIds: input.moneySetup.requiredRecurringIds,
+    essentialCategoryIds: input.moneySetup.essentialCategoryIds,
+  };
+
+  const income = pickNearestIncome(input.moneySetup, today, reasons);
+  const nextIncomeDate = income.nextIncomeDate;
+  const expectedIncomeAmount = income.expectedIncomeAmount;
+  Object.assign(debug, income.debug);
+
+  const base: Omit<SafeSpendingResult, "status"> = {
+    safeToday: null,
+    daysUntilIncome: null,
+    nextIncomeDate,
+    expectedIncomeAmount,
+    requiredFixedUntilIncome: 0,
+    essentialReserveUntilIncome: 0,
+    availableForDailySpending: null,
+    reasons,
+    debug,
+  };
+
+  if (!nextIncomeDate) {
+    reasons.push("missing_next_income_date");
+    return buildResult(base, "missing_income");
+  }
+
+  const todayMs = startOfDayMs(today);
+  const nextIncomeMs = startOfDayMs(nextIncomeDate);
+  if (todayMs == null || nextIncomeMs == null) {
+    reasons.push("invalid_income_period_date");
+    return buildResult(base, "invalid_period");
+  }
+  if (nextIncomeDate <= today) {
+    reasons.push("next_income_date_must_be_after_today");
+    return buildResult(base, "invalid_period");
+  }
+
+  const daysUntilIncome = Math.max(
+    1,
+    Math.ceil((nextIncomeMs - todayMs) / (24 * 60 * 60 * 1000)),
+  );
+  base.daysUntilIncome = daysUntilIncome;
+  debug.daysUntilIncome = daysUntilIncome;
+
+  if (!Number.isFinite(input.availableNow) || input.availableNow <= 0) {
+    reasons.push("available_now_must_be_positive");
+    return buildResult(base, "missing_balance");
+  }
+
+  const requiredIds = new Set(input.moneySetup.requiredRecurringIds);
+  if (requiredIds.size === 0) {
+    reasons.push("required_recurring_ids_not_configured");
+    return buildResult(base, "missing_required_expenses");
+  }
+
+  let requiredFixedUntilIncome = 0;
+  const recurringById = new Map(
+    input.recurringTransactions.map((item) => [item.id, item] as const),
+  );
+
+  for (const recurringId of requiredIds) {
+    const item = recurringById.get(recurringId);
+    if (!item) {
+      reasons.push(`required_recurring_missing:${recurringId}`);
+      continue;
+    }
+    if (!item.enabled) {
+      reasons.push(`required_recurring_disabled:${recurringId}`);
+      continue;
+    }
+    if (item.type !== "expense") {
+      reasons.push(`required_recurring_not_expense:${recurringId}`);
+      continue;
+    }
+    if (!item.nextRunDate || startOfDayMs(item.nextRunDate) == null) {
+      reasons.push(`required_recurring_missing_next_run_date:${recurringId}`);
+      continue;
+    }
+    if (!isIsoWithinInclusive(item.nextRunDate, today, nextIncomeDate)) {
+      continue;
+    }
+    requiredFixedUntilIncome += item.amount;
+  }
+
+  base.requiredFixedUntilIncome = requiredFixedUntilIncome;
+  debug.requiredFixedUntilIncome = requiredFixedUntilIncome;
+
+  const essentialIds = [...new Set(input.moneySetup.essentialCategoryIds)];
+  if (essentialIds.length > 0) {
+    const budgetsByCategory = new Map(
+      input.categoryBudgets.map((item) => [item.categoryId, item] as const),
+    );
+    const categoryIds = new Set(input.categories.map((category) => category.id));
+    let missingEssentialBudget = false;
+    let essentialReserveUntilIncome = 0;
+
+    for (const categoryId of essentialIds) {
+      if (!categoryIds.has(categoryId)) {
+        reasons.push(`essential_category_missing:${categoryId}`);
+      }
+      const budget = budgetsByCategory.get(categoryId);
+      if (!budget) {
+        reasons.push(`missing_budget_for_essential_category:${categoryId}`);
+        missingEssentialBudget = true;
+        continue;
+      }
+      if (!Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
+        reasons.push(`invalid_budget_for_essential_category:${categoryId}`);
+        missingEssentialBudget = true;
+        continue;
+      }
+      essentialReserveUntilIncome += (budget.monthlyLimit / 30) * daysUntilIncome;
+    }
+
+    base.essentialReserveUntilIncome = essentialReserveUntilIncome;
+    debug.essentialReserveUntilIncome = essentialReserveUntilIncome;
+
+    if (missingEssentialBudget) {
+      return buildResult(base, "missing_essential_budgets");
+    }
+  } else {
+    base.essentialReserveUntilIncome = 0;
+    debug.essentialReserveUntilIncome = 0;
+  }
+
+  const availableForDailySpending =
+    input.availableNow - requiredFixedUntilIncome - base.essentialReserveUntilIncome;
+  const safeToday = Math.max(0, Math.floor(availableForDailySpending / daysUntilIncome));
+
+  base.availableForDailySpending = availableForDailySpending;
+  base.safeToday = safeToday;
+  debug.availableForDailySpending = availableForDailySpending;
+  debug.safeToday = safeToday;
+
+  if (!Number.isFinite(availableForDailySpending)) {
+    reasons.push("available_for_daily_spending_invalid");
+    return buildResult(base, "not_enough_data");
+  }
+
+  return buildResult(base, "ready");
+}
