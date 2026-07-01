@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Sparkles, Wallet } from "lucide-react";
 import { BalanceQuickEdit } from "@/components/BalanceQuickEdit";
+import { MoneySetupDialog } from "@/components/MoneySetupDialog";
 import { TransactionList } from "@/components/TransactionList";
 import { VoiceRecorder } from "@/components/VoiceRecorder";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/categories";
 import { todayIsoDate } from "@/lib/format-date";
@@ -14,6 +16,7 @@ import {
   partnerDisplayName,
 } from "@/lib/owner-labels";
 import { countsInBalance } from "@/lib/transaction-confirmed";
+import { useCloudStore } from "@/store/useCloudStore";
 import {
   useBudgetPeriod,
   useFilteredTransactions,
@@ -77,21 +80,44 @@ function lowerCaseSentenceStart(value: string): string {
   return trimmed.charAt(0).toLocaleLowerCase("ru-RU") + trimmed.slice(1);
 }
 
+function isMoneySetupComplete(
+  setup: ReturnType<typeof useStore.getState>["moneySetup"],
+  recurringExpenseCount: number,
+): boolean {
+  const hasIncomeDate = Boolean(setup.nextIncomeDate);
+  const hasIncomeAmount = setup.expectedIncomeAmount != null && setup.expectedIncomeAmount > 0;
+  const hasExpensesLayer =
+    setup.requiredRecurringIds.length > 0 ||
+    setup.essentialCategoryIds.length > 0 ||
+    recurringExpenseCount === 0;
+
+  return hasIncomeDate && hasIncomeAmount && hasExpensesLayer;
+}
+
 export function TodayScreen() {
   const locale = useStore((s) => s.locale);
   const partnerName = useStore((s) => s.partnerName);
   const partnerKeywords = useStore((s) => s.partnerKeywords);
   const householdFilter = useStore((s) => s.householdFilter);
   const categories = useStore((s) => s.categories);
+  const moneySetup = useStore((s) => s.moneySetup);
+  const recurringTransactions = useStore((s) => s.recurringTransactions);
   const recentTransactions = useFilteredTransactions("all");
   const allViewerTransactions = useViewerMappedTransactions(false);
   const balances = useHouseholdBalances();
   const period = useBudgetPeriod();
   const totals = usePeriodOwnerTotals();
+  const household = useCloudStore((s) => s.household);
+  const [moneySetupOpen, setMoneySetupOpen] = useState(false);
 
   const hasPartner = hasPartnerBudget(partnerName, partnerKeywords);
   const partnerLabel = partnerDisplayName(partnerName) || (locale === "ru" ? "Партнер" : "Partner");
   const isNewUser = recentTransactions.length === 0;
+  const recurringExpenseCount = recurringTransactions.filter(
+    (item) => item.type === "expense" && item.enabled,
+  ).length;
+  const moneySetupComplete = isMoneySetupComplete(moneySetup, recurringExpenseCount);
+  const showHouseholdToggle = hasPartner || household?.mode === "shared";
 
   const daysLeft = remainingDays(period.to);
   const periodIncome = totals.me.income + totals.partner.income;
@@ -303,6 +329,25 @@ export function TodayScreen() {
             <VoiceRecorder compact />
           </CardContent>
         </Card>
+
+        <Card className="border-border/20 bg-muted/10 shadow-none">
+          <CardContent className="space-y-2 p-2.5">
+            <p className="text-sm font-medium text-foreground">
+              {locale === "ru"
+                ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
+                : "Add your income date and required expenses to calculate a safe limit."}
+            </p>
+            <Button type="button" size="sm" className="w-full sm:w-auto" onClick={() => setMoneySetupOpen(true)}>
+              {locale === "ru" ? "Настроить лимит" : "Set up limit"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <MoneySetupDialog
+          open={moneySetupOpen}
+          onOpenChange={setMoneySetupOpen}
+          showHouseholdToggle={showHouseholdToggle}
+        />
       </div>
     );
   }
@@ -328,6 +373,37 @@ export function TodayScreen() {
           <p className="text-xs leading-snug text-muted-foreground">
             {statusNote}
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/20 bg-muted/10 shadow-none">
+        <CardContent className="flex items-center justify-between gap-3 p-2.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {moneySetupComplete
+                ? locale === "ru"
+                  ? "Финансовая база настроена"
+                  : "Money setup saved"
+                : locale === "ru"
+                  ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
+                  : "Add your income date and required expenses to calculate a safe limit."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant={moneySetupComplete ? "ghost" : "default"}
+            className="shrink-0"
+            onClick={() => setMoneySetupOpen(true)}
+          >
+            {moneySetupComplete
+              ? locale === "ru"
+                ? "Изменить"
+                : "Edit"
+              : locale === "ru"
+                ? "Настроить лимит"
+                : "Set up limit"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -428,6 +504,12 @@ export function TodayScreen() {
       )}
 
       <TransactionList variant="today" limit={3} />
+
+      <MoneySetupDialog
+        open={moneySetupOpen}
+        onOpenChange={setMoneySetupOpen}
+        showHouseholdToggle={showHouseholdToggle}
+      />
     </div>
   );
 }
