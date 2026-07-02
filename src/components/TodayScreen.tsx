@@ -407,8 +407,8 @@ export function TodayScreen() {
           ? "Сегодня лучше держать паузу"
           : "Better to pause today"
         : locale === "ru"
-          ? "Доступно сейчас"
-          : "Available now";
+          ? "Ориентир на день"
+          : "Daily guide";
   const statusAmount = statusMode === "negative" ? Math.abs(balances.all) : canSpendToday;
   const statusNote =
     statusMode === "negative"
@@ -416,8 +416,8 @@ export function TodayScreen() {
         ? "Баланс ниже нуля. Сначала закройте минус."
         : "Balance is below zero. Cover the gap first."
       : locale === "ru"
-        ? `До конца периода: ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft >= 2 && daysLeft <= 4 ? "дня" : "дн."}`
-        : `Until period end: ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`;
+        ? `Если распределить до конца периода: ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft >= 2 && daysLeft <= 4 ? "дня" : "дн."}`
+        : `If spread until period end: ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`;
   const missionTitle = locale === "ru" ? "Фокус дня" : "Daily focus";
   const missionProgress =
     todayCount >= 3
