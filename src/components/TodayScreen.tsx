@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Sparkles, Wallet } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles, Wallet } from "lucide-react";
 import { BalanceQuickEdit } from "@/components/BalanceQuickEdit";
 import { MoneySetupDialog } from "@/components/MoneySetupDialog";
 import { TransactionList } from "@/components/TransactionList";
@@ -128,6 +128,7 @@ export function TodayScreen() {
   const totals = usePeriodOwnerTotals();
   const household = useCloudStore((s) => s.household);
   const [moneySetupOpen, setMoneySetupOpen] = useState(false);
+  const [safeSpendingDetailsOpen, setSafeSpendingDetailsOpen] = useState(false);
 
   const hasPartner = hasPartnerBudget(partnerName, partnerKeywords);
   const partnerLabel = partnerDisplayName(partnerName) || (locale === "ru" ? "Партнер" : "Partner");
@@ -403,27 +404,6 @@ export function TodayScreen() {
       ],
     };
   }, [categories, locale, todayCount, todayTransactions]);
-  const statusTitle =
-    statusMode === "negative"
-      ? locale === "ru"
-        ? "Сейчас не хватает"
-        : "Not enough right now"
-      : statusMode === "pause"
-        ? locale === "ru"
-          ? "Сегодня лучше держать паузу"
-          : "Better to pause today"
-        : locale === "ru"
-          ? "Ориентир на день"
-          : "Daily guide";
-  const statusAmount = statusMode === "negative" ? Math.abs(balances.all) : canSpendToday;
-  const statusNote =
-    statusMode === "negative"
-      ? locale === "ru"
-        ? "Баланс ниже нуля. Сначала закройте минус."
-        : "Balance is below zero. Cover the gap first."
-      : locale === "ru"
-        ? `Если распределить до конца периода: ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft >= 2 && daysLeft <= 4 ? "дня" : "дн."}`
-        : `If spread until period end: ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`;
   const missionTitle = locale === "ru" ? "Фокус дня" : "Daily focus";
   const missionProgress =
     todayCount >= 3
@@ -540,77 +520,14 @@ export function TodayScreen() {
 
       <Card className="border-primary/20 bg-primary/5 shadow-sm">
         <CardContent className="space-y-2.5 p-3">
-          <div className="space-y-0.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-              {currentBalanceTitle}
-            </p>
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
-              {formatMoney(currentBalanceAmount, locale)} {locale === "ru" ? "₽" : "RUB"}
-            </p>
-          </div>
-          <div className="space-y-1 rounded-lg bg-background/55 px-2.5 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-              {statusTitle}
-            </p>
-            <p className="text-lg font-semibold tracking-tight text-foreground">
-              {formatMoney(statusAmount, locale)} {locale === "ru" ? "₽" : "RUB"}
-            </p>
-            <p className="text-xs leading-snug text-muted-foreground">
-              {statusNote}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/20 bg-muted/10 shadow-none">
-        <CardContent className="space-y-2 p-2.5">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
-              {safeSpending.status === "ready" ? (
-                <>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    {safeSpendingCopy.title}
-                  </p>
-                  {safeSpendingCopy.amount ? (
-                    <p className="text-lg font-semibold tracking-tight text-foreground">
-                      {safeSpendingCopy.amount}
-                    </p>
-                  ) : null}
-                  <p className="text-xs leading-snug text-muted-foreground">
-                    {safeSpendingCopy.note}
-                  </p>
-                  {safeSpendingCopy.helper ? (
-                    <p className="text-[11px] leading-snug text-muted-foreground/80">
-                      {safeSpendingCopy.helper}
-                    </p>
-                  ) : null}
-                  {safeSpendingCopy.scopeNote ? (
-                    <p className="text-[11px] leading-snug text-muted-foreground/80">
-                      {safeSpendingCopy.scopeNote}
-                    </p>
-                  ) : null}
-                </>
-              ) : null}
-              {safeSpending.status !== "ready" ? (
-                <p className="text-sm font-medium text-foreground">
-                  {safeSpending.status === "missing_essential_budgets"
-                    ? locale === "ru"
-                      ? "Не хватает лимитов на базовые расходы"
-                      : "Missing limits for essential spending"
-                    : moneySetupComplete
-                    ? locale === "ru"
-                      ? "Финансовая база настроена"
-                      : "Money setup saved"
-                    : locale === "ru"
-                      ? "Чтобы посчитать безопасный лимит, добавьте дату дохода и обязательные расходы."
-                      : "Add your income date and required expenses to calculate a safe limit."}
-                </p>
-              ) : null}
-              {safeSpending.status !== "ready" ? (
-                <p className="text-xs leading-snug text-muted-foreground">
-                  {safeSpendingCopy.note}
-                </p>
-              ) : null}
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                {currentBalanceTitle}
+              </p>
+              <p className="text-2xl font-semibold tracking-tight text-foreground">
+                {formatMoney(currentBalanceAmount, locale)} {locale === "ru" ? "₽" : "RUB"}
+              </p>
             </div>
             <Button
               type="button"
@@ -622,8 +539,137 @@ export function TodayScreen() {
               {safeSpendingCopy.ctaLabel}
             </Button>
           </div>
+          <div className="space-y-1 rounded-lg bg-background/55 px-2.5 py-2">
+            {safeSpending.status === "ready" ? (
+              <>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                  {safeSpendingCopy.title}
+                </p>
+                {safeSpendingCopy.amount ? (
+                  <p className="text-xl font-semibold tracking-tight text-foreground">
+                    {safeSpendingCopy.amount}
+                  </p>
+                ) : null}
+                <p className="text-xs leading-snug text-muted-foreground">
+                  {safeSpendingCopy.note}
+                </p>
+                {safeSpendingCopy.scopeNote ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground/80">
+                    {safeSpendingCopy.scopeNote}
+                  </p>
+                ) : null}
+                {safeSpendingCopy.helper ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground/80">
+                    {safeSpendingCopy.helper}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">
+                  {safeSpending.status === "missing_essential_budgets"
+                    ? locale === "ru"
+                      ? "Не хватает лимитов на базовые расходы"
+                      : "Missing limits for essential spending"
+                    : safeSpendingCopy.title}
+                </p>
+                <p className="text-xs leading-snug text-muted-foreground">
+                  {safeSpendingCopy.note}
+                </p>
+              </>
+            )}
+          </div>
+          {safeSpending.status === "ready" ? (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto px-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setSafeSpendingDetailsOpen((value) => !value)}
+              >
+                {safeSpendingDetailsOpen ? (
+                  <ChevronUp className="mr-1.5 h-4 w-4" />
+                ) : (
+                  <ChevronDown className="mr-1.5 h-4 w-4" />
+                )}
+                {locale === "ru" ? "Почему такая сумма?" : "Why this amount?"}
+              </Button>
+              {safeSpendingDetailsOpen ? (
+                <div className="space-y-1 rounded-lg border border-border/20 bg-background/55 px-2.5 py-2 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>{currentBalanceTitle}</span>
+                    <span className="font-medium text-foreground">
+                      {formatMoney(currentBalanceAmount, locale)} {locale === "ru" ? "₽" : "RUB"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>
+                      {locale === "ru"
+                        ? "Обязательные платежи до дохода"
+                        : "Required payments until income"}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      −{formatMoney(safeSpending.requiredFixedUntilIncome, locale)} {locale === "ru" ? "₽" : "RUB"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>
+                      {locale === "ru"
+                        ? "Резерв на базовые категории"
+                        : "Reserve for essential categories"}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      −{formatMoney(Math.floor(safeSpending.essentialReserveUntilIncome), locale)} {locale === "ru" ? "₽" : "RUB"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>
+                      {locale === "ru"
+                        ? "Доступно до дохода"
+                        : "Available until income"}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {formatMoney(safeSpending.availableForDailySpending ?? 0, locale)} {locale === "ru" ? "₽" : "RUB"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>
+                      {locale === "ru"
+                        ? "Дней до дохода"
+                        : "Days until income"}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {dayCountLabel(safeSpending.daysUntilIncome ?? 1, locale)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t border-border/20 pt-1">
+                    <span>{locale === "ru" ? "Безопасно сегодня" : "Safe today"}</span>
+                    <span className="font-semibold text-foreground">
+                      {formatMoney(safeSpending.safeToday ?? 0, locale)} {locale === "ru" ? "₽" : "RUB"}
+                    </span>
+                  </div>
+                  <p className="pt-1 text-[11px] leading-snug text-muted-foreground/80">
+                    {locale === "ru"
+                      ? `Если распределить до конца периода: ${formatMoney(statusMode === "negative" ? 0 : canSpendToday, locale)} ₽ в день на ${dayCountLabel(daysLeft, locale)}.`
+                      : `If spread until period end: ${formatMoney(statusMode === "negative" ? 0 : canSpendToday, locale)} RUB per day for ${dayCountLabel(daysLeft, locale)}.`}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+
+      {safeSpending.status !== "ready" && safeSpendingCopy.scopeNote ? (
+        <Card className="border-border/20 bg-muted/10 shadow-none">
+          <CardContent className="p-2.5">
+            <p className="text-[11px] leading-snug text-muted-foreground/80">
+              {safeSpendingCopy.scopeNote}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {hasPartner ? (
         <Card className="border-transparent bg-transparent shadow-none">
