@@ -234,14 +234,8 @@ export function TodayScreen() {
             : locale === "ru"
               ? "Рассчитано по личному балансу."
               : "Calculated from the personal balance.",
-        ctaLabel: moneySetupComplete
-          ? locale === "ru"
-            ? "Изменить"
-            : "Edit"
-          : locale === "ru"
-            ? "Настроить лимит"
-            : "Set up limit",
-        ctaVariant: moneySetupComplete ? "ghost" : "default",
+        ctaLabel: locale === "ru" ? "Изменить" : "Edit",
+        ctaVariant: "ghost",
       };
     }
 
