@@ -142,6 +142,15 @@ export function TodayScreen() {
   const showHouseholdToggle = hasPartner || household?.mode === "shared";
   const availableNowForSafeSpending =
     moneySetup.useHouseholdBalance && showHouseholdToggle ? balances.all : balances.me;
+  const currentBalanceTitle =
+    moneySetup.useHouseholdBalance && showHouseholdToggle
+      ? locale === "ru"
+        ? "Текущий остаток семьи"
+        : "Current family balance"
+      : locale === "ru"
+        ? "Текущий остаток"
+        : "Current balance";
+  const currentBalanceAmount = availableNowForSafeSpending;
 
   const daysLeft = remainingDays(period.to);
   const periodIncome = totals.me.income + totals.partner.income;
@@ -533,18 +542,26 @@ export function TodayScreen() {
       </section>
 
       <Card className="border-primary/20 bg-primary/5 shadow-sm">
-        <CardContent className="space-y-1.5 p-3">
+        <CardContent className="space-y-2.5 p-3">
           <div className="space-y-0.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+              {currentBalanceTitle}
+            </p>
+            <p className="text-2xl font-semibold tracking-tight text-foreground">
+              {formatMoney(currentBalanceAmount, locale)} {locale === "ru" ? "₽" : "RUB"}
+            </p>
+          </div>
+          <div className="space-y-1 rounded-lg bg-background/55 px-2.5 py-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
               {statusTitle}
             </p>
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
+            <p className="text-lg font-semibold tracking-tight text-foreground">
               {formatMoney(statusAmount, locale)} {locale === "ru" ? "₽" : "RUB"}
             </p>
+            <p className="text-xs leading-snug text-muted-foreground">
+              {statusNote}
+            </p>
           </div>
-          <p className="text-xs leading-snug text-muted-foreground">
-            {statusNote}
-          </p>
         </CardContent>
       </Card>
 
