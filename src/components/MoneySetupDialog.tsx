@@ -28,6 +28,14 @@ const ESSENTIAL_PRIORITY_IDS = [
   "shopping",
 ];
 
+const ESSENTIAL_EXCLUDED_KEYWORDS = [
+  "recurring",
+  "regular",
+  "subscription",
+  "subscriptions",
+  "регуляр",
+] as const;
+
 type IncomeSourceDraft = {
   id: string;
   label: string;
@@ -47,6 +55,11 @@ function parseAmount(value: string): number | null {
   const amount = Number(normalized);
   if (!Number.isFinite(amount) || amount <= 0) return null;
   return amount;
+}
+
+function isServiceEssentialCategory(categoryId: string, label: string): boolean {
+  const haystack = `${categoryId} ${label}`.toLocaleLowerCase("ru-RU");
+  return ESSENTIAL_EXCLUDED_KEYWORDS.some((keyword) => haystack.includes(keyword));
 }
 
 function makeIncomeSourceId(): string {
@@ -100,7 +113,11 @@ export function MoneySetupDialog({
 
   const categoryOptions = useMemo(() => {
     const expenseCategories = sortCategoriesByLabel(
-      categories.filter((category) => category.type === "expense"),
+      categories.filter((category) => {
+        if (category.type !== "expense") return false;
+        const label = getCategoryLabel(category.id, categories, locale);
+        return !isServiceEssentialCategory(category.id, label);
+      }),
       categories,
       locale,
     );
@@ -557,6 +574,11 @@ export function MoneySetupDialog({
                 {locale === "ru"
                   ? "Отметьте то, без чего нельзя прожить до следующего дохода."
                   : "Mark what you need before the next income arrives."}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {locale === "ru"
+                  ? "Обязательные платежи — это конкретные платежи с датой и суммой. Необходимые категории — это базовые траты: продукты, транспорт, здоровье."
+                  : "Required payments are specific payments with a date and amount. Essential categories are core expenses like groceries, transport, and health."}
               </p>
             </div>
 
