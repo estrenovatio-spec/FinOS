@@ -9,7 +9,7 @@ import { VoiceRecorder } from "@/components/VoiceRecorder";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/categories";
-import { todayIsoDate } from "@/lib/format-date";
+import { daysInclusiveUntilDate, getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { calculateSafeSpending } from "@/lib/safe-spending";
 import {
@@ -28,10 +28,7 @@ import {
 } from "@/store/useStore";
 
 function remainingDays(periodTo: string): number {
-  const today = new Date(`${todayIsoDate()}T12:00:00`).getTime();
-  const end = new Date(`${periodTo}T12:00:00`).getTime();
-  if (!Number.isFinite(end)) return 1;
-  return Math.max(1, Math.ceil((end - today) / (24 * 60 * 60 * 1000)) + 1);
+  return daysInclusiveUntilDate(periodTo, getLocalTodayIsoDate()) ?? 1;
 }
 
 function dayCountLabel(days: number, locale: "ru" | "en"): string {
@@ -184,7 +181,7 @@ export function TodayScreen() {
         .filter(countsInBalance)
         .filter((transaction) => {
           const dateKey = transaction.date?.slice(0, 10);
-          return dateKey === todayIsoDate();
+          return dateKey === getLocalTodayIsoDate();
         }),
     [allViewerTransactions, householdFilter],
   );
@@ -202,7 +199,7 @@ export function TodayScreen() {
         recurringTransactions,
         categoryBudgets,
         categories,
-        today: todayIsoDate(),
+        today: getLocalTodayIsoDate(),
       }),
     [
       availableNowForSafeSpending,

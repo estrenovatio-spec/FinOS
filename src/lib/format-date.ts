@@ -47,6 +47,8 @@ const MONTH_LONG_EN = [
   "December",
 ] as const;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function parseIsoDateParts(dateStr: string): { y: number; mo: number; d: number } | null {
   const m = ISO_DATE.exec(dateStr.trim());
   if (!m) return null;
@@ -55,6 +57,21 @@ function parseIsoDateParts(dateStr: string): { y: number; mo: number; d: number 
   const d = Number(m[3]);
   if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   return { y, mo, d };
+}
+
+function toLocalIsoDate(ref: Date): string {
+  const y = ref.getFullYear();
+  const mo = String(ref.getMonth() + 1).padStart(2, "0");
+  const d = String(ref.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${d}`;
+}
+
+function localIsoDateToMiddayMs(dateStr: string): number | null {
+  const parts = parseIsoDateParts(dateStr);
+  if (!parts) return null;
+  const { y, mo, d } = parts;
+  const ms = new Date(y, mo - 1, d, 12, 0, 0, 0).getTime();
+  return Number.isFinite(ms) ? ms : null;
 }
 
 /** YYYY-MM-DD → locale display */
@@ -100,6 +117,20 @@ export function formatTransactionDateShort(dateStr: string, locale: Locale): str
 
 export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+export function getLocalTodayIsoDate(ref: Date = new Date()): string {
+  return toLocalIsoDate(ref);
+}
+
+export function daysInclusiveUntilDate(
+  targetDate: string,
+  today: string = getLocalTodayIsoDate(),
+): number | null {
+  const todayMs = localIsoDateToMiddayMs(today);
+  const targetMs = localIsoDateToMiddayMs(targetDate);
+  if (todayMs == null || targetMs == null) return null;
+  return Math.max(1, Math.ceil((targetMs - todayMs) / DAY_MS) + 1);
 }
 
 export function yesterdayIsoDate(): string {

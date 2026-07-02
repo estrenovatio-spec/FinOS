@@ -1,4 +1,4 @@
-import { todayIsoDate } from "@/lib/format-date";
+import { daysInclusiveUntilDate, getLocalTodayIsoDate } from "@/lib/format-date";
 import type { MoneySetup } from "@/lib/money-setup";
 import type { CategoryDefinition } from "@/types";
 import type { CategoryBudget, RecurringTransaction } from "@/types/planning";
@@ -119,7 +119,7 @@ export function calculateSafeSpending(
   input: CalculateSafeSpendingInput,
 ): SafeSpendingResult {
   const reasons: string[] = [];
-  const today = (input.today ?? todayIsoDate()).slice(0, 10);
+  const today = (input.today ?? getLocalTodayIsoDate()).slice(0, 10);
   const debug: Record<string, unknown> = {
     today,
     availableNow: input.availableNow,
@@ -161,10 +161,11 @@ export function calculateSafeSpending(
     return buildResult(base, "invalid_period");
   }
 
-  const daysUntilIncome = Math.max(
-    1,
-    Math.ceil((nextIncomeMs - todayMs) / (24 * 60 * 60 * 1000)),
-  );
+  const daysUntilIncome = daysInclusiveUntilDate(nextIncomeDate, today);
+  if (daysUntilIncome == null) {
+    reasons.push("invalid_income_period_date");
+    return buildResult(base, "invalid_period");
+  }
   base.daysUntilIncome = daysUntilIncome;
   debug.daysUntilIncome = daysUntilIncome;
 
