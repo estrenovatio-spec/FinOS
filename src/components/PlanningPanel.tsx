@@ -550,9 +550,8 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
     () => getCurrentBudgetPeriod(budgetMonthStartDay),
     [budgetMonthStartDay],
   );
-  const recurringCards = useMemo(() => {
+  const recurringCardsBase = useMemo(() => {
     const today = todayIso();
-    const currentCalendarMonth = today.slice(0, 7);
     return recurringTransactions
       .map((item) => {
         const periodTransactions = transactions.filter(
@@ -565,23 +564,24 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
         const skippedInPeriod = (item.skippedDates ?? []).filter((date) =>
           isDateInBudgetPeriod(date, recurringPeriod),
         );
+        const pendingDates = pendingTransactions.map((tx) => tx.date).sort();
+        const relevantOccurrenceDate = pendingDates[0] ?? item.nextRunDate;
+        const confirmedForRelevantOccurrence = paidTransactions.some(
+          (tx) => tx.date === relevantOccurrenceDate,
+        );
         const lastPaidDate =
           paidTransactions
             .map((tx) => tx.date)
             .sort()
             .at(-1) ?? null;
-        const paidByNextDate =
-          item.enabled &&
-          (item.nextRunDate > recurringPeriod.to ||
-            item.nextRunDate.slice(0, 7) > currentCalendarMonth);
-        const paid = paidTransactions.length > 0 || paidByNextDate;
         const pending = pendingTransactions.length > 0;
-        const overdue = item.enabled && !paid && item.nextRunDate <= today;
+        const paid = confirmedForRelevantOccurrence;
+        const overdue = item.enabled && !pending && !paid && item.nextRunDate <= today;
         const status: "paid" | "pending" | "overdue" | "upcoming" | "paused" =
-          paid
-            ? "paid"
-            : pending
-              ? "pending"
+          pending
+            ? "pending"
+            : paid
+              ? "paid"
               : !item.enabled
                 ? "paused"
                 : overdue
@@ -594,9 +594,14 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
           status,
           lastPaidDate,
           skippedInPeriod,
-          sortDate: pendingTransactions[0]?.date ?? item.nextRunDate,
+          relevantOccurrenceDate,
+          sortDate: relevantOccurrenceDate,
         };
-      })
+      });
+  }, [recurringPeriod, recurringTransactions, transactions]);
+
+  const recurringCards = useMemo(() => {
+    return recurringCardsBase
       .filter((card) => {
         if (recurringFilter === "paid") return card.paid;
         if (recurringFilter === "unpaid") return !card.paid;
@@ -611,23 +616,12 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
         if (priorityDiff !== 0) return priorityDiff;
         return a.sortDate.localeCompare(b.sortDate);
       });
-  }, [recurringFilter, recurringPeriod, recurringTransactions, transactions]);
+  }, [recurringCardsBase, recurringFilter]);
 
   const recurringPaidCount = useMemo(() => {
-    const currentCalendarMonth = todayIso().slice(0, 7);
-    return recurringTransactions.filter((item) =>
-      item.enabled &&
-      (item.nextRunDate > recurringPeriod.to ||
-        item.nextRunDate.slice(0, 7) > currentCalendarMonth) ||
-      transactions.some(
-        (tx) =>
-          tx.recurringId === item.id &&
-          tx.confirmed !== false &&
-          isDateInBudgetPeriod(tx.date, recurringPeriod),
-      ),
-    ).length;
-  }, [recurringPeriod, recurringTransactions, transactions]);
-  const recurringUnpaidCount = recurringTransactions.length - recurringPaidCount;
+    return recurringCardsBase.filter((card) => card.paid).length;
+  }, [recurringCardsBase]);
+  const recurringUnpaidCount = recurringCardsBase.length - recurringPaidCount;
 
   const showToggle = (
     <Button
