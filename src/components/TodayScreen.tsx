@@ -649,11 +649,6 @@ export function TodayScreen() {
                       {formatMoney(safeSpending.safeToday ?? 0, locale)} {locale === "ru" ? "₽" : "RUB"}
                     </span>
                   </div>
-                  <p className="pt-1 text-[11px] leading-snug text-muted-foreground/80">
-                    {locale === "ru"
-                      ? `Если распределить до конца периода: ${formatMoney(statusMode === "negative" ? 0 : canSpendToday, locale)} ₽ в день на ${dayCountLabel(daysLeft, locale)}.`
-                      : `If spread until period end: ${formatMoney(statusMode === "negative" ? 0 : canSpendToday, locale)} RUB per day for ${dayCountLabel(daysLeft, locale)}.`}
-                  </p>
                 </div>
               ) : null}
             </div>
