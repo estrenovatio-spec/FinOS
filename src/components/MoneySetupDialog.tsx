@@ -13,6 +13,7 @@ import { getCategoryLabel, sortCategoriesByLabel } from "@/lib/categories";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import {
   MONEY_SETUP_INCOME_SOURCE_KINDS,
+  type MoneySetupIncomeRecurrence,
   type MoneySetupIncomeSource,
   type MoneySetupIncomeSourceKind,
 } from "@/lib/money-setup";
@@ -242,6 +243,20 @@ export function MoneySetupDialog({
       })),
     [locale],
   );
+  const incomeRecurrenceOptions = useMemo(
+    () =>
+      [
+        {
+          value: "monthly" as MoneySetupIncomeRecurrence,
+          label: locale === "ru" ? "Каждый месяц" : "Every month",
+        },
+        {
+          value: "once" as MoneySetupIncomeRecurrence,
+          label: locale === "ru" ? "Один раз" : "One time",
+        },
+      ] satisfies Array<{ value: MoneySetupIncomeRecurrence; label: string }>,
+    [locale],
+  );
   const progress = useMemo(
     () => buildMoneySetupProgress({ locale, moneySetup, balances }),
     [balances, locale, moneySetup],
@@ -291,6 +306,7 @@ export function MoneySetupDialog({
         expectedAmount:
           source.expectedAmount != null ? String(source.expectedAmount) : "",
         kind: source.kind,
+        recurrence: source.recurrence ?? "monthly",
         isPrimary: Boolean(source.isPrimary),
       }));
     }
@@ -305,6 +321,7 @@ export function MoneySetupDialog({
               ? String(moneySetup.expectedIncomeAmount)
               : "",
           kind: "salary" as MoneySetupIncomeSourceKind,
+          recurrence: "monthly" as MoneySetupIncomeRecurrence,
           isPrimary: true,
         },
       ];
@@ -613,6 +630,15 @@ export function MoneySetupDialog({
                               ? "Дата не указана"
                               : "Date missing"}
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.recurrence === "monthly"
+                            ? locale === "ru"
+                              ? "Повторяется каждый месяц"
+                              : "Repeats every month"
+                            : locale === "ru"
+                              ? "Разовое поступление"
+                              : "One-time income"}
+                        </p>
                       </div>
                       {!showIncomeSources ? (
                         <Button
@@ -778,6 +804,28 @@ export function MoneySetupDialog({
                               }
                             >
                               {incomeKindOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="space-y-1">
+                            <span className="text-xs text-muted-foreground">
+                              {locale === "ru" ? "Повтор" : "Repeat"}
+                            </span>
+                            <select
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                              value={item.recurrence}
+                              onChange={(event) =>
+                                updateIncomeSource(item.id, {
+                                  recurrence: event.target
+                                    .value as MoneySetupIncomeRecurrence,
+                                })
+                              }
+                            >
+                              {incomeRecurrenceOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
                                   {option.label}
                                 </option>

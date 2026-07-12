@@ -1,6 +1,7 @@
 import { isGarbageTranscript } from "@/lib/transcript-guard";
 
-const INCOME_SOURCE_META_RE = /\n?\[\[finos:income-source:([a-zA-Z0-9_-]+)\]\]\s*$/;
+const INCOME_SOURCE_META_RE =
+  /\n?\[\[finos:income-source:([a-zA-Z0-9_-]+)(?::(\d{4}-\d{2}-\d{2}))?\]\]\s*$/;
 
 function stripHiddenTransactionMetadata(note: string): string {
   return note.replace(INCOME_SOURCE_META_RE, "").trimEnd();
@@ -9,6 +10,13 @@ function stripHiddenTransactionMetadata(note: string): string {
 export function extractIncomeSourceIdFromTransactionNote(note: string): string | null {
   const match = note.match(INCOME_SOURCE_META_RE);
   return match?.[1] ?? null;
+}
+
+export function extractIncomeOccurrenceDateFromTransactionNote(
+  note: string,
+): string | null {
+  const match = note.match(INCOME_SOURCE_META_RE);
+  return match?.[2] ?? null;
 }
 
 /** Note is only for extra context — not a duplicate of the amount on the right */
@@ -45,11 +53,16 @@ export function buildStoredTransactionNote(
   note: string,
   amount: number,
   incomeSourceId?: string | null,
+  incomeOccurrenceDate?: string | null,
 ): string {
   const visible = sanitizeTransactionNote(note, amount);
   const marker =
     typeof incomeSourceId === "string" && incomeSourceId.trim()
-      ? `[[finos:income-source:${incomeSourceId.trim()}]]`
+      ? `[[finos:income-source:${incomeSourceId.trim()}${
+          typeof incomeOccurrenceDate === "string" && incomeOccurrenceDate.trim()
+            ? `:${incomeOccurrenceDate.trim().slice(0, 10)}`
+            : ""
+        }]]`
       : "";
   if (!marker) return visible;
   return visible ? `${visible}\n${marker}` : marker;

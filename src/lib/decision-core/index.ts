@@ -49,6 +49,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
       confirmedTransactions,
       today: state.today,
       locale: state.locale,
+      forecastHorizonMonths: state.forecastHorizonMonths,
     }),
     essentialBudgetReserve: {
       totalRemaining: 0,

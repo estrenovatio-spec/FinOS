@@ -57,6 +57,7 @@ export interface ParsedTransaction {
   confirmed?: boolean;
   recurringId?: string | null;
   incomeSourceId?: string | null;
+  incomeOccurrenceDate?: string | null;
   odometerKm?: number | null;
   fuelLiters?: number | null;
   vehicleId?: string | null;

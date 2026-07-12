@@ -70,6 +70,7 @@ test("existing sources stay in place when a new one is added", () => {
       expectedDate: "2026-07-25",
       expectedAmount: "120000",
       kind: "salary",
+      recurrence: "once",
       isPrimary: true,
     },
   ];
@@ -99,6 +100,7 @@ test("saving multiple income sources does not overwrite the first one", () => {
         expectedDate: "2026-07-25",
         expectedAmount: "120000",
         kind: "salary",
+        recurrence: "once",
         isPrimary: true,
       },
       {
@@ -107,6 +109,7 @@ test("saving multiple income sources does not overwrite the first one", () => {
         expectedDate: "2026-07-18",
         expectedAmount: "40000",
         kind: "passive",
+        recurrence: "once",
         isPrimary: false,
       },
     ],
@@ -131,6 +134,7 @@ test("cancel-like empty draft is not persisted as a regular income source", () =
         expectedDate: "",
         expectedAmount: "",
         kind: "salary",
+        recurrence: "once",
         isPrimary: true,
       },
     ],
@@ -154,6 +158,7 @@ test("forecast line accounts for multiple income sources", () => {
             expectedDate: "2026-07-25",
             expectedAmount: 120000,
             kind: "salary",
+            recurrence: "once",
             isPrimary: true,
           },
           {
@@ -162,6 +167,7 @@ test("forecast line accounts for multiple income sources", () => {
             expectedDate: "2026-07-18",
             expectedAmount: 40000,
             kind: "passive",
+            recurrence: "once",
           },
         ],
       },
@@ -194,6 +200,7 @@ test("same-day incomes stay separate without losing total amount", () => {
             expectedDate: "2026-07-25",
             expectedAmount: 120000,
             kind: "salary",
+            recurrence: "once",
             isPrimary: true,
           },
           {
@@ -202,6 +209,7 @@ test("same-day incomes stay separate without losing total amount", () => {
             expectedDate: "2026-07-25",
             expectedAmount: 40000,
             kind: "passive",
+            recurrence: "once",
           },
         ],
       },

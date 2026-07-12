@@ -1,4 +1,6 @@
 import { extractIncomeSourceIdFromTransactionNote } from "@/lib/transaction-note";
+import { extractIncomeOccurrenceDateFromTransactionNote } from "@/lib/transaction-note";
+import { advanceRecurringDate } from "@/lib/planning/analytics";
 import type { CategoryDefinition, Locale, Transaction } from "@/types";
 import type { RecurringTransaction } from "@/types/planning";
 
@@ -15,12 +17,18 @@ export const MONEY_SETUP_INCOME_SOURCE_KINDS = [
 export type MoneySetupIncomeSourceKind =
   (typeof MONEY_SETUP_INCOME_SOURCE_KINDS)[number];
 
+export type MoneySetupIncomeRecurrence = "once" | "monthly";
+
 export interface MoneySetupIncomeSource {
   id: string;
   label: string;
   expectedDate: string | null;
   expectedAmount: number | null;
   kind: MoneySetupIncomeSourceKind;
+  recurrence?: MoneySetupIncomeRecurrence;
+  intervalMonths?: number | null;
+  dayOfMonth?: number | null;
+  endDate?: string | null;
   isPrimary?: boolean;
 }
 
@@ -31,6 +39,8 @@ export type MoneySetupIncomeSourceStatus =
   | "overdue_unconfirmed";
 
 export interface ResolvedMoneySetupIncomeSource extends MoneySetupIncomeSource {
+  occurrenceId: string;
+  occurrenceDate: string;
   status: MoneySetupIncomeSourceStatus;
   matchedTransactionId: string | null;
   matchedTransactionDate: string | null;
@@ -102,6 +112,22 @@ function normalizeMoneySetupIncomeSource(
         : null,
     expectedAmount,
     kind,
+    recurrence:
+      source.recurrence === "once" || source.recurrence === "monthly"
+        ? source.recurrence
+        : "monthly",
+    intervalMonths:
+      source.intervalMonths == null || Number.isNaN(Number(source.intervalMonths))
+        ? 1
+        : Math.max(1, Math.min(60, Math.round(Number(source.intervalMonths)))),
+    dayOfMonth:
+      source.dayOfMonth == null || Number.isNaN(Number(source.dayOfMonth))
+        ? null
+        : Math.max(1, Math.min(31, Math.round(Number(source.dayOfMonth)))),
+    endDate:
+      typeof source.endDate === "string" && source.endDate.trim()
+        ? source.endDate
+        : null,
     ...(typeof source.isPrimary === "boolean" ? { isPrimary: source.isPrimary } : {}),
   };
 }
@@ -185,6 +211,19 @@ function isoDay(value: string | null | undefined): string | null {
   return value.slice(0, 10);
 }
 
+function addMonths(iso: string, months: 1 | 3 | 6): string {
+  const day = isoDay(iso);
+  if (!day) return iso;
+  const date = new Date(`${day}T12:00:00`);
+  const startDay = date.getDate();
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  if (next.getDate() !== startDay) {
+    next.setDate(0);
+  }
+  return next.toISOString().slice(0, 10);
+}
+
 function dayDistance(from: string, to: string): number {
   const fromDate = new Date(`${from}T12:00:00`);
   const toDate = new Date(`${to}T12:00:00`);
@@ -216,6 +255,70 @@ function scoreIncomeMatch(
   return -1;
 }
 
+function resolveIncomeSourceDayOfMonth(source: MoneySetupIncomeSource): number | null {
+  if (source.dayOfMonth != null) {
+    return Math.max(1, Math.min(31, Math.round(source.dayOfMonth)));
+  }
+  const date = isoDay(source.expectedDate);
+  if (!date) return null;
+  return Number.parseInt(date.slice(8, 10), 10) || null;
+}
+
+function buildOccurrenceId(sourceId: string, occurrenceDate: string): string {
+  return `income-${sourceId}-${occurrenceDate}`;
+}
+
+function generateIncomeOccurrences(args: {
+  source: MoneySetupIncomeSource & { isLegacy?: boolean };
+  horizonEnd: string;
+}): Array<
+  (MoneySetupIncomeSource & { isLegacy?: boolean }) & {
+    occurrenceId: string;
+    occurrenceDate: string;
+  }
+> {
+  const startDate = isoDay(args.source.expectedDate);
+  if (!startDate) return [];
+
+  const recurrence = args.source.recurrence ?? "monthly";
+  const intervalMonths = Math.max(1, args.source.intervalMonths ?? 1);
+  const dayOfMonth = resolveIncomeSourceDayOfMonth(args.source);
+  const endDate = isoDay(args.source.endDate);
+
+  const occurrences: Array<
+    (MoneySetupIncomeSource & { isLegacy?: boolean }) & {
+      occurrenceId: string;
+      occurrenceDate: string;
+    }
+  > = [];
+
+  let runDate = startDate;
+  while (runDate <= args.horizonEnd) {
+    if (!endDate || runDate <= endDate) {
+      occurrences.push({
+        ...args.source,
+        expectedDate: runDate,
+        dayOfMonth,
+        occurrenceId: buildOccurrenceId(args.source.id, runDate),
+        occurrenceDate: runDate,
+      });
+    }
+
+    if (recurrence !== "monthly") break;
+
+    const nextRunDate = advanceRecurringDate(
+      runDate,
+      "monthly",
+      dayOfMonth,
+      intervalMonths,
+    );
+    if (nextRunDate === runDate) break;
+    runDate = nextRunDate;
+  }
+
+  return occurrences;
+}
+
 export function listConfiguredIncomeSources(
   setup: MoneySetup,
   locale: Locale = "ru",
@@ -237,6 +340,10 @@ export function listConfiguredIncomeSources(
         expectedDate: setup.nextIncomeDate,
         expectedAmount: setup.expectedIncomeAmount,
         kind: "salary",
+        recurrence: "monthly",
+        intervalMonths: 1,
+        dayOfMonth: Number.parseInt(setup.nextIncomeDate.slice(8, 10), 10) || null,
+        endDate: null,
         isPrimary: true,
         isLegacy: true,
       },
@@ -251,8 +358,10 @@ export function resolveMoneySetupIncomeSources(args: {
   confirmedTransactions: Transaction[];
   today: string;
   locale?: Locale;
+  forecastHorizonMonths?: 1 | 3 | 6;
 }): ResolvedMoneySetupIncomeSource[] {
-  const sources = listConfiguredIncomeSources(args.moneySetup, args.locale ?? "ru")
+  const horizonEnd = addMonths(args.today, args.forecastHorizonMonths ?? 3);
+  const occurrences = listConfiguredIncomeSources(args.moneySetup, args.locale ?? "ru")
     .filter(
       (source) =>
         typeof source.expectedDate === "string" &&
@@ -260,11 +369,17 @@ export function resolveMoneySetupIncomeSources(args: {
         source.expectedAmount != null &&
         source.expectedAmount > 0,
     )
+    .flatMap((source) =>
+      generateIncomeOccurrences({
+        source,
+        horizonEnd,
+      }),
+    )
     .sort((left, right) => {
-      const leftDate = left.expectedDate ?? "";
-      const rightDate = right.expectedDate ?? "";
-      if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
-      return left.id.localeCompare(right.id);
+      if (left.occurrenceDate !== right.occurrenceDate) {
+        return left.occurrenceDate.localeCompare(right.occurrenceDate);
+      }
+      return left.occurrenceId.localeCompare(right.occurrenceId);
     });
 
   const confirmedIncome = args.confirmedTransactions
@@ -277,16 +392,30 @@ export function resolveMoneySetupIncomeSources(args: {
     });
   const usedTransactionIds = new Set<string>();
 
-  return sources.map((source) => {
+  return occurrences.map((source) => {
     let matchedTransaction: Transaction | null = null;
     let matchedScore = -1;
 
     for (const transaction of confirmedIncome) {
       if (usedTransactionIds.has(transaction.id)) continue;
-      if (extractIncomeSourceIdFromTransactionNote(transaction.note) === source.id) {
+      const noteIncomeSourceId = extractIncomeSourceIdFromTransactionNote(transaction.note);
+      const noteOccurrenceDate = extractIncomeOccurrenceDateFromTransactionNote(transaction.note);
+      if (
+        noteIncomeSourceId === source.id &&
+        noteOccurrenceDate === source.occurrenceDate
+      ) {
         matchedTransaction = transaction;
         matchedScore = Number.MAX_SAFE_INTEGER;
         break;
+      }
+      if (
+        noteIncomeSourceId === source.id &&
+        noteOccurrenceDate == null &&
+        isoDay(transaction.date) === source.occurrenceDate
+      ) {
+        matchedTransaction = transaction;
+        matchedScore = Number.MAX_SAFE_INTEGER - 1;
+        continue;
       }
       const score = scoreIncomeMatch(source, transaction);
       if (score > matchedScore) {
@@ -300,6 +429,8 @@ export function resolveMoneySetupIncomeSources(args: {
       return {
         ...source,
         status: "received",
+        occurrenceId: source.occurrenceId,
+        occurrenceDate: source.occurrenceDate,
         matchedTransactionId: matchedTransaction.id,
         matchedTransactionDate: isoDay(matchedTransaction.date),
       };
@@ -315,11 +446,13 @@ export function resolveMoneySetupIncomeSources(args: {
             ? "due_today"
             : "overdue_unconfirmed";
 
-    return {
-      ...source,
-      status,
-      matchedTransactionId: null,
-      matchedTransactionDate: null,
-    };
+      return {
+        ...source,
+        occurrenceId: source.occurrenceId,
+        occurrenceDate: source.occurrenceDate,
+        status,
+        matchedTransactionId: null,
+        matchedTransactionDate: null,
+      };
   });
 }

@@ -2,7 +2,10 @@ import { getCategoryLabel } from "@/lib/categories";
 import { buildForecastDays } from "@/lib/decision-core/forecast-days";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
-import { extractIncomeSourceIdFromTransactionNote } from "@/lib/transaction-note";
+import {
+  extractIncomeOccurrenceDateFromTransactionNote,
+  extractIncomeSourceIdFromTransactionNote,
+} from "@/lib/transaction-note";
 import { isPendingTransaction } from "@/lib/transaction-confirmed";
 import type {
   BalanceForecast,
@@ -119,15 +122,17 @@ function buildIncomeEvents(ctx: DecisionCoreContext): ForecastEvent[] {
           ? ctx.today
           : source.expectedDate!.slice(0, 10);
       return {
-        id: `income-source-${source.id}-${effectiveDate}`,
+        id: `income-source-${source.occurrenceId}`,
         title: source.label,
         amount: source.expectedAmount ?? 0,
         date: effectiveDate,
         balanceAfter: 0,
         source: "income_source" as const,
         incomeSourceId: source.id,
+        incomeOccurrenceId: source.occurrenceId,
+        incomeOccurrenceDate: source.occurrenceDate,
         plannedIncomeStatus: source.status,
-        plannedDate: source.expectedDate?.slice(0, 10) ?? effectiveDate,
+        plannedDate: source.occurrenceDate,
       };
     });
 }
@@ -145,6 +150,12 @@ function buildConfirmedFutureTransactionEvents(ctx: DecisionCoreContext): Foreca
       balanceAfter: 0,
       source: "confirmed_transaction" as const,
       incomeSourceId: extractIncomeSourceIdFromTransactionNote(transaction.note),
+      incomeOccurrenceId:
+        extractIncomeSourceIdFromTransactionNote(transaction.note) &&
+        extractIncomeOccurrenceDateFromTransactionNote(transaction.note)
+          ? `income-${extractIncomeSourceIdFromTransactionNote(transaction.note)}-${extractIncomeOccurrenceDateFromTransactionNote(transaction.note)}`
+          : null,
+      incomeOccurrenceDate: extractIncomeOccurrenceDateFromTransactionNote(transaction.note),
       plannedIncomeStatus: null,
       plannedDate: null,
     }));
@@ -162,6 +173,8 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
       balanceAfter: 0,
       source: "pending_transaction" as const,
       incomeSourceId: null,
+      incomeOccurrenceId: null,
+      incomeOccurrenceDate: null,
       plannedIncomeStatus: null,
       plannedDate: null,
     }));
@@ -195,6 +208,8 @@ function buildRecurringForecastEvents(
           balanceAfter: 0,
           source: "recurring",
           incomeSourceId: null,
+          incomeOccurrenceId: null,
+          incomeOccurrenceDate: null,
           plannedIncomeStatus: null,
           plannedDate: null,
         });
@@ -227,6 +242,8 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
       balanceAfter: 0,
       source: "debt_payment" as const,
       incomeSourceId: null,
+      incomeOccurrenceId: null,
+      incomeOccurrenceDate: null,
       plannedIncomeStatus: null,
       plannedDate: null,
     }));

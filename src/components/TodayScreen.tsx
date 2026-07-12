@@ -150,6 +150,7 @@ export function TodayScreen({
               ? today
               : params.plannedDate,
           incomeSourceId: params.incomeSourceId,
+          incomeOccurrenceDate: params.plannedDate,
           title:
             locale === "ru"
               ? "Подтвердить доход"

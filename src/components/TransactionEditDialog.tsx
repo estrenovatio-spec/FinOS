@@ -19,6 +19,7 @@ import { clearCachedRecommendations } from "@/lib/storage";
 import {
   buildStoredTransactionNote,
   displayTransactionNote,
+  extractIncomeOccurrenceDateFromTransactionNote,
   extractIncomeSourceIdFromTransactionNote,
 } from "@/lib/transaction-note";
 import { normalizeGoalAmount } from "@/lib/goal-from-transaction";
@@ -103,7 +104,9 @@ export function TransactionEditDialog({
     }
     const sessionKey =
       transaction?.id ??
-      draft?.incomeSourceId ??
+      (draft?.incomeSourceId && draft?.incomeOccurrenceDate
+        ? `${draft.incomeSourceId}:${draft.incomeOccurrenceDate}`
+        : draft?.incomeSourceId) ??
       (draft
         ? `${draft.type}:${draft.categoryId}:${draft.date}:${draft.amount}`
         : null);
@@ -242,7 +245,10 @@ export function TransactionEditDialog({
         draft.incomeSourceId != null
           ? allTransactions.find(
               (item) =>
-                extractIncomeSourceIdFromTransactionNote(item.note) === draft.incomeSourceId,
+                extractIncomeSourceIdFromTransactionNote(item.note) === draft.incomeSourceId &&
+                (draft.incomeOccurrenceDate == null ||
+                  extractIncomeOccurrenceDateFromTransactionNote(item.note) ===
+                    draft.incomeOccurrenceDate),
             ) ?? null
           : null;
       const nextDate = date;
@@ -250,6 +256,7 @@ export function TransactionEditDialog({
         comment,
         roundedAmount,
         draft.incomeSourceId,
+        draft.incomeOccurrenceDate,
       );
 
       if (linkedTransaction) {

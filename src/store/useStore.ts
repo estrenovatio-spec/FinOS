@@ -50,6 +50,7 @@ import {
 import { GOAL_JAR_CATEGORY_ID } from "@/lib/planning/goal-transfer";
 import {
   buildStoredTransactionNote,
+  extractIncomeOccurrenceDateFromTransactionNote,
   extractIncomeSourceIdFromTransactionNote,
   sanitizeTransactionNote,
 } from "@/lib/transaction-note";
@@ -706,6 +707,7 @@ export const useStore = create<StoreState>()(
               normalized.note,
               normalized.amount,
               data.incomeSourceId,
+              data.incomeOccurrenceDate,
             ),
             goalId: goalId && goalAmount ? goalId : null,
             goalAmount: goalId && goalAmount ? goalAmount : null,
@@ -950,6 +952,8 @@ export const useStore = create<StoreState>()(
             const noteIncomeSourceId = extractIncomeSourceIdFromTransactionNote(
               tx.note,
             );
+            const noteIncomeOccurrenceDate =
+              extractIncomeOccurrenceDateFromTransactionNote(tx.note);
             let categoryId = patch.categoryId ?? tx.categoryId;
             const valid = categories.some(
               (c) => c.id === categoryId && c.type === type,
@@ -993,6 +997,7 @@ export const useStore = create<StoreState>()(
                     patch.note,
                     amount,
                     noteIncomeSourceId,
+                    noteIncomeOccurrenceDate,
                   )
                 : tx.note;
             updated = {

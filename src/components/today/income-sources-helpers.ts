@@ -1,5 +1,6 @@
 import type {
   MoneySetup,
+  MoneySetupIncomeRecurrence,
   MoneySetupIncomeSource,
   MoneySetupIncomeSourceKind,
 } from "@/lib/money-setup";
@@ -11,6 +12,7 @@ export type IncomeSourceDraft = {
   expectedDate: string;
   expectedAmount: string;
   kind: MoneySetupIncomeSourceKind;
+  recurrence: MoneySetupIncomeRecurrence;
   isPrimary: boolean;
 };
 
@@ -34,6 +36,7 @@ export function toIncomeSourceDraft(
     expectedAmount:
       source.expectedAmount != null ? String(source.expectedAmount) : "",
     kind: source.kind,
+    recurrence: source.recurrence ?? "monthly",
     isPrimary: Boolean(source.isPrimary),
   };
 }
@@ -45,6 +48,7 @@ export function emptyIncomeSourceDraft(isPrimary: boolean): IncomeSourceDraft {
     expectedDate: "",
     expectedAmount: "",
     kind: "salary",
+    recurrence: "monthly",
     isPrimary,
   };
 }
@@ -62,11 +66,12 @@ export function buildLegacyIncomeSourceDraft(
   return {
     id: makeIncomeSourceId(),
     label: locale === "ru" ? "Основной доход" : "Primary income",
-    expectedDate: setup.nextIncomeDate ?? "",
-    expectedAmount:
-      setup.expectedIncomeAmount != null ? String(setup.expectedIncomeAmount) : "",
-    kind: "salary",
-    isPrimary: true,
+      expectedDate: setup.nextIncomeDate ?? "",
+      expectedAmount:
+        setup.expectedIncomeAmount != null ? String(setup.expectedIncomeAmount) : "",
+      kind: "salary",
+      recurrence: "monthly",
+      isPrimary: true,
   };
 }
 
@@ -130,6 +135,13 @@ export function buildIncomeSetupSavePayload(args: {
       expectedDate: item.expectedDate || null,
       expectedAmount: parseAmount(item.expectedAmount),
       kind: item.kind,
+      recurrence: item.recurrence,
+      intervalMonths: item.recurrence === "monthly" ? 1 : null,
+      dayOfMonth:
+        item.recurrence === "monthly" && item.expectedDate
+          ? Number.parseInt(item.expectedDate.slice(8, 10), 10) || null
+          : null,
+      endDate: null,
       ...(item.isPrimary ? { isPrimary: true } : {}),
     }),
   );

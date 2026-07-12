@@ -18,6 +18,7 @@ import { buildTodayPayments } from "@/lib/decision-core/today-payments";
 import type { DecisionCoreContext, DecisionCoreState } from "@/lib/decision-core/types";
 import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 import { confirmPendingPaymentById } from "@/lib/pending-payment";
+import { buildStoredTransactionNote } from "@/lib/transaction-note";
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { getDefaultCategories } from "@/lib/categories";
 import type { Transaction } from "@/types";
@@ -143,6 +144,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
       confirmedTransactions,
       today: state.today,
       locale: state.locale,
+      forecastHorizonMonths: state.forecastHorizonMonths,
     }),
     safeSpending: calculateDecisionSafeSpending(state),
     essentialBudgetReserve: {
@@ -1513,6 +1515,7 @@ test("future expected income stays in forecast before its planned date", () => {
             expectedDate: "2026-07-10",
             expectedAmount: 120000,
             kind: "salary",
+            recurrence: "once",
             isPrimary: true,
           },
         ],
@@ -1544,6 +1547,7 @@ test("planned income due today stays in forecast as planned and asks for confirm
             expectedDate: "2026-07-10",
             expectedAmount: 120000,
             kind: "salary",
+            recurrence: "once",
             isPrimary: true,
           },
         ],
@@ -1576,6 +1580,7 @@ test("overdue unconfirmed income stays visible in forecast and marks confidence 
             expectedDate: "2026-07-10",
             expectedAmount: 120000,
             kind: "salary",
+            recurrence: "once",
             isPrimary: true,
           },
         ],
@@ -1620,6 +1625,7 @@ test("confirmed income transaction prevents double counting of the expected sour
             expectedDate: "2026-07-10",
             expectedAmount: 120000,
             kind: "salary",
+            recurrence: "once",
             isPrimary: true,
           },
         ],
@@ -1988,4 +1994,199 @@ test("a risk outside the 1 month horizon appears when the horizon is expanded to
   assert.equal(threeMonths.ctx.forecast.horizonEndDate, "2026-10-13");
   assert.equal(threeMonths.result.nextRisk?.date, "2026-09-01");
   assert.equal(threeMonths.result.safeUntil.status, "constraint_found");
+});
+
+test("one-time planned income appears only once within the horizon", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 50000, me: 50000, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "one-time-income",
+            label: "Разовый бонус",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "other",
+            recurrence: "once",
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  const incomeEvents = scenario.ctx.forecast.events.filter(
+    (event) => event.source === "income_source",
+  );
+
+  assert.deepEqual(
+    incomeEvents.map((event) => event.date),
+    ["2026-07-14"],
+  );
+});
+
+test("monthly planned income expands across the whole forecast horizon", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 80172, me: 80172, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "salary-14th",
+            label: "Доход 14 числа",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "salary",
+            recurrence: "monthly",
+            intervalMonths: 1,
+            dayOfMonth: 14,
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  const incomeEvents = scenario.ctx.forecast.events.filter(
+    (event) => event.source === "income_source",
+  );
+
+  assert.deepEqual(
+    incomeEvents.map((event) => event.date),
+    ["2026-07-14", "2026-08-14", "2026-09-14"],
+  );
+  assert.equal(
+    incomeEvents.every((event) => event.incomeOccurrenceId?.startsWith("income-salary-14th-")),
+    true,
+  );
+  assert.equal(incomeEvents.some((event) => event.date === "2026-10-14"), false);
+});
+
+test("confirmed July income replaces only the July occurrence while August and September remain planned", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-15",
+      forecastHorizonMonths: 3,
+      balances: { all: 102672, me: 102672, partner: 0 },
+      transactions: [
+        tx({
+          id: "salary-july-fact",
+          amount: 22500,
+          type: "income",
+          categoryId: "salary",
+          date: "2026-07-14",
+          note: buildStoredTransactionNote(
+            "Зарплата пришла",
+            22500,
+            "salary-14th",
+            "2026-07-14",
+          ),
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "salary-14th",
+            label: "Зарплата",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "salary",
+            recurrence: "monthly",
+            intervalMonths: 1,
+            dayOfMonth: 14,
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  const plannedIncomeEvents = scenario.ctx.forecast.events.filter(
+    (event) => event.source === "income_source",
+  );
+  assert.deepEqual(
+    plannedIncomeEvents.map((event) => [event.date, event.amount]),
+    [
+      ["2026-08-14", 24000],
+      ["2026-09-14", 24000],
+      ["2026-10-14", 24000],
+    ].filter(([date]) => date <= scenario.ctx.forecast.horizonEndDate),
+  );
+  assert.equal(
+    plannedIncomeEvents.some((event) => event.incomeOccurrenceDate === "2026-07-14"),
+    false,
+  );
+});
+
+test("overdue unconfirmed income does not stop the monthly series", () => {
+  const sources = resolveMoneySetupIncomeSources({
+    moneySetup: {
+      ...emptyMoneySetup(),
+      incomeSources: [
+        {
+          id: "salary-14th",
+          label: "Зарплата",
+          expectedDate: "2026-07-14",
+          expectedAmount: 24000,
+          kind: "salary",
+          recurrence: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 14,
+          isPrimary: true,
+        },
+      ],
+    },
+    confirmedTransactions: [],
+    today: "2026-07-20",
+    forecastHorizonMonths: 3,
+    locale: "ru",
+  });
+
+  assert.deepEqual(
+    sources.map((source) => [source.occurrenceDate, source.status]),
+    [
+      ["2026-07-14", "overdue_unconfirmed"],
+      ["2026-08-14", "scheduled"],
+      ["2026-09-14", "scheduled"],
+      ["2026-10-14", "scheduled"],
+    ],
+  );
+});
+
+test("monthly income uses the last available day for shorter months", () => {
+  const sources = resolveMoneySetupIncomeSources({
+    moneySetup: {
+      ...emptyMoneySetup(),
+      incomeSources: [
+        {
+          id: "month-end-income",
+          label: "Доход в конце месяца",
+          expectedDate: "2026-01-31",
+          expectedAmount: 10000,
+          kind: "salary",
+          recurrence: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 31,
+          isPrimary: true,
+        },
+      ],
+    },
+    confirmedTransactions: [],
+    today: "2026-01-15",
+    forecastHorizonMonths: 3,
+    locale: "ru",
+  });
+
+  assert.deepEqual(
+    sources.map((source) => source.occurrenceDate),
+    ["2026-01-31", "2026-02-28", "2026-03-31"],
+  );
 });
