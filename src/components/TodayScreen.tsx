@@ -10,6 +10,7 @@ import {
 } from "@/components/today/main-action-resolver";
 import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
 import { MoneySetupDialog } from "@/components/MoneySetupDialog";
+import type { MoneySetupInitialSection } from "@/components/MoneySetupDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -45,7 +46,7 @@ export function TodayScreen({
   const { toast } = useToast();
   const [moneySetupOpen, setMoneySetupOpen] = useState(false);
   const [moneySetupSection, setMoneySetupSection] = useState<
-    "balance" | "income" | "required_expenses" | "essential_budgets" | null
+    MoneySetupInitialSection | null
   >(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -143,6 +144,14 @@ export function TodayScreen({
     setActionBusy(false);
   }
 
+  function handleOverviewAction(actionKey: "edit_current_balance") {
+    if (actionKey === "edit_current_balance") {
+      setActionError(null);
+      setMoneySetupSection("current_balance");
+      setMoneySetupOpen(true);
+    }
+  }
+
   return (
     <div className="space-y-3 pb-24">
       <section className="space-y-1 px-1 pt-1">
@@ -158,7 +167,11 @@ export function TodayScreen({
         onAction={handleMainAction}
       />
 
-      <TodayOverview title={view.overviewTitle} items={view.overviewItems} />
+      <TodayOverview
+        title={view.overviewTitle}
+        items={view.overviewItems}
+        onItemAction={handleOverviewAction}
+      />
 
       {view.payments ? (
         <Card className="border-border/25 bg-card/95 shadow-none">

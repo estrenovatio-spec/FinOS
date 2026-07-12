@@ -27,6 +27,8 @@ export type TodayOverviewItem = {
   label: string;
   value: string;
   caption?: string | null;
+  actionLabel?: string | null;
+  actionKey?: "edit_current_balance" | null;
 };
 
 export type TodayPaymentsView = {
@@ -363,6 +365,8 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
         : locale === "ru"
           ? "От этой суммы строится прогноз."
           : "The forecast starts from this amount.",
+    actionLabel: locale === "ru" ? "Изменить" : "Edit",
+    actionKey: "edit_current_balance",
   };
 }
 

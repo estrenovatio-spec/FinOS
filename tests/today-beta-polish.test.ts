@@ -5,9 +5,11 @@ import { buildMoneySetupBalanceSectionView } from "@/components/MoneySetupDialog
 import { buildFocusedForecastView } from "@/components/app/focused-forecast-presenter";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
+import { getDefaultCategories } from "@/lib/categories";
 import { emptyMoneySetup } from "@/lib/money-setup";
 import type { BalanceForecast, DecisionCoreResult } from "@/lib/decision-core/types";
 import { ChartColumn, House, ReceiptText } from "lucide-react";
+import { useStore } from "@/store/useStore";
 
 function makeDecision(
   partial?: Partial<DecisionCoreResult>,
@@ -204,6 +206,8 @@ test("current balance is always visible when known", () => {
   const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
   assert.equal(currentBalance?.label, "Сейчас в кошельке");
   assert.match(currentBalance?.value ?? "", /40[\s\u00A0]000 ₽/);
+  assert.equal(currentBalance?.actionLabel, "Изменить");
+  assert.equal(currentBalance?.actionKey, "edit_current_balance");
 });
 
 test("allowed available shows amount instead of prose", () => {
@@ -712,4 +716,84 @@ test("MoneySetupDialog with initialSection=current_balance shows the current bal
   assert.equal(view.prompt, "Сколько денег сейчас доступно?");
   assert.equal(view.inputLabel, "Доступно сейчас");
   assert.equal(view.showInlineSaveButton, true);
+});
+
+test("setActualCash replaces the current balance instead of adding to it", () => {
+  const previous = useStore.getState();
+
+  useStore.setState({
+    ...previous,
+    categories: getDefaultCategories(),
+    transactions: [
+      {
+        id: "expense-1",
+        amount: 1485,
+        type: "expense",
+        categoryId: "groceries",
+        currency: "RUB",
+        note: "Продукты",
+        date: "2026-07-12",
+        owner: "me",
+        goalId: null,
+        goalAmount: null,
+        recurringId: null,
+        odometerKm: null,
+        fuelLiters: null,
+        vehicleId: null,
+        transferPairId: null,
+        businessTxId: null,
+        confirmed: true,
+      },
+    ],
+    cashOffsetMe: 0,
+    cashOffsetPartner: 0,
+  });
+
+  useStore.getState().setActualCash("me", 68515);
+  assert.equal(useStore.getState().cashOffsetMe, 70000);
+
+  useStore.getState().setActualCash("me", 60000);
+  assert.equal(useStore.getState().cashOffsetMe, 61485);
+
+  useStore.setState(previous);
+});
+
+test("setActualCash allows saving zero without creating an income transaction", () => {
+  const previous = useStore.getState();
+
+  useStore.setState({
+    ...previous,
+    categories: getDefaultCategories(),
+    transactions: [
+      {
+        id: "income-1",
+        amount: 10000,
+        type: "income",
+        categoryId: "salary",
+        currency: "RUB",
+        note: "Зарплата",
+        date: "2026-07-12",
+        owner: "me",
+        goalId: null,
+        goalAmount: null,
+        recurringId: null,
+        odometerKm: null,
+        fuelLiters: null,
+        vehicleId: null,
+        transferPairId: null,
+        businessTxId: null,
+        confirmed: true,
+      },
+    ],
+    cashOffsetMe: 0,
+    cashOffsetPartner: 0,
+  });
+
+  const beforeCount = useStore.getState().transactions.length;
+  useStore.getState().setActualCash("me", 0);
+
+  assert.equal(useStore.getState().cashOffsetMe, -10000);
+  assert.equal(useStore.getState().transactions.length, beforeCount);
+
+  useStore.setState(previous);
 });
