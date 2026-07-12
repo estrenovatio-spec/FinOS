@@ -15,6 +15,7 @@ type StatusInput = {
   forecast: BalanceForecast;
   requiredFloor: number;
   hasOverduePayments: boolean;
+  hasIncomeToConfirm: boolean;
 };
 
 export function buildStatus(input: StatusInput): DecisionStatus {
@@ -27,12 +28,14 @@ export function buildStatus(input: StatusInput): DecisionStatus {
     forecast,
     requiredFloor,
     hasOverduePayments,
+    hasIncomeToConfirm,
   } = input;
 
   let key: DecisionStatus["key"] = "calm";
   let note: string | undefined;
   if (
     hasOverduePayments ||
+    hasIncomeToConfirm ||
     todayPayments.length > 0 ||
     forecast.startBalance <= 0 ||
     (safeUntil.isReady && forecast.firstDeficitDate != null)

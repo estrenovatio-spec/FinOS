@@ -25,6 +25,7 @@ import {
   type BudgetPeriod,
 } from "@/lib/budget-period";
 import { applyDetectedOwner } from "@/lib/detect-owner";
+import { getLocalTodayIsoDate, normalizeIsoDate } from "@/lib/format-date";
 import {
   DEFAULT_MY_CHIP_COLOR,
   DEFAULT_PARTNER_CHIP_COLOR,
@@ -47,7 +48,11 @@ import {
   isPartnerTransferPairCandidate,
 } from "@/lib/partner-transfer";
 import { GOAL_JAR_CATEGORY_ID } from "@/lib/planning/goal-transfer";
-import { sanitizeTransactionNote } from "@/lib/transaction-note";
+import {
+  buildStoredTransactionNote,
+  extractIncomeSourceIdFromTransactionNote,
+  sanitizeTransactionNote,
+} from "@/lib/transaction-note";
 import {
   mapTransactionsForViewer,
   spenderFromViewerOwner,
@@ -213,6 +218,7 @@ interface StoreState {
     patch: {
       amount?: number;
       categoryId?: string;
+      date?: string;
       owner?: BudgetOwner;
       createdBy?: string | null;
       type?: TxType;
@@ -369,6 +375,13 @@ function calcBalance(transactions: Transaction[]): number {
     }
     return acc - tx.amount;
   }, 0);
+}
+
+function countsInCurrentBalance(tx: Transaction, today: string): boolean {
+  if (!countsInBalance(tx)) return false;
+  const txDate = normalizeIsoDate(tx.date);
+  if (!txDate) return false;
+  return txDate <= today;
 }
 
 function hasManualRecurringPayment(
@@ -684,6 +697,11 @@ export const useStore = create<StoreState>()(
             id: newId,
             owner,
             ...normalized,
+            note: buildStoredTransactionNote(
+              normalized.note,
+              normalized.amount,
+              data.incomeSourceId,
+            ),
             goalId: goalId && goalAmount ? goalId : null,
             goalAmount: goalId && goalAmount ? goalAmount : null,
             confirmed: data.confirmed === false ? false : true,
@@ -924,6 +942,9 @@ export const useStore = create<StoreState>()(
                 ? roundMoneyUp(patch.amount)
                 : tx.amount;
             const type = patch.type ?? tx.type;
+            const noteIncomeSourceId = extractIncomeSourceIdFromTransactionNote(
+              tx.note,
+            );
             let categoryId = patch.categoryId ?? tx.categoryId;
             const valid = categories.some(
               (c) => c.id === categoryId && c.type === type,
@@ -963,12 +984,17 @@ export const useStore = create<StoreState>()(
                 : (tx.vehicleId ?? null);
             const note =
               patch.note !== undefined
-                ? sanitizeTransactionNote(patch.note, amount)
+                ? buildStoredTransactionNote(
+                    patch.note,
+                    amount,
+                    noteIncomeSourceId,
+                  )
                 : tx.note;
             updated = {
               ...tx,
               amount,
               categoryId,
+              date: patch.date ?? tx.date,
               type,
               owner,
               note,
@@ -1006,6 +1032,7 @@ export const useStore = create<StoreState>()(
           void cloudPushTransactionUpdate(id, {
             amount: after.amount,
             categoryId: after.categoryId,
+            date: after.date,
             owner: after.owner,
             createdBy: after.createdBy,
             type: after.type,
@@ -1153,8 +1180,9 @@ export const useStore = create<StoreState>()(
       setActualCash: (owner, actualAmount) => {
         if (!Number.isFinite(actualAmount)) return;
         const actual = Math.round(actualAmount);
+        const today = getLocalTodayIsoDate();
         const txs = filterByHousehold(get().transactions, owner).filter(
-          countsInBalance,
+          (tx) => countsInCurrentBalance(tx, today),
         );
         const computed = calcBalance(txs);
         const offset = actual - computed;
@@ -2037,8 +2065,11 @@ function computedOwnerBalanceFromTxs(
   viewerTxs: Transaction[],
   owner: "me" | "partner",
 ): number {
+  const today = getLocalTodayIsoDate();
   return calcBalance(
-    viewerTxs.filter((tx) => tx.owner === owner && countsInBalance(tx)),
+    viewerTxs.filter(
+      (tx) => tx.owner === owner && countsInCurrentBalance(tx, today),
+    ),
   );
 }
 

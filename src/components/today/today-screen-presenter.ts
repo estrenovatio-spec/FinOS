@@ -194,6 +194,10 @@ function buildHeroTitle(mainAction: DecisionMainAction, locale: Locale): string 
           : "You do not have enough money right now";
     case "reserve_for_risk":
       return locale === "ru" ? "Лучше оставить" : "Better to keep";
+    case "confirm_income":
+      return locale === "ru" ? "Сегодня ожидается доход" : "Income is expected today";
+    case "resolve_income_delay":
+      return locale === "ru" ? "Доход не подтверждён" : "Income is not confirmed";
     case "complete_balance_setup":
       return locale === "ru" ? "Укажите, сколько денег сейчас" : "Set your current balance";
     case "complete_required_expenses_setup":
@@ -211,7 +215,9 @@ function buildHeroSafeUntilDue(decision: DecisionCoreResult, locale: Locale): st
 
   if (locale === "ru") {
     if (title.startsWith("До ")) {
-      return `Денег хватает до ${title.slice(3)}`;
+      return decision.safeUntil.confidence === "confirmed"
+        ? `Денег хватает до ${title.slice(3)}`
+        : `По плану денег хватает до ${title.slice(3)}`;
     }
     return title;
   }
@@ -246,6 +252,14 @@ function buildHeroDue(decision: DecisionCoreResult, locale: Locale): string | nu
         ? locale === "ru"
           ? `До ${formatDayMonth(mainAction.dueDate, locale)}`
           : `Until ${formatDayMonth(mainAction.dueDate, locale)}`
+        : null;
+    case "confirm_income":
+      return mainAction.description ?? null;
+    case "resolve_income_delay":
+      return mainAction.dueDate
+        ? locale === "ru"
+          ? `Ожидался ${formatDayMonth(mainAction.dueDate, locale)}`
+          : `Was expected on ${formatDayMonth(mainAction.dueDate, locale)}`
         : null;
     case "hold":
       return buildHeroSafeUntilDue(decision, locale);
@@ -286,6 +300,14 @@ function buildHeroReason(
         : locale === "ru"
           ? "До ближайшего обязательства эту сумму лучше не трогать."
           : "It is better not to touch this money before the next obligation.";
+    case "confirm_income":
+      return locale === "ru"
+        ? "Прогноз уже учитывает этот доход как план, но текущий баланс его пока не включает."
+        : "The forecast already counts this income as planned, but the current balance does not include it yet.";
+    case "resolve_income_delay":
+      return locale === "ru"
+        ? "Прогноз всё ещё опирается на этот доход как на план. Подтвердите факт или измените дату."
+        : "The forecast still relies on this income as planned. Confirm it or move the date.";
     case "complete_balance_setup":
       return locale === "ru"
         ? "Это отправная точка для прогноза."
@@ -394,7 +416,7 @@ function buildAllowedItem(allowed: DecisionAllowed, locale: Locale): TodayOvervi
       caption:
         locale === "ru"
           ? allowed.horizonDate
-            ? `Сумма рассчитана с учётом всех платежей до ${formatDayMonth(allowed.horizonDate, locale)}.`
+            ? `${allowed.confidence === "confirmed" ? "Сумма рассчитана" : "Сумма пока рассчитана по плану"} с учётом всех платежей до ${formatDayMonth(allowed.horizonDate, locale)}.${allowed.confidenceNote ? ` ${allowed.confidenceNote}` : ""}`
             : "Сумма рассчитана с учётом известных обязательств."
           : allowed.horizonDate
             ? `Calculated with all payments until ${formatDayMonth(allowed.horizonDate, locale)}.`
@@ -416,7 +438,7 @@ function buildAllowedItem(allowed: DecisionAllowed, locale: Locale): TodayOvervi
       caption:
         locale === "ru"
           ? allowed.horizonDate
-            ? `Эти деньги понадобятся до ${formatDayMonth(allowed.horizonDate, locale)}.`
+            ? `Эти деньги понадобятся до ${formatDayMonth(allowed.horizonDate, locale)}.${allowed.confidenceNote ? ` ${allowed.confidenceNote}` : ""}`
             : "Сначала разберитесь с обязательными платежами."
           : allowed.horizonDate
             ? `This money is needed until ${formatDayMonth(allowed.horizonDate, locale)}.`
@@ -498,12 +520,17 @@ function buildTimingItem(input: TodayPresentationInput): TodayOverviewItem | nul
           .filter(Boolean)
           .join(" ")
       : null;
+    const confidenceCaption =
+      !decision.constraintExplanation && decision.safeUntil.confidenceNote
+        ? decision.safeUntil.confidenceNote
+        : null;
     return {
       id: "safe-until",
       label: locale === "ru" ? "Денег хватит до" : "Money lasts until",
       value: decision.safeUntil.title,
       caption:
         explanationCaption ||
+        confidenceCaption ||
         (decision.safeUntil.note &&
         !decision.safeUntil.note.toLocaleLowerCase("ru-RU").includes("прогноз")
           ? decision.safeUntil.note

@@ -75,6 +75,70 @@ export function buildMainAction(
   const { locale, forecast, confirmedTransactions } = ctx;
 
   switch (decision.type) {
+    case "overdue_income_confirmation":
+      return {
+        type: "resolve_income_delay",
+        title:
+          locale === "ru"
+            ? "Доход не подтверждён"
+            : "Income is not confirmed",
+        text:
+          locale === "ru"
+            ? `Запишите фактическое поступление ${decision.title.toLowerCase()} — ${rub(decision.amount, locale)}.`
+            : `Record the actual ${decision.title} receipt — ${rub(decision.amount, locale)}.`,
+        description:
+          locale === "ru"
+            ? `Ожидался ${formatDayMonth(decision.dueDate, locale)}.`
+            : `It was expected on ${formatDayMonth(decision.dueDate, locale)}.`,
+        reason:
+          locale === "ru"
+            ? "Прогноз учитывает этот доход как план, но текущий баланс его не содержит."
+            : "The forecast still treats this income as planned, while the current balance does not include it.",
+        amount: decision.amount,
+        dueDate: decision.dueDate,
+        relatedEntityId: decision.incomeSourceId,
+        priority: "high",
+        command: {
+          type: "confirm_income_source",
+          incomeSourceId: decision.incomeSourceId,
+          incomeTitle: decision.title,
+          plannedDate: decision.dueDate,
+          plannedAmount: decision.amount,
+          status: "overdue_unconfirmed",
+        },
+      };
+    case "income_due_today":
+      return {
+        type: "confirm_income",
+        title:
+          locale === "ru"
+            ? "Сегодня ожидается доход"
+            : "Income is expected today",
+        text:
+          locale === "ru"
+            ? `Подтвердите поступление ${decision.title.toLowerCase()} — ${rub(decision.amount, locale)}.`
+            : `Confirm the ${decision.title} receipt — ${rub(decision.amount, locale)}.`,
+        description:
+          locale === "ru"
+            ? decision.title
+            : decision.title,
+        reason:
+          locale === "ru"
+            ? "Прогноз уже учитывает этот доход как план, но текущий баланс его не включает."
+            : "The forecast already includes this income as planned, but the current balance does not.",
+        amount: decision.amount,
+        dueDate: decision.dueDate,
+        relatedEntityId: decision.incomeSourceId,
+        priority: "high",
+        command: {
+          type: "confirm_income_source",
+          incomeSourceId: decision.incomeSourceId,
+          incomeTitle: decision.title,
+          plannedDate: decision.dueDate,
+          plannedAmount: decision.amount,
+          status: "due_today",
+        },
+      };
     case "overdue_payment":
       return {
         type: "pay_overdue",

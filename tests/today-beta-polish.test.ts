@@ -29,6 +29,7 @@ function makeDecision(
       rawStatus: "ready",
       safeToday: 3500,
       nextIncomeDate: "2026-07-25",
+      confidence: "confirmed",
     },
     todayPayments: [],
     nextRisk: null,
@@ -203,6 +204,7 @@ test("hero and safe-until overview use the same canonical date", () => {
         rawStatus: "ready",
         safeToday: 3500,
         nextIncomeDate: "2026-08-10",
+        confidence: "confirmed",
       },
       mainAction: {
         type: "hold",
@@ -730,6 +732,7 @@ test("Today safe-until card uses the same constraint explanation source", () => 
         rawStatus: "ready",
         safeToday: 0,
         nextIncomeDate: "2026-08-10",
+        confidence: "confirmed",
       },
       constraintExplanation: explanation,
     }),
@@ -922,6 +925,43 @@ test("setActualCash allows saving zero without creating an income transaction", 
 
   assert.equal(useStore.getState().cashOffsetMe, -10000);
   assert.equal(useStore.getState().transactions.length, beforeCount);
+
+  useStore.setState(previous);
+});
+
+test("setActualCash ignores confirmed income that is dated in the future", () => {
+  const previous = useStore.getState();
+
+  useStore.setState({
+    ...previous,
+    categories: getDefaultCategories(),
+    transactions: [
+      {
+        id: "future-income-1",
+        amount: 120000,
+        type: "income",
+        categoryId: "salary",
+        currency: "RUB",
+        note: "Зарплата",
+        date: "2026-07-20",
+        owner: "me",
+        goalId: null,
+        goalAmount: null,
+        recurringId: null,
+        odometerKm: null,
+        fuelLiters: null,
+        vehicleId: null,
+        transferPairId: null,
+        businessTxId: null,
+        confirmed: true,
+      },
+    ],
+    cashOffsetMe: 0,
+    cashOffsetPartner: 0,
+  });
+
+  useStore.getState().setActualCash("me", 5000);
+  assert.equal(useStore.getState().cashOffsetMe, 5000);
 
   useStore.setState(previous);
 });

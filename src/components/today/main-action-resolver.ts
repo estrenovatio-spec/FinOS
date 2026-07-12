@@ -14,6 +14,13 @@ export type TodayActionExecutionResult =
 
 export type TodayActionExecutor = {
   confirmPendingTransaction: (paymentId: string) => boolean;
+  openIncomeConfirmation: (params: {
+    incomeSourceId: string;
+    incomeTitle: string;
+    plannedDate: string;
+    plannedAmount: number;
+    status: "due_today" | "overdue_unconfirmed";
+  }) => void;
   openMoneySetup: (
     scope: "balance" | "income" | "required_expenses" | "essential_budgets",
   ) => void;
@@ -59,6 +66,14 @@ export function getMainActionButtonLabel(
       return locale === "ru"
         ? "Настроить важные траты"
         : "Set essential spending";
+    case "confirm_income_source":
+      return command.status === "overdue_unconfirmed"
+        ? locale === "ru"
+          ? "Записать фактическую сумму"
+          : "Record actual amount"
+        : locale === "ru"
+          ? "Подтвердить поступление"
+          : "Confirm receipt";
     case "open_forecast":
       return locale === "ru" ? "Открыть прогноз" : "Open forecast";
     case "open_recurring_operations":
@@ -83,6 +98,9 @@ export async function executeMainActionCommand(
         : { ok: false, error: "missing_entity" };
     case "open_money_setup":
       executor.openMoneySetup(command.scope);
+      return { ok: true };
+    case "confirm_income_source":
+      executor.openIncomeConfirmation(command);
       return { ok: true };
     case "open_forecast":
       executor.navigateToTab("forecast", {

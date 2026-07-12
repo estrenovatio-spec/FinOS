@@ -272,6 +272,7 @@ export async function apiUpdateTransaction(
       Transaction,
       | "amount"
       | "categoryId"
+      | "date"
       | "owner"
       | "createdBy"
       | "type"

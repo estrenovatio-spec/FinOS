@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/format-money";
+import { getForecastConfidence } from "@/lib/decision-core/forecast-confidence";
 import { getConstraintDate } from "@/lib/decision-core/constraint-point";
 import type {
   DecisionAllowed,
@@ -15,6 +16,7 @@ export function buildAllowed(
   ctx: DecisionCoreContext,
 ): DecisionAllowed {
   const horizonDate = getConstraintDate(ctx) ?? ctx.forecast.nextIncomeDate;
+  const confidence = getForecastConfidence(ctx, horizonDate);
   const hasKnownIncomeHorizon = Boolean(horizonDate);
   const essentialReserve = ctx.essentialBudgetReserve.totalRemaining;
   const discretionaryAmount = Math.max(
@@ -25,6 +27,8 @@ export function buildAllowed(
   switch (decision.type) {
     case "overdue_payment":
     case "payment_today":
+    case "overdue_income_confirmation":
+    case "income_due_today":
     case "current_deficit":
     case "future_deficit":
       return {
@@ -36,6 +40,8 @@ export function buildAllowed(
         status: "restricted",
         amount: 0,
         horizonDate: horizonDate ?? null,
+        confidence: confidence.confidence,
+        confidenceNote: confidence.note,
         reason:
           ctx.locale === "ru"
             ? "Необязательные траты нарушат обязательные платежи или приведут к дефициту."
@@ -51,6 +57,8 @@ export function buildAllowed(
         status: "restricted",
         amount: 0,
         horizonDate: decision.dueDate,
+        confidence: confidence.confidence,
+        confidenceNote: confidence.note,
         reason:
           ctx.locale === "ru"
             ? "Свободная сумма сегодня уже нужна как резерв под ближайшую ограничивающую точку."
@@ -66,6 +74,8 @@ export function buildAllowed(
         status: "unknown",
         amount: null,
         horizonDate: null,
+        confidence: "uncertain",
+        confidenceNote: null,
         reason:
           ctx.locale === "ru"
             ? "Нельзя надёжно посчитать безопасную сумму без ключевых данных."
@@ -84,8 +94,10 @@ export function buildAllowed(
           horizonDate: null,
           reason:
             ctx.locale === "ru"
-              ? "У прогноза нет подтверждённого горизонта следующего дохода."
+              ? confidence.note ?? "У прогноза нет подтверждённого горизонта следующего дохода."
               : "The forecast has no confirmed next-income horizon.",
+          confidence: confidence.confidence,
+          confidenceNote: confidence.note,
         };
       }
 
@@ -103,6 +115,8 @@ export function buildAllowed(
           status: "restricted",
           amount: 0,
           horizonDate,
+          confidence: confidence.confidence,
+          confidenceNote: confidence.note,
           reason:
             ctx.locale === "ru"
               ? "Свободного остатка сверх обязательств не остаётся."
@@ -119,6 +133,8 @@ export function buildAllowed(
         status: "available",
         amount: discretionaryAmount,
         horizonDate,
+        confidence: confidence.confidence,
+        confidenceNote: confidence.note,
         reason:
           ctx.locale === "ru"
             ? essentialReserve > 0

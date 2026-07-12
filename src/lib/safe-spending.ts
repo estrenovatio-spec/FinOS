@@ -73,7 +73,9 @@ function pickNearestIncome(
     today,
   });
   if (resolved.length > 0) {
-    const dated = resolved.filter((source) => source.status === "expected");
+    const dated = resolved.filter(
+      (source) => source.status === "scheduled" || source.status === "due_today",
+    );
     const overdue = resolved.filter((source) => source.status === "overdue_unconfirmed");
 
     if (dated.length === 0) {
@@ -82,9 +84,12 @@ function pickNearestIncome(
       } else {
         reasons.push("income_sources_present_but_no_future_income_date");
       }
+      const latestOverdue = [...overdue].sort((left, right) =>
+        (right.expectedDate ?? "").localeCompare(left.expectedDate ?? ""),
+      )[0];
       return {
-        nextIncomeDate: null,
-        expectedIncomeAmount: null,
+        nextIncomeDate: latestOverdue?.expectedDate ?? null,
+        expectedIncomeAmount: latestOverdue?.expectedAmount ?? null,
         hasOverdueUnconfirmed: overdue.length > 0,
         debug: {
           incomeMode: "sources",
@@ -192,12 +197,13 @@ export function calculateSafeSpending(
     reasons.push("invalid_income_period_date");
     return buildResult(base, "invalid_period");
   }
-  if (nextIncomeDate <= today) {
+  if (nextIncomeDate < today) {
     reasons.push("next_income_date_must_be_after_today");
-    return buildResult(base, "invalid_period");
+    return buildResult(base, "unconfirmed_income");
   }
 
-  const daysUntilIncome = daysInclusiveUntilDate(nextIncomeDate, today);
+  const daysUntilIncome =
+    nextIncomeDate === today ? 1 : daysInclusiveUntilDate(nextIncomeDate, today);
   if (daysUntilIncome == null) {
     reasons.push("invalid_income_period_date");
     return buildResult(base, "invalid_period");

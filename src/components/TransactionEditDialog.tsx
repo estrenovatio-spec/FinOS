@@ -16,7 +16,11 @@ import { hasPartnerBudget, myDisplayName, partnerDisplayName } from "@/lib/owner
 import { parseAmountFromTranscript } from "@/lib/parse-amount";
 import { roundMoneyUp } from "@/lib/format-money";
 import { clearCachedRecommendations } from "@/lib/storage";
-import { displayTransactionNote, sanitizeTransactionNote } from "@/lib/transaction-note";
+import {
+  buildStoredTransactionNote,
+  displayTransactionNote,
+  extractIncomeSourceIdFromTransactionNote,
+} from "@/lib/transaction-note";
 import { normalizeGoalAmount } from "@/lib/goal-from-transaction";
 import {
   collectHouseholdMemberUserIds,
@@ -35,19 +39,30 @@ import {
   partnerDefaultVehicleIds,
 } from "@/lib/vehicle";
 import { useCategories, useStore, useTransactions } from "@/store/useStore";
-import type { BudgetOwner, Transaction, TxType } from "@/types";
+import type { BudgetOwner, ParsedTransaction, Transaction, TxType } from "@/types";
 import { getFallbackCategoryId } from "@/lib/categories";
+
+export type TransactionDialogDraft = ParsedTransaction & {
+  title?: string | null;
+  submitLabel?: string | null;
+  subtitle?: string | null;
+  sourceEditLabel?: string | null;
+};
 
 interface TransactionEditDialogProps {
   transaction: Transaction | null;
+  draft?: TransactionDialogDraft | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRequestSourceEdit?: (() => void) | null;
 }
 
 export function TransactionEditDialog({
   transaction,
+  draft = null,
   open,
   onOpenChange,
+  onRequestSourceEdit = null,
 }: TransactionEditDialogProps) {
   const locale = useStore((s) => s.locale);
   const userName = useStore((s) => s.userName);
@@ -62,6 +77,7 @@ export function TransactionEditDialog({
   const vehicles = useStore((s) => s.vehicles);
   const vehiclePrefs = useStore((s) => s.vehiclePrefs);
   const lastFuelVehicleId = useStore((s) => s.lastFuelVehicleId);
+  const addTransaction = useStore((s) => s.addTransaction);
   const updateTransaction = useStore((s) => s.updateTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
   const syncVehicleFromTransaction = useStore((s) => s.syncVehicleFromTransaction);
@@ -75,18 +91,43 @@ export function TransactionEditDialog({
   const [owner, setOwner] = useState<BudgetOwner>("me");
   const [goalId, setGoalId] = useState("");
   const [goalAmount, setGoalAmount] = useState("");
+  const [date, setDate] = useState("");
   const [comment, setComment] = useState("");
   const editSessionKeyRef = useRef<string | null>(null);
+  const createMode = !transaction && Boolean(draft);
 
   useEffect(() => {
     if (!open) {
       editSessionKeyRef.current = null;
       return;
     }
-    if (!transaction) return;
-    if (editSessionKeyRef.current === transaction.id) return;
-    editSessionKeyRef.current = transaction.id;
+    const sessionKey =
+      transaction?.id ??
+      draft?.incomeSourceId ??
+      (draft
+        ? `${draft.type}:${draft.categoryId}:${draft.date}:${draft.amount}`
+        : null);
+    if (!sessionKey || editSessionKeyRef.current === sessionKey) return;
+    editSessionKeyRef.current = sessionKey;
 
+    if (draft) {
+      setAmount(String(draft.amount));
+      setTxType(draft.type);
+      setCategoryId(draft.categoryId);
+      setOwner(draft.owner ?? "me");
+      setDate(draft.date);
+      setGoalId(draft.goalId ?? "");
+      setGoalAmount(
+        draft.goalAmount && draft.goalAmount > 0 ? String(draft.goalAmount) : "",
+      );
+      setOdometerKm(draft.odometerKm != null ? String(draft.odometerKm) : "");
+      setFuelLiters(draft.fuelLiters != null ? String(draft.fuelLiters) : "");
+      setVehicleId(draft.vehicleId ?? "");
+      setComment(draft.note ?? "");
+      return;
+    }
+
+    if (!transaction) return;
     const raw =
       useStore.getState().transactions.find((t) => t.id === transaction.id) ?? transaction;
     const viewerUserId = decodeUserIdFromHouseholdToken(token) ?? cloudUserId ?? null;
@@ -99,6 +140,7 @@ export function TransactionEditDialog({
     setTxType(raw.type);
     setCategoryId(raw.categoryId);
     setOwner(resolveTransactionOwnerForViewer(raw, viewerUserId, memberIds));
+    setDate(raw.date.slice(0, 10));
     setGoalId(raw.goalId ?? "");
     setGoalAmount(
       raw.goalAmount && raw.goalAmount > 0 ? String(raw.goalAmount) : "",
@@ -118,22 +160,23 @@ export function TransactionEditDialog({
     lastFuelVehicleId,
     open,
     storedMemberIds,
+    draft,
     token,
     transaction,
     vehiclePrefs,
     vehicles,
   ]);
 
-  if (!transaction) return null;
+  if (!transaction && !draft) return null;
 
   const typeCategories = getCategoriesByType(categories, txType, locale);
   const isTransportFuelOrService =
     txType === "expense" &&
     categoryId === "transport" &&
-    (isFuelExpense({ type: txType, categoryId, note: transaction.note }) ||
-      isVehicleServiceExpense({ type: txType, categoryId, note: transaction.note }));
-  const isFuelTx = isFuelExpense({ type: txType, categoryId, note: transaction.note });
-  const isServiceTx = isVehicleServiceExpense({ type: txType, categoryId, note: transaction.note });
+    (isFuelExpense({ type: txType, categoryId, note: transaction?.note ?? draft?.note ?? "" }) ||
+      isVehicleServiceExpense({ type: txType, categoryId, note: transaction?.note ?? draft?.note ?? "" }));
+  const isFuelTx = isFuelExpense({ type: txType, categoryId, note: transaction?.note ?? draft?.note ?? "" });
+  const isServiceTx = isVehicleServiceExpense({ type: txType, categoryId, note: transaction?.note ?? draft?.note ?? "" });
   const showVehicleFields =
     garageHasVehicles(vehicles) &&
     isTransportFuelOrService &&
@@ -163,8 +206,6 @@ export function TransactionEditDialog({
         ? parseAmountFromTranscript(goalAmount, locale)
         : 0;
 
-    const raw =
-      useStore.getState().transactions.find((t) => t.id === transaction.id) ?? transaction;
     const viewerUserId = decodeUserIdFromHouseholdToken(token) ?? cloudUserId ?? null;
     const memberIds = collectHouseholdMemberUserIds(
       storedMemberIds,
@@ -187,29 +228,87 @@ export function TransactionEditDialog({
         ? Math.max(0, Math.round((Number(fuelLitersRaw) || 0) * 100) / 100)
         : null;
 
-    updateTransaction(transaction.id, {
-      amount: roundMoneyUp(parsed),
-      type: txType,
-      categoryId,
-      owner: spender?.owner,
-      createdBy: spender?.createdBy,
-      note: sanitizeTransactionNote(comment, roundMoneyUp(parsed)),
+    const roundedAmount = roundMoneyUp(parsed);
+    const goalPatch = {
       goalId: txType === "income" && goalId && parsedGoal > 0 ? goalId : null,
       goalAmount:
         txType === "income" && goalId && parsedGoal > 0
           ? normalizeGoalAmount(parsedGoal)
           : null,
-      ...(showVehicleFields ? { odometerKm: odometer, vehicleId: vid } : {}),
-      ...(showFuelLiters ? { fuelLiters: liters } : {}),
-    });
-    if (odometer != null) {
-      syncVehicleFromTransaction(transaction.id);
+    };
+
+    if (createMode && draft) {
+      const linkedTransaction =
+        draft.incomeSourceId != null
+          ? allTransactions.find(
+              (item) =>
+                extractIncomeSourceIdFromTransactionNote(item.note) === draft.incomeSourceId,
+            ) ?? null
+          : null;
+      const nextDate = date;
+      const nextNote = buildStoredTransactionNote(
+        comment,
+        roundedAmount,
+        draft.incomeSourceId,
+      );
+
+      if (linkedTransaction) {
+        updateTransaction(linkedTransaction.id, {
+          amount: roundedAmount,
+          type: txType,
+          categoryId,
+          date: nextDate,
+          owner: spender?.owner,
+          createdBy: spender?.createdBy,
+          note: nextNote,
+          ...goalPatch,
+          ...(showVehicleFields ? { odometerKm: odometer, vehicleId: vid } : {}),
+          ...(showFuelLiters ? { fuelLiters: liters } : {}),
+        });
+        if (odometer != null) {
+          syncVehicleFromTransaction(linkedTransaction.id);
+        }
+      } else {
+        addTransaction({
+          amount: roundedAmount,
+          type: txType,
+          categoryId,
+          currency: "RUB",
+          note: comment,
+          date: nextDate,
+          owner,
+          createdBy: spender?.createdBy,
+          incomeSourceId: draft.incomeSourceId,
+          ...goalPatch,
+          ...(showVehicleFields ? { odometerKm: odometer, vehicleId: vid } : {}),
+          ...(showFuelLiters ? { fuelLiters: liters } : {}),
+        });
+      }
+    } else if (transaction) {
+      updateTransaction(transaction.id, {
+        amount: roundedAmount,
+        type: txType,
+        categoryId,
+        owner: spender?.owner,
+        createdBy: spender?.createdBy,
+        note: comment,
+        ...goalPatch,
+        ...(showVehicleFields ? { odometerKm: odometer, vehicleId: vid } : {}),
+        ...(showFuelLiters ? { fuelLiters: liters } : {}),
+      });
+      if (odometer != null) {
+        syncVehicleFromTransaction(transaction.id);
+      }
     }
     clearCachedRecommendations();
     onOpenChange(false);
   };
 
   const handleDelete = () => {
+    if (!transaction) {
+      onOpenChange(false);
+      return;
+    }
     deleteTransaction(transaction.id);
     clearCachedRecommendations();
     onOpenChange(false);
@@ -219,6 +318,7 @@ export function TransactionEditDialog({
   const canSave =
     Number.isFinite(parsedAmount) &&
     parsedAmount > 0 &&
+    (!createMode || Boolean(date)) &&
     categoryId.length > 0 &&
     typeCategories.some((c) => c.id === categoryId);
 
@@ -226,9 +326,15 @@ export function TransactionEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(var(--tg-viewport-height,100dvh)-1rem)] w-[calc(100vw-1rem)] max-w-sm flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(90dvh,42rem)]">
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-10 text-left">
-          <DialogTitle>{t(locale, "txEditTitle")}</DialogTitle>
+          <DialogTitle>
+            {createMode
+              ? draft?.title ?? (locale === "ru" ? "Подтвердить доход" : "Confirm income")
+              : t(locale, "txEditTitle")}
+          </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            {formatTransactionDate(transaction.date, locale)}
+            {createMode
+              ? draft?.subtitle ?? formatTransactionDate(date, locale)
+              : formatTransactionDate(transaction?.date ?? "", locale)}
           </p>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 [-webkit-overflow-scrolling:touch]">
@@ -265,6 +371,21 @@ export function TransactionEditDialog({
               onChange={(e) => setAmount(e.target.value)}
               placeholder="500"
             />
+          </div>
+          <div className="space-y-1">
+            {createMode ? (
+              <>
+                <label className="text-sm font-medium" htmlFor="tx-date">
+                  {locale === "ru" ? "Дата поступления" : "Receipt date"}
+                </label>
+                <Input
+                  id="tx-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </>
+            ) : null}
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium" htmlFor="tx-comment">
@@ -400,19 +521,36 @@ export function TransactionEditDialog({
               {t(locale, "cancel")}
             </Button>
             <Button type="button" className="flex-1" disabled={!canSave} onClick={handleSave}>
-              {t(locale, "confirm")}
+              {createMode
+                ? draft?.submitLabel ?? (locale === "ru" ? "Сохранить" : "Save")
+                : t(locale, "confirm")}
             </Button>
           </div>
-          <div className="border-t pt-2">
-            <Button
-              type="button"
-              variant="destructive"
-              className="w-full"
-              onClick={handleDelete}
-            >
-              {t(locale, "txDelete")}
-            </Button>
-          </div>
+          {createMode && onRequestSourceEdit ? (
+            <div className="border-t pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={onRequestSourceEdit}
+              >
+                {draft?.sourceEditLabel ??
+                  (locale === "ru" ? "Изменить сумму или дату" : "Edit amount or date")}
+              </Button>
+            </div>
+          ) : null}
+          {!createMode ? (
+            <div className="border-t pt-2">
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full"
+                onClick={handleDelete}
+              >
+                {t(locale, "txDelete")}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

@@ -8,6 +8,7 @@ import { buildSyncPayload, deleteCloudTransaction, updateCloudTransaction } from
 const patchSchema = z.object({
   amount: z.number().positive().optional(),
   categoryId: z.string().optional(),
+  date: z.string().optional(),
   owner: z.enum(["me", "partner"]).optional(),
   createdBy: z.string().nullable().optional(),
   type: z.enum(["income", "expense"]).optional(),

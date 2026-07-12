@@ -1,5 +1,9 @@
 import type { SafeSpendingResult, SafeSpendingStatus } from "@/lib/safe-spending";
-import type { MoneySetup } from "@/lib/money-setup";
+import type {
+  MoneySetup,
+  MoneySetupIncomeSourceStatus,
+  ResolvedMoneySetupIncomeSource,
+} from "@/lib/money-setup";
 import type {
   CategoryDefinition,
   HouseholdFilter,
@@ -18,6 +22,8 @@ export type DecisionStatus = {
   note?: string;
 };
 
+export type ForecastConfidence = "confirmed" | "planned" | "uncertain";
+
 export type DecisionSafeUntil = {
   title: string;
   note: string | null;
@@ -26,6 +32,8 @@ export type DecisionSafeUntil = {
   rawStatus: SafeSpendingStatus;
   safeToday: number | null;
   nextIncomeDate: string | null;
+  confidence: ForecastConfidence;
+  confidenceNote?: string | null;
 };
 
 export type DecisionTodayPayment = {
@@ -54,6 +62,14 @@ export type DecisionMainActionCommand =
   | {
       type: "confirm_payment";
       paymentId: string;
+    }
+  | {
+      type: "confirm_income_source";
+      incomeSourceId: string;
+      incomeTitle: string;
+      plannedDate: string;
+      plannedAmount: number;
+      status: Extract<MoneySetupIncomeSourceStatus, "due_today" | "overdue_unconfirmed">;
     }
   | {
       type: "open_money_setup";
@@ -93,6 +109,8 @@ export type DecisionMainAction = {
     | "complete_income_setup"
     | "complete_required_expenses_setup"
     | "add_first_entry"
+    | "confirm_income"
+    | "resolve_income_delay"
     | "hold";
   title: string;
   text: string;
@@ -117,6 +135,8 @@ export type DecisionAllowed = {
   amount?: number | null;
   horizonDate?: string | null;
   reason?: string | null;
+  confidence?: ForecastConfidence;
+  confidenceNote?: string | null;
 };
 
 export type DecisionConstraintExplanation = {
@@ -154,6 +174,7 @@ export type DecisionCoreResult = {
 
 export type DecisionCoreSnapshot = DecisionCoreResult & {
   forecast: BalanceForecast;
+  resolvedIncomeSources: ResolvedMoneySetupIncomeSource[];
 };
 
 export type DecisionCoreState = {
@@ -186,6 +207,7 @@ export type DecisionCoreContext = {
   categoryBudgets: CategoryBudget[];
   budgetMonthStartDay: number;
   availableNow: number;
+  resolvedIncomeSources: ResolvedMoneySetupIncomeSource[];
   safeSpending: SafeSpendingResult;
   essentialBudgetReserve: EssentialBudgetReserve;
   forecast: BalanceForecast;
@@ -202,6 +224,20 @@ export type PrimaryDecision =
   | {
       type: "payment_today";
       paymentId: string;
+      amount: number;
+      dueDate: string;
+      title: string;
+    }
+  | {
+      type: "overdue_income_confirmation";
+      incomeSourceId: string;
+      amount: number;
+      dueDate: string;
+      title: string;
+    }
+  | {
+      type: "income_due_today";
+      incomeSourceId: string;
       amount: number;
       dueDate: string;
       title: string;
@@ -232,6 +268,7 @@ export type PrimaryDecision =
 
 export type ForecastEventSource =
   | "income_source"
+  | "confirmed_transaction"
   | "pending_transaction"
   | "recurring"
   | "debt_payment";
@@ -243,6 +280,9 @@ export type ForecastEvent = {
   date: string;
   balanceAfter: number;
   source: ForecastEventSource;
+  incomeSourceId?: string | null;
+  plannedIncomeStatus?: Exclude<MoneySetupIncomeSourceStatus, "received"> | null;
+  plannedDate?: string | null;
 };
 
 export type BalanceForecast = {

@@ -2,7 +2,7 @@ import { getCategoryLabel } from "@/lib/categories";
 import { daysInclusiveUntilDate } from "@/lib/format-date";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
-import { resolveMoneySetupIncomeSources } from "@/lib/money-setup";
+import { extractIncomeSourceIdFromTransactionNote } from "@/lib/transaction-note";
 import { isPendingTransaction } from "@/lib/transaction-confirmed";
 import type {
   BalanceForecast,
@@ -102,39 +102,49 @@ function hasMatchingActualTransaction(
 }
 
 function buildIncomeEvents(ctx: DecisionCoreContext): ForecastEvent[] {
-  const expectedSources = resolveMoneySetupIncomeSources({
-    moneySetup: ctx.moneySetup,
-    confirmedTransactions: ctx.confirmedTransactions,
-    today: ctx.today,
-    locale: ctx.locale,
-  }).filter((source) => source.status === "expected");
+  return ctx.resolvedIncomeSources
+    .filter(
+      (
+        source,
+      ): source is typeof source & {
+        status: Exclude<typeof source.status, "received">;
+      } => source.status !== "received",
+    )
+    .map((source) => {
+      const effectiveDate =
+        source.status === "overdue_unconfirmed"
+          ? ctx.today
+          : source.expectedDate!.slice(0, 10);
+      return {
+        id: `income-source-${source.id}-${effectiveDate}`,
+        title: source.label,
+        amount: source.expectedAmount ?? 0,
+        date: effectiveDate,
+        balanceAfter: 0,
+        source: "income_source" as const,
+        incomeSourceId: source.id,
+        plannedIncomeStatus: source.status,
+        plannedDate: source.expectedDate?.slice(0, 10) ?? effectiveDate,
+      };
+    });
+}
 
-  if (expectedSources.length > 0) {
-    const grouped = new Map<string, typeof expectedSources>();
-    for (const source of expectedSources) {
-      const day = source.expectedDate!.slice(0, 10);
-      grouped.set(day, [...(grouped.get(day) ?? []), source]);
-    }
-
-    return [...grouped.entries()].map(([date, sources]) => ({
-      id: `income-${date}-${sources
-        .map((source) => source.id)
-        .sort((left, right) => left.localeCompare(right))
-        .join("__")}`,
+function buildConfirmedFutureTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[] {
+  return ctx.confirmedTransactions
+    .filter((transaction) => transaction.date.slice(0, 10) > ctx.today)
+    .map((transaction) => ({
+      id: transaction.id,
       title:
-        sources.length === 1
-          ? sources[0]!.label
-          : ctx.locale === "ru"
-            ? "Доходы"
-            : "Income",
-      amount: sources.reduce((sum, source) => sum + (source.expectedAmount ?? 0), 0),
-      date,
+        transaction.note.trim() ||
+        getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale),
+      amount: transaction.type === "income" ? transaction.amount : -transaction.amount,
+      date: transaction.date.slice(0, 10),
       balanceAfter: 0,
-      source: "income_source",
+      source: "confirmed_transaction" as const,
+      incomeSourceId: extractIncomeSourceIdFromTransactionNote(transaction.note),
+      plannedIncomeStatus: null,
+      plannedDate: null,
     }));
-  }
-
-  return [];
 }
 
 function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[] {
@@ -148,6 +158,9 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
       date: transaction.date.slice(0, 10),
       balanceAfter: 0,
       source: "pending_transaction" as const,
+      incomeSourceId: null,
+      plannedIncomeStatus: null,
+      plannedDate: null,
     }));
 }
 
@@ -178,6 +191,9 @@ function buildRecurringForecastEvents(
           date: runDate,
           balanceAfter: 0,
           source: "recurring",
+          incomeSourceId: null,
+          plannedIncomeStatus: null,
+          plannedDate: null,
         });
       }
 
@@ -207,6 +223,9 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
       date: item.nextPaymentDate!.slice(0, 10),
       balanceAfter: 0,
       source: "debt_payment" as const,
+      incomeSourceId: null,
+      plannedIncomeStatus: null,
+      plannedDate: null,
     }));
 }
 
@@ -220,6 +239,7 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
 
   const events = [
     ...incomeEvents,
+    ...buildConfirmedFutureTransactionEvents(ctx),
     ...buildPendingTransactionEvents(ctx),
     ...buildRecurringForecastEvents(ctx, horizonEndDate),
     ...buildDebtEvents(ctx, horizonEndDate),

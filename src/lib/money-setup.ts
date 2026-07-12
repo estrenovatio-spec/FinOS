@@ -1,3 +1,4 @@
+import { extractIncomeSourceIdFromTransactionNote } from "@/lib/transaction-note";
 import type { CategoryDefinition, Locale, Transaction } from "@/types";
 import type { RecurringTransaction } from "@/types/planning";
 
@@ -24,7 +25,8 @@ export interface MoneySetupIncomeSource {
 }
 
 export type MoneySetupIncomeSourceStatus =
-  | "expected"
+  | "scheduled"
+  | "due_today"
   | "received"
   | "overdue_unconfirmed";
 
@@ -281,6 +283,11 @@ export function resolveMoneySetupIncomeSources(args: {
 
     for (const transaction of confirmedIncome) {
       if (usedTransactionIds.has(transaction.id)) continue;
+      if (extractIncomeSourceIdFromTransactionNote(transaction.note) === source.id) {
+        matchedTransaction = transaction;
+        matchedScore = Number.MAX_SAFE_INTEGER;
+        break;
+      }
       const score = scoreIncomeMatch(source, transaction);
       if (score > matchedScore) {
         matchedScore = score;
@@ -300,9 +307,13 @@ export function resolveMoneySetupIncomeSources(args: {
 
     const expectedDate = isoDay(source.expectedDate);
     const status =
-      expectedDate != null && expectedDate > args.today
-        ? "expected"
-        : "overdue_unconfirmed";
+      expectedDate == null
+        ? "overdue_unconfirmed"
+        : expectedDate > args.today
+          ? "scheduled"
+          : expectedDate === args.today
+            ? "due_today"
+            : "overdue_unconfirmed";
 
     return {
       ...source,

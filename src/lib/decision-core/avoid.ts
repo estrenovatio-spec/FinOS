@@ -11,6 +11,18 @@ export function buildAvoid(
   nextRisk: DecisionNextRisk | null,
 ): DecisionAvoid {
   switch (decision.type) {
+    case "overdue_income_confirmation":
+    case "income_due_today":
+      return {
+        text:
+          ctx.locale === "ru"
+            ? "Не рассчитывать на эти деньги как на уже полученные, пока вы не подтвердите поступление."
+            : "Do not treat this income as received until you confirm the actual receipt.",
+        reason:
+          ctx.locale === "ru"
+            ? "Текущий баланс учитывает только фактически доступные деньги."
+            : "The current balance only includes money that is actually available.",
+      };
     case "overdue_payment":
     case "payment_today":
       return {

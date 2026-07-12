@@ -419,7 +419,8 @@ test("materialized recurring does not appear in the forecast twice and debt keep
   const rentGroup = groups.find((group) => group.date === "2026-07-15");
   const debtGroup = groups.find((group) => group.date === "2026-07-18");
 
-  assert.equal(rentGroup, undefined);
+  assert.equal(rentGroup?.events.length, 1);
+  assert.equal(rentGroup?.events[0]?.source, "confirmed_transaction");
   assert.equal(debtGroup?.events[0]?.source, "debt_payment");
 });
 

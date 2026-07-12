@@ -744,6 +744,7 @@ export async function updateCloudTransaction(
       Transaction,
       | "amount"
       | "categoryId"
+      | "date"
       | "owner"
       | "type"
       | "goalId"

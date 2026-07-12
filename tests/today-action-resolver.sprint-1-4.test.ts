@@ -90,6 +90,9 @@ test("confirm_payment uses the existing idempotent payment confirmation flow", a
       transactions = result.transactions;
       return result.changed;
     },
+    openIncomeConfirmation() {
+      assert.fail("income confirmation should not open for confirm_payment");
+    },
     openMoneySetup() {
       assert.fail("money setup should not open for confirm_payment");
     },
@@ -121,6 +124,9 @@ test("forecast and recurring commands navigate through existing tabs without rou
   const executor = {
     confirmPendingTransaction() {
       return false;
+    },
+    openIncomeConfirmation() {
+      assert.fail("income confirmation should not open in navigation test");
     },
     openMoneySetup() {
       assert.fail("money setup should not open in navigation test");
@@ -176,6 +182,47 @@ test("forecast focus is passed through without recalculating the date", () => {
   );
 });
 
+test("confirm_income_source opens the confirmation flow with the planned payload", async () => {
+  let opened: unknown = null;
+  const command: DecisionMainActionCommand = {
+    type: "confirm_income_source",
+    incomeSourceId: "salary-july",
+    incomeTitle: "Зарплата",
+    plannedDate: "2026-07-10",
+    plannedAmount: 120000,
+    status: "due_today",
+  };
+
+  const result = await executeMainActionCommand(command, {
+    confirmPendingTransaction() {
+      assert.fail("payment confirmation should not run for income confirmation");
+    },
+    openIncomeConfirmation(params) {
+      opened = params;
+    },
+    openMoneySetup() {
+      assert.fail("money setup should not open for income confirmation");
+    },
+    openQuickAdd() {
+      assert.fail("quick add should not open for income confirmation");
+    },
+    navigateToTab() {
+      assert.fail("navigation should not run for income confirmation");
+    },
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(opened, {
+    type: "confirm_income_source",
+    incomeSourceId: "salary-july",
+    incomeTitle: "Зарплата",
+    plannedDate: "2026-07-10",
+    plannedAmount: 120000,
+    status: "due_today",
+  });
+  assert.equal(getMainActionButtonLabel(command, "ru"), "Подтвердить поступление");
+});
+
 test("unknown command is safely rejected and cannot cause a money mutation", async () => {
   let mutationCount = 0;
   const command = { type: "mystery" } as unknown as DecisionMainActionCommand;
@@ -183,6 +230,9 @@ test("unknown command is safely rejected and cannot cause a money mutation", asy
     confirmPendingTransaction() {
       mutationCount += 1;
       return true;
+    },
+    openIncomeConfirmation() {
+      mutationCount += 1;
     },
     openMoneySetup() {
       mutationCount += 1;

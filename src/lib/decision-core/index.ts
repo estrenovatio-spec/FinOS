@@ -1,4 +1,5 @@
 import { countsInBalance } from "@/lib/transaction-confirmed";
+import { resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
 import { buildConstraintExplanation } from "@/lib/decision-core/constraint-explanation";
@@ -42,6 +43,12 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     budgetMonthStartDay: state.budgetMonthStartDay,
     availableNow,
     safeSpending,
+    resolvedIncomeSources: resolveMoneySetupIncomeSources({
+      moneySetup: state.moneySetup,
+      confirmedTransactions,
+      today: state.today,
+      locale: state.locale,
+    }),
     essentialBudgetReserve: {
       totalRemaining: 0,
       periodFrom: state.today,
@@ -88,6 +95,9 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     forecast: ctx.forecast,
     requiredFloor: getRequiredFloor(ctx),
     hasOverduePayments,
+    hasIncomeToConfirm: ctx.resolvedIncomeSources.some(
+      (source) => source.status === "due_today" || source.status === "overdue_unconfirmed",
+    ),
   });
   const mainAction = buildMainAction(primaryDecision, ctx, nextRisk);
   const avoid = buildAvoid(primaryDecision, ctx, nextRisk);
@@ -113,6 +123,7 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     peaceIndex,
     hasHistory: ctx.confirmedTransactions.length > 0,
     forecast: ctx.forecast,
+    resolvedIncomeSources: ctx.resolvedIncomeSources,
   };
 }
 

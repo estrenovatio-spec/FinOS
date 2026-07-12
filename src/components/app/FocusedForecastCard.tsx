@@ -32,7 +32,23 @@ function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
     case "debt_payment":
       return locale === "ru" ? "Долг" : "Debt";
     case "income_source":
-      return locale === "ru" ? "Доход" : "Income";
+      return locale === "ru" ? "Ожидаемый доход" : "Expected income";
+    case "confirmed_transaction":
+      return locale === "ru" ? "Полученный доход" : "Received income";
+  }
+}
+
+function plannedIncomeStateLabel(event: ForecastEvent, locale: Locale): string | null {
+  if (event.source !== "income_source") return null;
+  switch (event.plannedIncomeStatus) {
+    case "scheduled":
+      return locale === "ru" ? "Ожидается" : "Expected";
+    case "due_today":
+      return locale === "ru" ? "Ожидается сегодня" : "Expected today";
+    case "overdue_unconfirmed":
+      return locale === "ru" ? "Не подтверждён" : "Not confirmed";
+    default:
+      return null;
   }
 }
 
@@ -256,6 +272,11 @@ export function FocusedForecastCard({
                             <p className="mt-0.5 text-xs text-muted-foreground">
                               {sourceLabel(event.source, locale)}
                             </p>
+                            {plannedIncomeStateLabel(event, locale) ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {plannedIncomeStateLabel(event, locale)}
+                              </p>
+                            ) : null}
                             {isFocusedEvent ? (
                               <p className="mt-1 text-[11px] font-medium text-primary">
                                 {locale === "ru"

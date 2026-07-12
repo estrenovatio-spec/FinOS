@@ -181,7 +181,7 @@ test("forecast line accounts for multiple income sources", () => {
   );
 });
 
-test("same-day incomes are grouped without losing total amount", () => {
+test("same-day incomes stay separate without losing total amount", () => {
   const snapshot = decisionCoreSnapshot(
     buildState({
       moneySetup: {
@@ -211,6 +211,9 @@ test("same-day incomes are grouped without losing total amount", () => {
     (event) => event.source === "income_source",
   );
 
-  assert.equal(incomeEvents.length, 1);
-  assert.equal(incomeEvents[0]?.amount, 160000);
+  assert.equal(incomeEvents.length, 2);
+  assert.equal(
+    incomeEvents.reduce((sum, event) => sum + event.amount, 0),
+    160000,
+  );
 });

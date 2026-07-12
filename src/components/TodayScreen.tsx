@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { QuickAddOperationDialog } from "@/components/today/QuickAddOperationDialog";
+import {
+  TransactionEditDialog,
+  type TransactionDialogDraft,
+} from "@/components/TransactionEditDialog";
 import { TodayHero } from "@/components/today/TodayHero";
 import { TodayOverview } from "@/components/today/TodayOverview";
 import { TodaySecondaryInsights } from "@/components/today/TodaySecondaryInsights";
@@ -49,6 +53,9 @@ export function TodayScreen({
     MoneySetupInitialSection | null
   >(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [incomeConfirmationDraft, setIncomeConfirmationDraft] =
+    useState<TransactionDialogDraft | null>(null);
+  const [incomeConfirmationOpen, setIncomeConfirmationOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -126,6 +133,39 @@ export function TodayScreen({
       openQuickAdd: () => {
         setQuickAddOpen(true);
       },
+      openIncomeConfirmation: (params) => {
+        setIncomeConfirmationDraft({
+          amount: params.plannedAmount,
+          type: "income",
+          categoryId: "salary",
+          currency: "RUB",
+          note: params.incomeTitle,
+          date:
+            params.status === "due_today"
+              ? today
+              : params.plannedDate,
+          incomeSourceId: params.incomeSourceId,
+          title:
+            locale === "ru"
+              ? "Подтвердить доход"
+              : "Confirm income",
+          subtitle:
+            params.status === "overdue_unconfirmed" && locale === "ru"
+              ? `Ожидался ${params.plannedDate}`
+              : params.status === "overdue_unconfirmed"
+                ? `Expected on ${params.plannedDate}`
+                : params.incomeTitle,
+          submitLabel:
+            locale === "ru"
+              ? "Сохранить поступление"
+              : "Save income",
+          sourceEditLabel:
+            locale === "ru"
+              ? "Изменить сумму или дату"
+              : "Edit amount or date",
+        });
+        setIncomeConfirmationOpen(true);
+      },
       navigateToTab: onNavigateToTab,
     });
 
@@ -197,6 +237,24 @@ export function TodayScreen({
         open={quickAddOpen}
         onOpenChange={setQuickAddOpen}
         showTrigger={false}
+      />
+
+      <TransactionEditDialog
+        transaction={null}
+        draft={incomeConfirmationDraft}
+        open={incomeConfirmationOpen}
+        onOpenChange={(nextOpen) => {
+          setIncomeConfirmationOpen(nextOpen);
+          if (!nextOpen) {
+            setIncomeConfirmationDraft(null);
+          }
+        }}
+        onRequestSourceEdit={() => {
+          setIncomeConfirmationOpen(false);
+          setIncomeConfirmationDraft(null);
+          setMoneySetupSection("income");
+          setMoneySetupOpen(true);
+        }}
       />
 
       <div className="sticky bottom-20 z-20 pt-2">

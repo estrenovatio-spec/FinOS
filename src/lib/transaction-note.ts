@@ -1,8 +1,19 @@
 import { isGarbageTranscript } from "@/lib/transcript-guard";
 
+const INCOME_SOURCE_META_RE = /\n?\[\[finos:income-source:([a-zA-Z0-9_-]+)\]\]\s*$/;
+
+function stripHiddenTransactionMetadata(note: string): string {
+  return note.replace(INCOME_SOURCE_META_RE, "").trimEnd();
+}
+
+export function extractIncomeSourceIdFromTransactionNote(note: string): string | null {
+  const match = note.match(INCOME_SOURCE_META_RE);
+  return match?.[1] ?? null;
+}
+
 /** Note is only for extra context — not a duplicate of the amount on the right */
 export function isAmountOnlyNote(note: string, amount: number): boolean {
-  const n = note.trim();
+  const n = stripHiddenTransactionMetadata(note).trim();
   if (!n) return true;
 
   const amt = Math.round(amount * 100) / 100;
@@ -20,7 +31,7 @@ export function isAmountOnlyNote(note: string, amount: number): boolean {
 }
 
 export function sanitizeTransactionNote(note: string, amount: number): string {
-  const n = note.trim();
+  const n = stripHiddenTransactionMetadata(note).trim();
   if (!n || isGarbageTranscript(n) || isAmountOnlyNote(n, amount)) return "";
   return n.slice(0, 120);
 }
@@ -28,6 +39,20 @@ export function sanitizeTransactionNote(note: string, amount: number): string {
 export function displayTransactionNote(note: string, amount: number): string | null {
   const clean = sanitizeTransactionNote(note, amount);
   return clean || null;
+}
+
+export function buildStoredTransactionNote(
+  note: string,
+  amount: number,
+  incomeSourceId?: string | null,
+): string {
+  const visible = sanitizeTransactionNote(note, amount);
+  const marker =
+    typeof incomeSourceId === "string" && incomeSourceId.trim()
+      ? `[[finos:income-source:${incomeSourceId.trim()}]]`
+      : "";
+  if (!marker) return visible;
+  return visible ? `${visible}\n${marker}` : marker;
 }
 
 /** Комментарий при вводе + фраза/заметка от разбора. */

@@ -1,5 +1,6 @@
 import { calculateSafeSpending } from "@/lib/safe-spending";
 import { daysInclusiveUntilDate } from "@/lib/format-date";
+import { getForecastConfidence } from "@/lib/decision-core/forecast-confidence";
 import { getConstraintPoint } from "@/lib/decision-core/constraint-point";
 import type { DecisionCoreContext, DecisionCoreState, DecisionSafeUntil } from "@/lib/decision-core/types";
 
@@ -57,6 +58,10 @@ export function calculateDecisionSafeSpending(state: DecisionCoreState) {
 export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
   const { locale, moneySetup, safeSpending, forecast } = ctx;
   const constraintPoint = getConstraintPoint(ctx);
+  const confidence = getForecastConfidence(
+    ctx,
+    constraintPoint?.date ?? forecast.nextIncomeDate ?? safeSpending.nextIncomeDate,
+  );
 
   if (!Number.isFinite(ctx.availableNow) || ctx.availableNow <= 0) {
     return {
@@ -70,6 +75,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: "missing_balance",
       safeToday: 0,
       nextIncomeDate: forecast.nextIncomeDate,
+      confidence: "uncertain",
+      confidenceNote: null,
     };
   }
 
@@ -85,6 +92,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: "missing_income",
       safeToday: null,
       nextIncomeDate: null,
+      confidence: "uncertain",
+      confidenceNote: null,
     };
   }
 
@@ -100,6 +109,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: "unconfirmed_income",
       safeToday: null,
       nextIncomeDate: null,
+      confidence: "uncertain",
+      confidenceNote: null,
     };
   }
 
@@ -123,6 +134,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: "ready",
       safeToday: 0,
       nextIncomeDate: forecast.nextIncomeDate,
+      confidence: confidence.confidence,
+      confidenceNote: confidence.note,
     };
   }
 
@@ -134,13 +147,17 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
           : `Until ${formatDayMonth(constraintPoint.event.date, locale)}`,
       note:
         locale === "ru"
-          ? `Это первая ограничивающая точка на прогнозной линии: после неё баланс опускается до обязательного минимума ${constraintPoint.requiredFloor} ₽.`
+          ? confidence.note
+            ? `После этой даты свободных денег почти не останется. ${confidence.note}`
+            : `После этой даты свободных денег почти не останется.`
           : `This is the first limiting point on the forecast line: after it the balance drops to the required floor.`,
       isReady: true,
       needsSetup: false,
       rawStatus: "ready",
       safeToday: Math.max(0, forecast.minBalance - constraintPoint.requiredFloor),
       nextIncomeDate: forecast.nextIncomeDate,
+      confidence: confidence.confidence,
+      confidenceNote: confidence.note,
     };
   }
 
@@ -152,13 +169,15 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
           : `Until ${formatDayMonth(forecast.nextIncomeDate, locale)}`,
       note:
         locale === "ru"
-          ? "Расчёт теперь опирается на прогнозную линию баланса до ближайшего дохода."
+          ? confidence.note ?? "Расчёт теперь опирается на прогнозную линию баланса до ближайшего дохода."
           : "This now uses the forecast balance line until the next income.",
       isReady: true,
       needsSetup: false,
       rawStatus: "ready",
       safeToday: Math.max(0, forecast.minBalance),
       nextIncomeDate: forecast.nextIncomeDate,
+      confidence: confidence.confidence,
+      confidenceNote: confidence.note,
     };
   }
 
@@ -175,6 +194,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
         rawStatus: safeSpending.status,
         safeToday: safeSpending.safeToday,
         nextIncomeDate: safeSpending.nextIncomeDate,
+        confidence: confidence.confidence,
+        confidenceNote: confidence.note,
       };
     }
 
@@ -193,6 +214,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
         rawStatus: safeSpending.status,
         safeToday: safeSpending.safeToday,
         nextIncomeDate: safeSpending.nextIncomeDate,
+        confidence: confidence.confidence,
+        confidenceNote: confidence.note,
       };
     }
   }
@@ -209,6 +232,8 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: safeSpending.status,
       safeToday: safeSpending.safeToday,
       nextIncomeDate: safeSpending.nextIncomeDate,
+      confidence: confidence.confidence,
+      confidenceNote: confidence.note,
     };
   }
 
@@ -226,5 +251,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
     rawStatus: safeSpending.status,
     safeToday: safeSpending.safeToday,
     nextIncomeDate: safeSpending.nextIncomeDate,
+    confidence: "uncertain",
+    confidenceNote: null,
   };
 }

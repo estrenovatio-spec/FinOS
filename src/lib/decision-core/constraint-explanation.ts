@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/format-money";
+import { getForecastConfidence } from "@/lib/decision-core/forecast-confidence";
 import { groupForecastEventsByDate } from "@/lib/forecast-focus";
 import { getConstraintPoint } from "@/lib/decision-core/constraint-point";
 import type {
@@ -150,6 +151,7 @@ export function buildConstraintExplanation(
 ): DecisionConstraintExplanation | null {
   const point = getConstraintPoint(ctx);
   if (!point) return null;
+  const confidence = getForecastConfidence(ctx, point.date);
 
   const group =
     groupForecastEventsByDate(ctx.forecast).find((entry) => entry.date === point.date) ?? null;
@@ -175,10 +177,10 @@ export function buildConstraintExplanation(
 
   const detail =
     point.kind === "deficit"
-      ? null
-      : ctx.locale === "ru"
-        ? "Эти деньги уже нужны на базовые расходы."
-        : "That money is already needed for essentials.";
+      ? confidence.note
+      : [ctx.locale === "ru" ? "Эти деньги уже нужны на базовые расходы." : "That money is already needed for essentials.", confidence.note]
+          .filter(Boolean)
+          .join(" ");
 
   return {
     date: point.date,

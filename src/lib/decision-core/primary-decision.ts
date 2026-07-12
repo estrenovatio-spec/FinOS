@@ -48,6 +48,36 @@ function resolveMissingData(ctx: DecisionCoreContext, safeUntil: DecisionSafeUnt
   };
 }
 
+function pickIncomeConfirmationDecision(ctx: DecisionCoreContext): PrimaryDecision | null {
+  const overdue = ctx.resolvedIncomeSources
+    .filter((source) => source.status === "overdue_unconfirmed")
+    .sort((left, right) => (left.expectedDate ?? "").localeCompare(right.expectedDate ?? ""))[0];
+  if (overdue && overdue.expectedAmount && overdue.expectedDate) {
+    return {
+      type: "overdue_income_confirmation",
+      incomeSourceId: overdue.id,
+      amount: overdue.expectedAmount,
+      dueDate: overdue.expectedDate,
+      title: overdue.label,
+    };
+  }
+
+  const dueToday = ctx.resolvedIncomeSources
+    .filter((source) => source.status === "due_today")
+    .sort((left, right) => left.id.localeCompare(right.id))[0];
+  if (dueToday && dueToday.expectedAmount && dueToday.expectedDate) {
+    return {
+      type: "income_due_today",
+      incomeSourceId: dueToday.id,
+      amount: dueToday.expectedAmount,
+      dueDate: dueToday.expectedDate,
+      title: dueToday.label,
+    };
+  }
+
+  return null;
+}
+
 export function resolvePrimaryDecision(
   input: ResolvePrimaryDecisionInput,
 ): PrimaryDecision {
@@ -76,6 +106,18 @@ export function resolvePrimaryDecision(
     };
   }
 
+  if (ctx.forecast.startBalance < 0 || ctx.forecast.firstDeficitDate === ctx.today) {
+    return {
+      type: "current_deficit",
+      amount: Math.max(Math.abs(ctx.forecast.minBalance), Math.abs(ctx.forecast.startBalance)),
+    };
+  }
+
+  const incomeConfirmation = pickIncomeConfirmationDecision(ctx);
+  if (incomeConfirmation) {
+    return incomeConfirmation;
+  }
+
   if (todayPayments.length > 0) {
     const payment = todayPayments[0]!;
     return {
@@ -87,18 +129,7 @@ export function resolvePrimaryDecision(
     };
   }
 
-  if (ctx.forecast.startBalance < 0 || ctx.forecast.firstDeficitDate === ctx.today) {
-    return {
-      type: "current_deficit",
-      amount: Math.max(Math.abs(ctx.forecast.minBalance), Math.abs(ctx.forecast.startBalance)),
-    };
-  }
-
   const missingDataDecision = resolveMissingData(ctx, safeUntil);
-  if (missingDataDecision) {
-    return missingDataDecision;
-  }
-
   if (ctx.forecast.firstDeficitDate) {
     return {
       type: "future_deficit",
@@ -120,6 +151,10 @@ export function resolvePrimaryDecision(
       dueDate: nextRisk.date,
       title: nextRisk.title,
     };
+  }
+
+  if (missingDataDecision) {
+    return missingDataDecision;
   }
 
   return {

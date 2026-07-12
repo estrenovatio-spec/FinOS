@@ -12,7 +12,7 @@ import { resolvePrimaryDecision } from "@/lib/decision-core/primary-decision";
 import { calculateDecisionSafeSpending, buildSafeUntil } from "@/lib/decision-core/safe-until";
 import { buildTodayPayments } from "@/lib/decision-core/today-payments";
 import type { DecisionCoreContext, DecisionCoreState } from "@/lib/decision-core/types";
-import { emptyMoneySetup } from "@/lib/money-setup";
+import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 import { confirmPendingPaymentById } from "@/lib/pending-payment";
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { getDefaultCategories } from "@/lib/categories";
@@ -131,6 +131,12 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     categoryBudgets: state.categoryBudgets,
     budgetMonthStartDay: state.budgetMonthStartDay,
     availableNow,
+    resolvedIncomeSources: resolveMoneySetupIncomeSources({
+      moneySetup: state.moneySetup,
+      confirmedTransactions,
+      today: state.today,
+      locale: state.locale,
+    }),
     safeSpending: calculateDecisionSafeSpending(state),
     essentialBudgetReserve: {
       totalRemaining: 0,
@@ -1271,9 +1277,13 @@ test("Confirmed recurring transaction does not reappear as a recurring occurrenc
     }),
   );
 
+  const sameDayEvents = ctx.forecast.events.filter(
+    (event) => event.date === "2026-07-12",
+  );
+  assert.equal(sameDayEvents.filter((event) => event.source === "recurring").length, 0);
   assert.equal(
-    ctx.forecast.events.filter((event) => event.date === "2026-07-12").length,
-    0,
+    sameDayEvents.filter((event) => event.source === "confirmed_transaction").length,
+    1,
   );
 });
 
@@ -1504,7 +1514,7 @@ test("future expected income stays in forecast before its planned date", () => {
   assert.equal(scenario.result.safeUntil.nextIncomeDate, "2026-07-10");
 });
 
-test("planned income due today is not counted until it is actually recorded", () => {
+test("planned income due today stays in forecast as planned and asks for confirmation", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-10",
@@ -1525,15 +1535,18 @@ test("planned income due today is not counted until it is actually recorded", ()
     }),
   );
 
-  assert.equal(
-    scenario.ctx.forecast.events.some((event) => event.source === "income_source"),
-    false,
+  const incomeEvent = scenario.ctx.forecast.events.find(
+    (event) => event.source === "income_source",
   );
-  assert.equal(scenario.result.safeUntil.rawStatus, "unconfirmed_income");
-  assert.equal(scenario.result.mainAction.type, "complete_income_setup");
+  assert.equal(Boolean(incomeEvent), true);
+  assert.equal(incomeEvent?.plannedIncomeStatus, "due_today");
+  assert.equal(incomeEvent?.incomeSourceId, "salary-july");
+  assert.equal(scenario.result.mainAction.type, "confirm_income");
+  assert.equal(scenario.result.mainAction.command.type, "confirm_income_source");
+  assert.equal(scenario.result.safeUntil.confidence, "planned");
 });
 
-test("overdue unconfirmed income is excluded from forecast and marked as unconfirmed", () => {
+test("overdue unconfirmed income stays visible in forecast and marks confidence as uncertain", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
@@ -1554,12 +1567,16 @@ test("overdue unconfirmed income is excluded from forecast and marked as unconfi
     }),
   );
 
-  assert.equal(
-    scenario.ctx.forecast.events.some((event) => event.source === "income_source"),
-    false,
+  const incomeEvent = scenario.ctx.forecast.events.find(
+    (event) => event.source === "income_source",
   );
-  assert.equal(scenario.result.safeUntil.rawStatus, "unconfirmed_income");
-  assert.equal(scenario.result.status.key, "risk");
+  assert.equal(Boolean(incomeEvent), true);
+  assert.equal(incomeEvent?.plannedIncomeStatus, "overdue_unconfirmed");
+  assert.equal(incomeEvent?.date, "2026-07-12");
+  assert.equal(scenario.result.mainAction.type, "resolve_income_delay");
+  assert.equal(scenario.result.safeUntil.confidence, "uncertain");
+  assert.match(scenario.result.safeUntil.confidenceNote ?? "", /неподтвержд/i);
+  assert.equal(scenario.result.status.key, "action");
 });
 
 test("confirmed income transaction prevents double counting of the expected source", () => {

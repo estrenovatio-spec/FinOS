@@ -168,6 +168,7 @@ export async function cloudPushTransactionUpdate(
       Transaction,
       | "amount"
       | "categoryId"
+      | "date"
       | "owner"
       | "createdBy"
       | "type"
