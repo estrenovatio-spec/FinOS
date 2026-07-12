@@ -28,11 +28,27 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { useHouseholdBalances, useStore } from "@/store/useStore";
 
+export type MoneySetupInitialSection =
+  | "balance"
+  | "current_balance"
+  | "income"
+  | "required_expenses"
+  | "essential_budgets";
+
+export type MoneySetupBalanceSectionView = {
+  title: string;
+  prompt: string;
+  inputLabel: string;
+  currentAmountNote: string;
+  showInlineSaveButton: boolean;
+  completionLabel: string | null;
+};
+
 type MoneySetupDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   showHouseholdToggle: boolean;
-  initialSection?: "balance" | "income" | "required_expenses" | "essential_budgets" | null;
+  initialSection?: MoneySetupInitialSection | null;
 };
 
 const ESSENTIAL_PRIORITY_IDS = [
@@ -64,6 +80,14 @@ function parseAmount(value: string): number | null {
   return amount;
 }
 
+function parseBalanceAmount(value: string): number | null {
+  const normalized = value.replace(/\s+/g, "").replace(",", ".");
+  if (!normalized) return null;
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return amount;
+}
+
 function isServiceEssentialCategory(
   categoryId: string,
   label: string,
@@ -72,6 +96,41 @@ function isServiceEssentialCategory(
   return ESSENTIAL_EXCLUDED_KEYWORDS.some((keyword) =>
     haystack.includes(keyword),
   );
+}
+
+function normalizeMoneySetupInitialSection(
+  section: MoneySetupInitialSection | null | undefined,
+): "balance" | "income" | "required_expenses" | "essential_budgets" | null {
+  if (section === "current_balance") return "balance";
+  return section ?? null;
+}
+
+export function buildMoneySetupBalanceSectionView(args: {
+  locale: "ru" | "en";
+  initialSection: MoneySetupInitialSection | null | undefined;
+  currentAvailableBalance: number;
+  isCompleted: boolean;
+}): MoneySetupBalanceSectionView {
+  const normalizedInitialSection = normalizeMoneySetupInitialSection(args.initialSection);
+
+  return {
+    title: args.locale === "ru" ? "Текущий остаток" : "Current balance",
+    prompt:
+      args.locale === "ru"
+        ? "Сколько денег сейчас доступно?"
+        : "How much money is available right now?",
+    inputLabel: args.locale === "ru" ? "Доступно сейчас" : "Available now",
+    currentAmountNote:
+      args.locale === "ru"
+        ? `Сейчас в расчёте: ${args.currentAvailableBalance} ₽`
+        : `Currently in use: ${args.currentAvailableBalance} RUB`,
+    showInlineSaveButton: normalizedInitialSection === "balance",
+    completionLabel: args.isCompleted
+      ? args.locale === "ru"
+        ? "Заполнено"
+        : "Completed"
+      : null,
+  };
 }
 
 export function MoneySetupDialog({
@@ -85,6 +144,7 @@ export function MoneySetupDialog({
   const recurringTransactions = useStore((s) => s.recurringTransactions);
   const categories = useStore((s) => s.categories);
   const updateMoneySetup = useStore((s) => s.updateMoneySetup);
+  const setActualCash = useStore((s) => s.setActualCash);
   const balances = useHouseholdBalances();
   const { toast } = useToast();
 
@@ -139,9 +199,12 @@ export function MoneySetupDialog({
     [],
   );
   const [useHouseholdBalance, setUseHouseholdBalance] = useState(false);
+  const [currentBalanceInput, setCurrentBalanceInput] = useState("");
   const incomeSectionRef = useRef<HTMLDivElement | null>(null);
+  const balanceSectionRef = useRef<HTMLDivElement | null>(null);
   const requiredExpensesSectionRef = useRef<HTMLDivElement | null>(null);
   const essentialCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
+  const currentBalanceInputRef = useRef<HTMLInputElement | null>(null);
   const incomeDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const incomeKindOptions = useMemo(
@@ -183,6 +246,20 @@ export function MoneySetupDialog({
     () => buildMoneySetupProgress({ locale, moneySetup, balances }),
     [balances, locale, moneySetup],
   );
+  const normalizedInitialSection = normalizeMoneySetupInitialSection(initialSection);
+  const currentAvailableBalance = useHouseholdBalance ? balances.all : balances.me;
+  const isBalanceCompleted =
+    progress.items.find((item) => item.id === "balance")?.done ?? false;
+  const balanceSectionView = useMemo(
+    () =>
+      buildMoneySetupBalanceSectionView({
+        locale,
+        initialSection,
+        currentAvailableBalance,
+        isCompleted: isBalanceCompleted,
+      }),
+    [currentAvailableBalance, initialSection, isBalanceCompleted, locale],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -199,7 +276,8 @@ export function MoneySetupDialog({
     setHasNoRequiredFixedExpenses(moneySetup.hasNoRequiredFixedExpenses);
     setEssentialCategoryIds(moneySetup.essentialCategoryIds);
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
-  }, [moneySetup, open]);
+    setCurrentBalanceInput(String(moneySetup.useHouseholdBalance ? balances.all : balances.me));
+  }, [balances.all, balances.me, moneySetup, open]);
 
   const visibleIncomeSources = useMemo(() => {
     if (showIncomeSources) {
@@ -235,26 +313,29 @@ export function MoneySetupDialog({
   }, [incomeSources, locale, moneySetup, showIncomeSources]);
 
   useEffect(() => {
-    if (!open || !initialSection) return;
+    if (!open || !normalizedInitialSection) return;
 
     const target =
-      initialSection === "balance"
-        ? null
-        : initialSection === "income"
+      normalizedInitialSection === "balance"
+        ? balanceSectionRef.current
+        : normalizedInitialSection === "income"
         ? incomeSectionRef.current
-        : initialSection === "required_expenses"
+        : normalizedInitialSection === "required_expenses"
           ? requiredExpensesSectionRef.current
           : essentialCategoriesSectionRef.current;
 
     const frame = window.requestAnimationFrame(() => {
       target?.scrollIntoView({ block: "start", behavior: "smooth" });
-      if (initialSection === "income") {
+      if (normalizedInitialSection === "balance") {
+        currentBalanceInputRef.current?.focus();
+      }
+      if (normalizedInitialSection === "income") {
         incomeDateInputRef.current?.focus();
       }
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [initialSection, open]);
+  }, [normalizedInitialSection, open]);
 
   const addIncomeSource = () => {
     setShowIncomeSources(true);
@@ -313,6 +394,11 @@ export function MoneySetupDialog({
   };
 
   const handleSave = () => {
+    const parsedCurrentBalance = parseBalanceAmount(currentBalanceInput);
+    if (parsedCurrentBalance != null) {
+      setActualCash("me", parsedCurrentBalance);
+    }
+
     const incomePayload = buildIncomeSetupSavePayload({
       showIncomeSources,
       incomeSources,
@@ -331,6 +417,25 @@ export function MoneySetupDialog({
     });
     toast(
       locale === "ru" ? "Финансовая база сохранена" : "Financial base saved",
+      "success",
+    );
+    onOpenChange(false);
+  };
+
+  const handleSaveCurrentBalanceOnly = () => {
+    const parsedCurrentBalance = parseBalanceAmount(currentBalanceInput);
+    if (parsedCurrentBalance == null) {
+      toast(
+        locale === "ru"
+          ? "Введите текущий доступный остаток"
+          : "Enter the current available balance",
+        "error",
+      );
+      return;
+    }
+    setActualCash("me", parsedCurrentBalance);
+    toast(
+      locale === "ru" ? "Текущий остаток сохранён" : "Current balance saved",
       "success",
     );
     onOpenChange(false);
@@ -386,6 +491,54 @@ export function MoneySetupDialog({
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto px-4 py-4">
+          <div ref={balanceSectionRef} className="space-y-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-foreground">
+                  {balanceSectionView.title}
+                </p>
+                {balanceSectionView.completionLabel ? (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {balanceSectionView.completionLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {balanceSectionView.prompt}
+              </p>
+            </div>
+
+            <div className="rounded-md border border-border/70 bg-background px-3 py-3">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-foreground">
+                  {balanceSectionView.inputLabel}
+                </label>
+                <Input
+                  ref={currentBalanceInputRef}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  placeholder={locale === "ru" ? "Например, 45000" : "For example, 45000"}
+                  value={currentBalanceInput}
+                  onChange={(event) => setCurrentBalanceInput(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {balanceSectionView.currentAmountNote}
+                </p>
+              </div>
+
+              {balanceSectionView.showInlineSaveButton ? (
+                <Button
+                  type="button"
+                  className="mt-3 w-full"
+                  onClick={handleSaveCurrentBalanceOnly}
+                >
+                  {locale === "ru" ? "Сохранить" : "Save"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
           <div ref={incomeSectionRef} className="space-y-3">
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">

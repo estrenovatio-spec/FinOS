@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APP_BOTTOM_NAV_TABS } from "@/components/app/AppBottomNav";
+import { buildMoneySetupBalanceSectionView } from "@/components/MoneySetupDialog";
 import { buildFocusedForecastView } from "@/components/app/focused-forecast-presenter";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
@@ -623,7 +624,25 @@ test("stale forecast event id falls back to the date", () => {
 
   assert.equal(view.selectedDate, "2026-07-27");
   assert.equal(view.selectedEventId, null);
-  assert.match(view.message ?? "", /сохранён фокус на самой дате/);
+  assert.match(view.message ?? "", /дата, на которой прогноз уходит в минус/);
+});
+
+test("missing focused date quietly falls back to the regular forecast view", () => {
+  const view = buildFocusedForecastView(
+    makeForecast(),
+    {
+      date: "2026-07-26",
+      source: "today_main_action",
+      reason: "future_deficit",
+      eventId: "gone-event",
+    },
+    "ru",
+  );
+
+  assert.equal(view.selectedDate, null);
+  assert.equal(view.selectedEventId, null);
+  assert.equal(view.message, null);
+  assert.equal(view.contextTitle, null);
 });
 
 test("money setup progress is based on filled data", () => {
@@ -679,4 +698,18 @@ test("money setup progress updates when another section is filled", () => {
 
   assert.equal(before.completed, 2);
   assert.equal(after.completed, 3);
+});
+
+test("MoneySetupDialog with initialSection=current_balance shows the current balance input immediately", () => {
+  const view = buildMoneySetupBalanceSectionView({
+    locale: "ru",
+    initialSection: "current_balance",
+    currentAvailableBalance: 15000,
+    isCompleted: false,
+  });
+
+  assert.equal(view.title, "Текущий остаток");
+  assert.equal(view.prompt, "Сколько денег сейчас доступно?");
+  assert.equal(view.inputLabel, "Доступно сейчас");
+  assert.equal(view.showInlineSaveButton, true);
 });
