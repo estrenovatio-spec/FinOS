@@ -1271,3 +1271,131 @@ test("Debt that does not constrain the balance is not treated as the next risk",
 
   assert.equal(result.nextRisk, null);
 });
+
+test("future expected income stays in forecast before its planned date", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-08",
+      balances: { all: 10000, me: 10000, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "salary-july",
+            label: "Зарплата",
+            expectedDate: "2026-07-10",
+            expectedAmount: 120000,
+            kind: "salary",
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  const incomeEvents = scenario.ctx.forecast.events.filter(
+    (event) => event.source === "income_source",
+  );
+
+  assert.equal(incomeEvents.length, 1);
+  assert.equal(incomeEvents[0]?.date, "2026-07-10");
+  assert.equal(incomeEvents[0]?.amount, 120000);
+  assert.equal(scenario.result.safeUntil.nextIncomeDate, "2026-07-10");
+});
+
+test("planned income due today is not counted until it is actually recorded", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-10",
+      balances: { all: 10000, me: 10000, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "salary-july",
+            label: "Зарплата",
+            expectedDate: "2026-07-10",
+            expectedAmount: 120000,
+            kind: "salary",
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(
+    scenario.ctx.forecast.events.some((event) => event.source === "income_source"),
+    false,
+  );
+  assert.equal(scenario.result.safeUntil.rawStatus, "unconfirmed_income");
+  assert.equal(scenario.result.mainAction.type, "complete_income_setup");
+});
+
+test("overdue unconfirmed income is excluded from forecast and marked as unconfirmed", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 10000, me: 10000, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "salary-july",
+            label: "Зарплата",
+            expectedDate: "2026-07-10",
+            expectedAmount: 120000,
+            kind: "salary",
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(
+    scenario.ctx.forecast.events.some((event) => event.source === "income_source"),
+    false,
+  );
+  assert.equal(scenario.result.safeUntil.rawStatus, "unconfirmed_income");
+  assert.equal(scenario.result.status.key, "risk");
+});
+
+test("confirmed income transaction prevents double counting of the expected source", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-09",
+      balances: { all: 130000, me: 130000, partner: 0 },
+      transactions: [
+        tx({
+          id: "salary-recorded",
+          amount: 120000,
+          type: "income",
+          categoryId: "salary",
+          date: "2026-07-09",
+          note: "Зарплата",
+          confirmed: true,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "salary-july",
+            label: "Зарплата",
+            expectedDate: "2026-07-10",
+            expectedAmount: 120000,
+            kind: "salary",
+            isPrimary: true,
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(
+    scenario.ctx.forecast.events.some((event) => event.source === "income_source"),
+    false,
+  );
+  assert.equal(scenario.result.safeUntil.rawStatus, "missing_income");
+});

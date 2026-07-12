@@ -45,6 +45,7 @@ export function calculateDecisionSafeSpending(state: DecisionCoreState) {
   return calculateSafeSpending({
     availableNow: state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
     moneySetup: state.moneySetup,
+    confirmedTransactions: state.transactions.filter((transaction) => transaction.confirmed !== false),
     recurringTransactions: state.recurringTransactions,
     categoryBudgets: state.categoryBudgets,
     categories: state.categories,
@@ -80,6 +81,21 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       isReady: false,
       needsSetup: true,
       rawStatus: "missing_income",
+      safeToday: null,
+      nextIncomeDate: null,
+    };
+  }
+
+  if (!forecast.nextIncomeDate && safeSpending.status === "unconfirmed_income") {
+    return {
+      title: locale === "ru" ? "Доход не подтверждён" : "Income is not confirmed",
+      note:
+        locale === "ru"
+          ? "Плановая дата дохода уже наступила, но поступление не записано, поэтому прогноз его не учитывает."
+          : "The planned income date has already arrived, but the receipt was not recorded, so the forecast does not count it.",
+      isReady: false,
+      needsSetup: true,
+      rawStatus: "unconfirmed_income",
       safeToday: null,
       nextIncomeDate: null,
     };

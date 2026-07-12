@@ -18,7 +18,7 @@ function appendMissingReason(
   missing: Set<"income" | "required_expenses" | "essential_budgets" | "balance">,
   status: string,
 ) {
-  if (status === "missing_income") {
+  if (status === "missing_income" || status === "unconfirmed_income") {
     missing.add("income");
   }
   if (status === "missing_required_expenses") {

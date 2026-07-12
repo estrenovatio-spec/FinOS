@@ -1,4 +1,4 @@
-import type { CategoryDefinition } from "@/types";
+import type { CategoryDefinition, Locale, Transaction } from "@/types";
 import type { RecurringTransaction } from "@/types/planning";
 
 export const MONEY_SETUP_INCOME_SOURCE_KINDS = [
@@ -21,6 +21,18 @@ export interface MoneySetupIncomeSource {
   expectedAmount: number | null;
   kind: MoneySetupIncomeSourceKind;
   isPrimary?: boolean;
+}
+
+export type MoneySetupIncomeSourceStatus =
+  | "expected"
+  | "received"
+  | "overdue_unconfirmed";
+
+export interface ResolvedMoneySetupIncomeSource extends MoneySetupIncomeSource {
+  status: MoneySetupIncomeSourceStatus;
+  matchedTransactionId: string | null;
+  matchedTransactionDate: string | null;
+  isLegacy?: boolean;
 }
 
 export interface MoneySetup {
@@ -147,4 +159,156 @@ export function pruneMoneySetupIds(
       setup.requiredRecurringIds.length > 0 ? false : setup.hasNoRequiredFixedExpenses,
     essentialCategoryIds: setup.essentialCategoryIds.filter((id) => categoryIds.has(id)),
   };
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/g, " ")
+    .trim();
+}
+
+function hasTextOverlap(left: string | null | undefined, right: string | null | undefined): boolean {
+  const leftWords = new Set(normalizeText(left).split(" ").filter((word) => word.length >= 3));
+  if (leftWords.size === 0) return false;
+  return normalizeText(right)
+    .split(" ")
+    .filter((word) => word.length >= 3)
+    .some((word) => leftWords.has(word));
+}
+
+function isoDay(value: string | null | undefined): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value.slice(0, 10);
+}
+
+function dayDistance(from: string, to: string): number {
+  const fromDate = new Date(`${from}T12:00:00`);
+  const toDate = new Date(`${to}T12:00:00`);
+  const diff = Math.abs(toDate.getTime() - fromDate.getTime());
+  return Math.round(diff / (24 * 60 * 60 * 1000));
+}
+
+function scoreIncomeMatch(
+  source: MoneySetupIncomeSource,
+  transaction: Transaction,
+): number {
+  const expectedDate = isoDay(source.expectedDate);
+  const actualDate = isoDay(transaction.date);
+  const expectedAmount = source.expectedAmount != null ? Math.round(source.expectedAmount) : null;
+  if (!expectedDate || !actualDate || expectedAmount == null) return -1;
+  if (transaction.type !== "income" || transaction.confirmed === false) return -1;
+  if (Math.round(transaction.amount) !== expectedAmount) return -1;
+
+  const distance = dayDistance(expectedDate, actualDate);
+  const labelOverlap = hasTextOverlap(source.label, transaction.note);
+  if (labelOverlap && distance <= 31) {
+    return 200 - distance;
+  }
+  if (actualDate === expectedDate) return 120;
+  if (distance <= 1) return 110 - distance;
+  if (distance <= 3) return 100 - distance;
+  if (actualDate > expectedDate && distance <= 7) return 80 - distance;
+  if (actualDate < expectedDate && distance <= 3) return 70 - distance;
+  return -1;
+}
+
+export function listConfiguredIncomeSources(
+  setup: MoneySetup,
+  locale: Locale = "ru",
+): Array<MoneySetupIncomeSource & { isLegacy?: boolean }> {
+  if (setup.incomeSources.length > 0) {
+    return setup.incomeSources;
+  }
+
+  if (
+    typeof setup.nextIncomeDate === "string" &&
+    setup.nextIncomeDate.trim() &&
+    setup.expectedIncomeAmount != null &&
+    setup.expectedIncomeAmount > 0
+  ) {
+    return [
+      {
+        id: "legacy-primary-income",
+        label: locale === "ru" ? "Основной доход" : "Primary income",
+        expectedDate: setup.nextIncomeDate,
+        expectedAmount: setup.expectedIncomeAmount,
+        kind: "salary",
+        isPrimary: true,
+        isLegacy: true,
+      },
+    ];
+  }
+
+  return [];
+}
+
+export function resolveMoneySetupIncomeSources(args: {
+  moneySetup: MoneySetup;
+  confirmedTransactions: Transaction[];
+  today: string;
+  locale?: Locale;
+}): ResolvedMoneySetupIncomeSource[] {
+  const sources = listConfiguredIncomeSources(args.moneySetup, args.locale ?? "ru")
+    .filter(
+      (source) =>
+        typeof source.expectedDate === "string" &&
+        source.expectedDate.trim() &&
+        source.expectedAmount != null &&
+        source.expectedAmount > 0,
+    )
+    .sort((left, right) => {
+      const leftDate = left.expectedDate ?? "";
+      const rightDate = right.expectedDate ?? "";
+      if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
+      return left.id.localeCompare(right.id);
+    });
+
+  const confirmedIncome = args.confirmedTransactions
+    .filter((transaction) => transaction.type === "income" && transaction.confirmed !== false)
+    .sort((left, right) => {
+      const leftDate = isoDay(left.date) ?? left.date;
+      const rightDate = isoDay(right.date) ?? right.date;
+      if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
+      return left.id.localeCompare(right.id);
+    });
+  const usedTransactionIds = new Set<string>();
+
+  return sources.map((source) => {
+    let matchedTransaction: Transaction | null = null;
+    let matchedScore = -1;
+
+    for (const transaction of confirmedIncome) {
+      if (usedTransactionIds.has(transaction.id)) continue;
+      const score = scoreIncomeMatch(source, transaction);
+      if (score > matchedScore) {
+        matchedScore = score;
+        matchedTransaction = transaction;
+      }
+    }
+
+    if (matchedTransaction) {
+      usedTransactionIds.add(matchedTransaction.id);
+      return {
+        ...source,
+        status: "received",
+        matchedTransactionId: matchedTransaction.id,
+        matchedTransactionDate: isoDay(matchedTransaction.date),
+      };
+    }
+
+    const expectedDate = isoDay(source.expectedDate);
+    const status =
+      expectedDate != null && expectedDate > args.today
+        ? "expected"
+        : "overdue_unconfirmed";
+
+    return {
+      ...source,
+      status,
+      matchedTransactionId: null,
+      matchedTransactionDate: null,
+    };
+  });
 }

@@ -2,13 +2,14 @@ import {
   daysInclusiveUntilDate,
   getLocalTodayIsoDate,
 } from "@/lib/format-date";
-import type { MoneySetup } from "@/lib/money-setup";
-import type { CategoryDefinition } from "@/types";
+import { resolveMoneySetupIncomeSources, type MoneySetup } from "@/lib/money-setup";
+import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, RecurringTransaction } from "@/types/planning";
 
 export type SafeSpendingStatus =
   | "ready"
   | "missing_income"
+  | "unconfirmed_income"
   | "missing_balance"
   | "missing_required_expenses"
   | "missing_essential_budgets"
@@ -37,6 +38,7 @@ export type SafeSpendingResult = {
 export type CalculateSafeSpendingInput = {
   availableNow: number;
   moneySetup: MoneySetup;
+  confirmedTransactions: Transaction[];
   recurringTransactions: RecurringTransaction[];
   categoryBudgets: CategoryBudget[];
   categories: CategoryDefinition[];
@@ -49,10 +51,6 @@ function startOfDayMs(iso: string): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function isIsoOnOrAfter(date: string, min: string): boolean {
-  return date.slice(0, 10) >= min.slice(0, 10);
-}
-
 function isIsoWithinInclusive(date: string, from: string, to: string): boolean {
   const day = date.slice(0, 10);
   return day >= from.slice(0, 10) && day <= to.slice(0, 10);
@@ -60,30 +58,39 @@ function isIsoWithinInclusive(date: string, from: string, to: string): boolean {
 
 function pickNearestIncome(
   moneySetup: MoneySetup,
+  confirmedTransactions: Transaction[],
   today: string,
   reasons: string[],
 ): {
   nextIncomeDate: string | null;
   expectedIncomeAmount: number | null;
+  hasOverdueUnconfirmed: boolean;
   debug: Record<string, unknown>;
 } {
-  if (moneySetup.incomeSources.length > 0) {
-    const dated = moneySetup.incomeSources.filter(
-      (source) =>
-        typeof source.expectedDate === "string" &&
-        source.expectedDate.trim() &&
-        isIsoOnOrAfter(source.expectedDate, today),
-    );
+  const resolved = resolveMoneySetupIncomeSources({
+    moneySetup,
+    confirmedTransactions,
+    today,
+  });
+  if (resolved.length > 0) {
+    const dated = resolved.filter((source) => source.status === "expected");
+    const overdue = resolved.filter((source) => source.status === "overdue_unconfirmed");
 
     if (dated.length === 0) {
-      reasons.push("income_sources_present_but_no_future_income_date");
+      if (overdue.length > 0) {
+        reasons.push("income_sources_present_but_unconfirmed_after_due_date");
+      } else {
+        reasons.push("income_sources_present_but_no_future_income_date");
+      }
       return {
         nextIncomeDate: null,
         expectedIncomeAmount: null,
+        hasOverdueUnconfirmed: overdue.length > 0,
         debug: {
           incomeMode: "sources",
-          incomeSourcesCount: moneySetup.incomeSources.length,
+          incomeSourcesCount: resolved.length,
           usableIncomeSources: 0,
+          overdueIncomeSourceIds: overdue.map((source) => source.id),
         },
       };
     }
@@ -101,11 +108,13 @@ function pickNearestIncome(
     return {
       nextIncomeDate: nearestDate,
       expectedIncomeAmount,
+      hasOverdueUnconfirmed: overdue.length > 0,
       debug: {
         incomeMode: "sources",
-        incomeSourcesCount: moneySetup.incomeSources.length,
+        incomeSourcesCount: resolved.length,
         usableIncomeSources: dated.length,
         matchedIncomeSourceIds: sameDay.map((source) => source.id),
+        overdueIncomeSourceIds: overdue.map((source) => source.id),
       },
     };
   }
@@ -113,6 +122,9 @@ function pickNearestIncome(
   return {
     nextIncomeDate: moneySetup.nextIncomeDate,
     expectedIncomeAmount: moneySetup.expectedIncomeAmount,
+    hasOverdueUnconfirmed:
+      Boolean(moneySetup.nextIncomeDate) &&
+      moneySetup.nextIncomeDate!.slice(0, 10) <= today,
     debug: {
       incomeMode: "legacy",
       incomeSourcesCount: 0,
@@ -143,7 +155,12 @@ export function calculateSafeSpending(
     essentialCategoryIds: input.moneySetup.essentialCategoryIds,
   };
 
-  const income = pickNearestIncome(input.moneySetup, today, reasons);
+  const income = pickNearestIncome(
+    input.moneySetup,
+    input.confirmedTransactions,
+    today,
+    reasons,
+  );
   const nextIncomeDate = income.nextIncomeDate;
   const expectedIncomeAmount = income.expectedIncomeAmount;
   Object.assign(debug, income.debug);
@@ -163,7 +180,10 @@ export function calculateSafeSpending(
 
   if (!nextIncomeDate) {
     reasons.push("missing_next_income_date");
-    return buildResult(base, "missing_income");
+    return buildResult(
+      base,
+      income.hasOverdueUnconfirmed ? "unconfirmed_income" : "missing_income",
+    );
   }
 
   const todayMs = startOfDayMs(today);

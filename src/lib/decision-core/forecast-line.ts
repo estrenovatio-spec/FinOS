@@ -2,7 +2,7 @@ import { getCategoryLabel } from "@/lib/categories";
 import { daysInclusiveUntilDate } from "@/lib/format-date";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
-import type { MoneySetupIncomeSource } from "@/lib/money-setup";
+import { resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 import { isPendingTransaction } from "@/lib/transaction-confirmed";
 import type {
   BalanceForecast,
@@ -102,25 +102,25 @@ function hasMatchingActualTransaction(
 }
 
 function buildIncomeEvents(ctx: DecisionCoreContext): ForecastEvent[] {
-  const futureSources = ctx.moneySetup.incomeSources
-    .filter(
-      (source) =>
-        source.expectedDate &&
-        source.expectedAmount &&
-        source.expectedAmount > 0 &&
-        source.expectedDate.slice(0, 10) >= ctx.today,
-    )
-    .sort((left, right) => left.expectedDate!.localeCompare(right.expectedDate!));
+  const expectedSources = resolveMoneySetupIncomeSources({
+    moneySetup: ctx.moneySetup,
+    confirmedTransactions: ctx.confirmedTransactions,
+    today: ctx.today,
+    locale: ctx.locale,
+  }).filter((source) => source.status === "expected");
 
-  if (futureSources.length > 0) {
-    const grouped = new Map<string, MoneySetupIncomeSource[]>();
-    for (const source of futureSources) {
+  if (expectedSources.length > 0) {
+    const grouped = new Map<string, typeof expectedSources>();
+    for (const source of expectedSources) {
       const day = source.expectedDate!.slice(0, 10);
       grouped.set(day, [...(grouped.get(day) ?? []), source]);
     }
 
     return [...grouped.entries()].map(([date, sources]) => ({
-      id: `income-${date}`,
+      id: `income-${date}-${sources
+        .map((source) => source.id)
+        .sort((left, right) => left.localeCompare(right))
+        .join("__")}`,
       title:
         sources.length === 1
           ? sources[0]!.label
@@ -132,24 +132,6 @@ function buildIncomeEvents(ctx: DecisionCoreContext): ForecastEvent[] {
       balanceAfter: 0,
       source: "income_source",
     }));
-  }
-
-  if (
-    ctx.moneySetup.nextIncomeDate &&
-    ctx.moneySetup.expectedIncomeAmount &&
-    ctx.moneySetup.expectedIncomeAmount > 0 &&
-    ctx.moneySetup.nextIncomeDate.slice(0, 10) >= ctx.today
-  ) {
-    return [
-      {
-        id: `income-legacy-${ctx.moneySetup.nextIncomeDate.slice(0, 10)}`,
-        title: ctx.locale === "ru" ? "Следующий доход" : "Next income",
-        amount: ctx.moneySetup.expectedIncomeAmount,
-        date: ctx.moneySetup.nextIncomeDate.slice(0, 10),
-        balanceAfter: 0,
-        source: "income_source",
-      },
-    ];
   }
 
   return [];
