@@ -1,4 +1,5 @@
 import { getCategoryLabel } from "@/lib/categories";
+import { buildForecastDays } from "@/lib/decision-core/forecast-days";
 import { daysInclusiveUntilDate } from "@/lib/format-date";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
@@ -248,27 +249,31 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
     .sort(sortEvents);
 
   let balance = ctx.availableNow;
-  let minBalance = balance;
-  let minBalanceDate: string | null = null;
-  let firstDeficitDate: string | null = balance < 0 ? ctx.today : null;
 
   const eventsWithBalance = events.map((event) => {
     balance += event.amount;
-
-    if (balance < minBalance) {
-      minBalance = balance;
-      minBalanceDate = event.date;
-    }
-
-    if (!firstDeficitDate && balance < 0) {
-      firstDeficitDate = event.date;
-    }
 
     return {
       ...event,
       balanceAfter: balance,
     };
   });
+
+  const days = buildForecastDays(ctx.availableNow, eventsWithBalance);
+  let minBalance = ctx.availableNow;
+  let minBalanceDate: string | null = null;
+  let firstDeficitDate: string | null = ctx.availableNow < 0 ? ctx.today : null;
+
+  for (const day of days) {
+    if (day.endBalance < minBalance) {
+      minBalance = day.endBalance;
+      minBalanceDate = day.date;
+    }
+
+    if (!firstDeficitDate && day.endBalance < 0) {
+      firstDeficitDate = day.date;
+    }
+  }
 
   const nextIncomeDate =
     eventsWithBalance.find((event) => event.amount > 0)?.date ?? configuredNextIncomeDate;
@@ -281,5 +286,6 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
     nextIncomeDate,
     horizonEndDate,
     events: eventsWithBalance,
+    days,
   };
 }

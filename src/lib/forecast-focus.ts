@@ -3,6 +3,7 @@ import {
   normalizeIsoDate,
 } from "@/lib/format-date";
 import type { BalanceForecast, ForecastEvent } from "@/lib/decision-core/types";
+import { getForecastDays as getDecisionForecastDays } from "@/lib/decision-core/forecast-days";
 
 export type ForecastFocus = {
   date: string;
@@ -33,29 +34,14 @@ function sortGroups(left: ForecastDateGroup, right: ForecastDateGroup) {
 export function groupForecastEventsByDate(
   forecast: BalanceForecast,
 ): ForecastDateGroup[] {
-  const grouped = new Map<string, ForecastDateGroup>();
-
-  for (const event of forecast.events) {
-    const date = normalizeIsoDate(event.date);
-    if (!date) continue;
-
-    const existing = grouped.get(date);
-    if (existing) {
-      existing.events.push(event);
-      existing.totalDelta += event.amount;
-      existing.balanceAfter = event.balanceAfter;
-      continue;
-    }
-
-    grouped.set(date, {
-      date,
-      events: [event],
-      balanceAfter: event.balanceAfter,
-      totalDelta: event.amount,
-    });
-  }
-
-  return [...grouped.values()].sort(sortGroups);
+  return getDecisionForecastDays(forecast)
+    .map((day) => ({
+      date: day.date,
+      events: day.events,
+      balanceAfter: day.endBalance,
+      totalDelta: day.netChange,
+    }))
+    .sort(sortGroups);
 }
 
 export function resolveForecastFocus(

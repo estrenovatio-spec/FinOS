@@ -285,6 +285,16 @@ export type ForecastEvent = {
   plannedDate?: string | null;
 };
 
+export type ForecastDay = {
+  date: string;
+  events: ForecastEvent[];
+  incomeTotal: number;
+  expenseTotal: number;
+  netChange: number;
+  startBalance: number;
+  endBalance: number;
+};
+
 export type BalanceForecast = {
   startBalance: number;
   minBalance: number;
@@ -293,4 +303,5 @@ export type BalanceForecast = {
   nextIncomeDate: string | null;
   horizonEndDate: string;
   events: ForecastEvent[];
+  days?: ForecastDay[];
 };

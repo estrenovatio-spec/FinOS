@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { decisionCore } from "@/lib/decision-core";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
-import { findConstraintEvent, getRequiredFloor } from "@/lib/decision-core/constraint-point";
+import {
+  findConstraintEvent,
+  getConstraintPoint,
+  getRequiredFloor,
+} from "@/lib/decision-core/constraint-point";
 import { buildEssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
 import { buildForecastLine } from "@/lib/decision-core/forecast-line";
 import { buildMainAction } from "@/lib/decision-core/main-action";
@@ -1616,4 +1620,199 @@ test("confirmed income transaction prevents double counting of the expected sour
     false,
   );
   assert.equal(scenario.result.safeUntil.rawStatus, "missing_income");
+});
+
+function buildSameDayCashGapScenario(expenseOrder: string[] = ["rent", "school", "internet"]) {
+  const expenseMap = {
+    rent: tx({
+      id: "rent-july-25",
+      amount: 53000,
+      type: "expense",
+      categoryId: "rent",
+      date: "2026-07-25",
+      note: "Аренда",
+      confirmed: false,
+    }),
+    school: tx({
+      id: "school-july-25",
+      amount: 9300,
+      type: "expense",
+      categoryId: "kids_family",
+      date: "2026-07-25",
+      note: "Учёба Ксю",
+      confirmed: false,
+    }),
+    internet: tx({
+      id: "internet-july-25",
+      amount: 500,
+      type: "expense",
+      categoryId: "services",
+      date: "2026-07-25",
+      note: "Интернет",
+      confirmed: false,
+    }),
+  } as const;
+
+  return evaluate(
+    buildState({
+      today: "2026-07-20",
+      balances: { all: 60894, me: 60894, partner: 0 },
+      transactions: expenseOrder.map((key) => expenseMap[key as keyof typeof expenseMap]),
+      recurringTransactions: [
+        recurring({
+          id: "tax-july-28",
+          amount: 30000,
+          type: "expense",
+          categoryId: "tax",
+          note: "Налог",
+          nextRunDate: "2026-07-28",
+          frequency: "monthly",
+          dayOfMonth: 28,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "income-july-25",
+            label: "Доход",
+            expectedDate: "2026-07-25",
+            expectedAmount: 25000,
+            kind: "salary",
+            isPrimary: true,
+          },
+        ],
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+}
+
+test("same-day income and expenses aggregate into one end-of-day balance", () => {
+  const scenario = buildSameDayCashGapScenario();
+  const july25 = scenario.ctx.forecast.days?.find((day) => day.date === "2026-07-25");
+
+  assert.ok(july25);
+  assert.equal(july25?.startBalance, 60894);
+  assert.equal(july25?.incomeTotal, 25000);
+  assert.equal(july25?.expenseTotal, 62800);
+  assert.equal(july25?.netChange, -37800);
+  assert.equal(july25?.endBalance, 23094);
+});
+
+test("positive end-of-day balance does not create a false deficit on the same date", () => {
+  const scenario = buildSameDayCashGapScenario();
+
+  assert.equal(scenario.ctx.forecast.firstDeficitDate, "2026-07-28");
+  assert.equal(
+    scenario.ctx.forecast.days?.find((day) => day.date === "2026-07-25")?.endBalance,
+    23094,
+  );
+  assert.equal(
+    scenario.ctx.forecast.events.some(
+      (event) => event.date === "2026-07-25" && event.balanceAfter < 0,
+    ),
+    true,
+  );
+});
+
+test("constraint point uses the next truly limiting day instead of a same-day intermediate dip", () => {
+  const scenario = buildSameDayCashGapScenario();
+  const point = getConstraintPoint(scenario.ctx);
+
+  assert.equal(point?.date, "2026-07-28");
+  assert.equal(point?.kind, "deficit");
+  assert.equal(point?.balanceAfter, -6906);
+  assert.notEqual(point?.eventId, "school-july-25");
+  assert.equal(scenario.result.nextRisk?.date, "2026-07-28");
+  assert.equal(scenario.result.allowed.horizonDate, "2026-07-28");
+  assert.match(scenario.result.safeUntil.note ?? "", /28 июля/);
+});
+
+test("same-day constraint semantics do not depend on event order", () => {
+  const original = buildSameDayCashGapScenario(["rent", "school", "internet"]);
+  const reordered = buildSameDayCashGapScenario(["internet", "school", "rent"]);
+
+  assert.equal(
+    original.ctx.forecast.days?.find((day) => day.date === "2026-07-25")?.endBalance,
+    23094,
+  );
+  assert.equal(
+    reordered.ctx.forecast.days?.find((day) => day.date === "2026-07-25")?.endBalance,
+    23094,
+  );
+  assert.equal(original.ctx.forecast.firstDeficitDate, reordered.ctx.forecast.firstDeficitDate);
+  assert.equal(original.result.nextRisk?.date, reordered.result.nextRisk?.date);
+  assert.equal(original.result.allowed.horizonDate, reordered.result.allowed.horizonDate);
+});
+
+test("constraint explanation describes the end-of-day total instead of a fake same-day deficit", () => {
+  const scenario = buildSameDayCashGapScenario();
+
+  assert.equal(scenario.result.constraintExplanation?.date, "2026-07-28");
+  assert.equal(
+    scenario.result.constraintExplanation?.summary?.includes("25 июля денег уже не хватит"),
+    false,
+  );
+  const july25 = scenario.ctx.forecast.days?.find((day) => day.date === "2026-07-25");
+  assert.equal(july25?.endBalance, 23094);
+});
+
+test("a truly negative end-of-day balance still creates a same-day deficit", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-20",
+      balances: { all: 60894, me: 60894, partner: 0 },
+      transactions: [
+        tx({
+          id: "rent-july-25",
+          amount: 53000,
+          type: "expense",
+          categoryId: "rent",
+          date: "2026-07-25",
+          note: "Аренда",
+          confirmed: false,
+        }),
+        tx({
+          id: "school-july-25",
+          amount: 9300,
+          type: "expense",
+          categoryId: "kids_family",
+          date: "2026-07-25",
+          note: "Учёба Ксю",
+          confirmed: false,
+        }),
+        tx({
+          id: "internet-july-25",
+          amount: 500,
+          type: "expense",
+          categoryId: "services",
+          date: "2026-07-25",
+          note: "Интернет",
+          confirmed: false,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "income-july-25",
+            label: "Доход",
+            expectedDate: "2026-07-25",
+            expectedAmount: 1000,
+            kind: "salary",
+            isPrimary: true,
+          },
+        ],
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(
+    scenario.ctx.forecast.days?.find((day) => day.date === "2026-07-25")?.endBalance,
+    -906,
+  );
+  assert.equal(scenario.ctx.forecast.firstDeficitDate, "2026-07-25");
+  assert.equal(scenario.result.nextRisk?.date, "2026-07-25");
 });

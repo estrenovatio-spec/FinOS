@@ -1,3 +1,7 @@
+import {
+  getForecastDays,
+  pickConstraintEventForDay,
+} from "@/lib/decision-core/forecast-days";
 import type { DecisionCoreContext, ForecastEvent } from "@/lib/decision-core/types";
 
 export function getRequiredFloor(ctx: DecisionCoreContext): number {
@@ -16,44 +20,46 @@ export type ConstraintPoint = {
 };
 
 export function getConstraintPoint(ctx: DecisionCoreContext): ConstraintPoint | null {
-  if (ctx.forecast.firstDeficitDate) {
-    const event =
-      ctx.forecast.events.find(
-        (entry) => entry.date === ctx.forecast.firstDeficitDate && entry.balanceAfter < 0,
-      ) ?? null;
-    return event
-      ? {
-          event,
-          date: event.date,
-          eventId: event.id,
-          eventTitle: event.title,
-          eventAmount: event.amount,
-          balanceAfter: event.balanceAfter,
-          kind: "deficit",
-          requiredFloor: getRequiredFloor(ctx),
-        }
-      : null;
-  }
-
+  const days = getForecastDays(ctx.forecast);
   const requiredFloor = getRequiredFloor(ctx);
-  if (requiredFloor <= 0) return null;
 
-  const event =
-    ctx.forecast.events.find(
-      (entry) => entry.amount < 0 && entry.balanceAfter <= requiredFloor,
-    ) ?? null;
-  return event
-    ? {
+  for (const day of days) {
+    if (day.endBalance < 0) {
+      const event = pickConstraintEventForDay(day);
+      if (!event) return null;
+      return {
         event,
-        date: event.date,
+        date: day.date,
         eventId: event.id,
         eventTitle: event.title,
         eventAmount: event.amount,
-        balanceAfter: event.balanceAfter,
+        balanceAfter: day.endBalance,
+        kind: "deficit",
+        requiredFloor,
+      };
+    }
+  }
+
+  if (requiredFloor <= 0) return null;
+
+  for (const day of days) {
+    if (day.endBalance <= requiredFloor) {
+      const event = pickConstraintEventForDay(day);
+      if (!event) return null;
+      return {
+        event,
+        date: day.date,
+        eventId: event.id,
+        eventTitle: event.title,
+        eventAmount: event.amount,
+        balanceAfter: day.endBalance,
         kind: "reserve",
         requiredFloor,
-      }
-    : null;
+      };
+    }
+  }
+
+  return null;
 }
 
 export function findConstraintEvent(ctx: DecisionCoreContext): ForecastEvent | null {
@@ -61,5 +67,5 @@ export function findConstraintEvent(ctx: DecisionCoreContext): ForecastEvent | n
 }
 
 export function getConstraintDate(ctx: DecisionCoreContext): string | null {
-  return getConstraintPoint(ctx)?.event.date ?? null;
+  return getConstraintPoint(ctx)?.date ?? null;
 }

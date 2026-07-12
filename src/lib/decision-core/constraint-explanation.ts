@@ -1,6 +1,6 @@
 import { formatMoney } from "@/lib/format-money";
+import { findForecastDayByDate } from "@/lib/decision-core/forecast-days";
 import { getForecastConfidence } from "@/lib/decision-core/forecast-confidence";
-import { groupForecastEventsByDate } from "@/lib/forecast-focus";
 import { getConstraintPoint } from "@/lib/decision-core/constraint-point";
 import type {
   DecisionConstraintExplanation,
@@ -88,6 +88,7 @@ function buildSingleEventSummary(
 }
 
 function buildMixedDaySummary(
+  date: string,
   events: ForecastEvent[],
   balanceAfter: number,
   kind: "deficit" | "reserve",
@@ -103,8 +104,8 @@ function buildMixedDaySummary(
   );
   const firstSentence =
     locale === "ru"
-      ? `В этот день придёт ${absoluteRub(incomeTotal, locale)} и спишется ${absoluteRub(expenseTotal, locale)}.`
-      : `On this date ${absoluteRub(incomeTotal, locale)} will come in and ${absoluteRub(expenseTotal, locale)} will go out.`;
+      ? `${formatDayMonth(date, locale)} придёт ${absoluteRub(incomeTotal, locale)} и спишется ${absoluteRub(expenseTotal, locale)}.`
+      : `On ${formatDayMonth(date, locale)} ${absoluteRub(incomeTotal, locale)} will come in and ${absoluteRub(expenseTotal, locale)} will go out.`;
 
   const secondSentence =
     kind === "deficit"
@@ -119,6 +120,7 @@ function buildMixedDaySummary(
 }
 
 function buildMultiEventSummary(
+  date: string,
   events: ForecastEvent[],
   balanceAfter: number,
   kind: "deficit" | "reserve",
@@ -127,14 +129,14 @@ function buildMultiEventSummary(
   const hasIncome = events.some((event) => event.amount > 0);
   const hasExpense = events.some((event) => event.amount < 0);
   if (hasIncome && hasExpense) {
-    return buildMixedDaySummary(events, balanceAfter, kind, locale);
+    return buildMixedDaySummary(date, events, balanceAfter, kind, locale);
   }
 
   const absTotal = events.reduce((sum, event) => sum + Math.abs(event.amount), 0);
   const firstSentence =
     locale === "ru"
-      ? `В этот день пройдут ${events.length} платежа на ${absoluteRub(absTotal, locale)}.`
-      : `${events.length} payments totaling ${absoluteRub(absTotal, locale)} will happen on this date.`;
+      ? `${formatDayMonth(date, locale)} пройдут ${events.length} платежа на ${absoluteRub(absTotal, locale)}.`
+      : `${events.length} payments totaling ${absoluteRub(absTotal, locale)} will happen on ${formatDayMonth(date, locale)}.`;
   const secondSentence =
     kind === "deficit"
       ? locale === "ru"
@@ -153,11 +155,10 @@ export function buildConstraintExplanation(
   if (!point) return null;
   const confidence = getForecastConfidence(ctx, point.date);
 
-  const group =
-    groupForecastEventsByDate(ctx.forecast).find((entry) => entry.date === point.date) ?? null;
-  const events = group?.events ?? [point.event];
-  const balanceAfter = normalizeAmount(group?.balanceAfter ?? point.balanceAfter);
-  const totalDelta = normalizeAmount(group?.totalDelta ?? point.eventAmount);
+  const day = findForecastDayByDate(ctx.forecast, point.date);
+  const events = day?.events ?? [point.event];
+  const balanceAfter = normalizeAmount(day?.endBalance ?? point.balanceAfter);
+  const totalDelta = normalizeAmount(day?.netChange ?? point.eventAmount);
   const selectedEvent =
     events.find((event) => event.id === point.eventId) ?? (events.length === 1 ? events[0] : null);
 
@@ -173,7 +174,7 @@ export function buildConstraintExplanation(
   const summary =
     selectedEvent && events.length === 1
       ? buildSingleEventSummary(selectedEvent, balanceAfter, point.kind, ctx.locale)
-      : buildMultiEventSummary(events, balanceAfter, point.kind, ctx.locale);
+      : buildMultiEventSummary(point.date, events, balanceAfter, point.kind, ctx.locale);
 
   const detail =
     point.kind === "deficit"

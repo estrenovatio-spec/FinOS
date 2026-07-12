@@ -1,5 +1,6 @@
 import { daysInclusiveUntilDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import { findForecastDayByDate, pickConstraintEventForDay } from "@/lib/decision-core/forecast-days";
 import type {
   DecisionCoreContext,
   DecisionMainAction,
@@ -61,10 +62,8 @@ function nextRiskReason(ctx: DecisionCoreContext, nextRisk: DecisionNextRisk | n
 }
 
 function findFirstDeficitEventId(ctx: DecisionCoreContext, riskDate: string): string | null {
-  const match = ctx.forecast.events.find(
-    (event) => event.date === riskDate && event.balanceAfter < 0,
-  );
-  return match?.id ?? null;
+  const day = findForecastDayByDate(ctx.forecast, riskDate);
+  return day ? (pickConstraintEventForDay(day)?.id ?? null) : null;
 }
 
 export function buildMainAction(
