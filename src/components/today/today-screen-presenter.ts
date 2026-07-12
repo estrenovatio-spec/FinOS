@@ -205,7 +205,26 @@ function buildHeroTitle(mainAction: DecisionMainAction, locale: Locale): string 
   }
 }
 
-function buildHeroDue(mainAction: DecisionMainAction, locale: Locale): string | null {
+function buildHeroSafeUntilDue(decision: DecisionCoreResult, locale: Locale): string | null {
+  const title = decision.safeUntil.title?.trim();
+  if (!title) return null;
+
+  if (locale === "ru") {
+    if (title.startsWith("До ")) {
+      return `Денег хватает до ${title.slice(3)}`;
+    }
+    return title;
+  }
+
+  if (title.startsWith("Until ")) {
+    return `Your money lasts until ${title.slice(6)}`;
+  }
+
+  return title;
+}
+
+function buildHeroDue(decision: DecisionCoreResult, locale: Locale): string | null {
+  const { mainAction } = decision;
   switch (mainAction.type) {
     case "pay_overdue":
       return mainAction.dueDate
@@ -229,11 +248,7 @@ function buildHeroDue(mainAction: DecisionMainAction, locale: Locale): string | 
           : `Until ${formatDayMonth(mainAction.dueDate, locale)}`
         : null;
     case "hold":
-      return mainAction.dueDate
-        ? locale === "ru"
-          ? `Денег хватает до ${formatDayMonth(mainAction.dueDate, locale)}`
-          : `Your money lasts until ${formatDayMonth(mainAction.dueDate, locale)}`
-        : null;
+      return buildHeroSafeUntilDue(decision, locale);
     default:
       return null;
   }
@@ -338,7 +353,7 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
     tone: status.tone,
     title: buildHeroTitle(decision.mainAction, locale),
     amount: rub(decision.mainAction.amount ?? null, locale),
-    due: buildHeroDue(decision.mainAction, locale),
+    due: buildHeroDue(decision, locale),
     reason: buildHeroReason(decision, locale, currentBalance != null),
     ctaLabel: getMainActionButtonLabel(decision.mainAction.command, locale),
     isEmptyState: false,

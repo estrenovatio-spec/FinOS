@@ -191,6 +191,47 @@ test("hero without urgent action does not show forced CTA", () => {
   assert.equal(view.hero.title, "Сегодня всё спокойно");
 });
 
+test("hero and safe-until overview use the same canonical date", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      safeUntil: {
+        title: "До 3 августа",
+        note: "Расчёт по прогнозной линии.",
+        isReady: true,
+        needsSetup: false,
+        rawStatus: "ready",
+        safeToday: 3500,
+        nextIncomeDate: "2026-08-10",
+      },
+      mainAction: {
+        type: "hold",
+        title: "Срочных действий нет",
+        text: "Сегодня обязательных действий нет.",
+        description: "Прогноз остаётся устойчивым на известном горизонте.",
+        reason: "Система не нашла обязательного шага сильнее, чем сохранение резерва.",
+        amount: null,
+        dueDate: "2026-07-25",
+        relatedEntityId: null,
+        priority: "low",
+        command: { type: "none" },
+      },
+      nextRisk: null,
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-08-10",
+    },
+    balances: { all: 40000, me: 40000, partner: 0 },
+  });
+
+  const safeUntil = view.overviewItems.find((item) => item.id === "safe-until");
+  assert.equal(safeUntil?.value, "До 3 августа");
+  assert.equal(view.hero.due, "Денег хватает до 3 августа");
+  assert.doesNotMatch(view.hero.due ?? "", /25 июля/);
+});
+
 test("current balance is always visible when known", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),
