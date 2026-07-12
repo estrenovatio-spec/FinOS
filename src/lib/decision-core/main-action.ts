@@ -88,7 +88,7 @@ export function buildMainAction(
             : `Pay ${decision.title} — ${rub(decision.amount, locale)}.`,
         description:
           locale === "ru"
-            ? `Платёж просрочен с ${formatDayMonth(decision.dueDate, locale)}.`
+            ? `Просрочено с ${formatDayMonth(decision.dueDate, locale)}.`
             : `This payment has been overdue since ${formatDayMonth(decision.dueDate, locale)}.`,
         reason:
           locale === "ru"
@@ -116,8 +116,8 @@ export function buildMainAction(
             : `Pay ${decision.title} — ${rub(decision.amount, locale)} today.`,
         description:
           locale === "ru"
-            ? "После оплаты прогноз сразу пересчитается."
-            : "The forecast will recalculate right after payment.",
+            ? "Срок — сегодня."
+            : "Due today.",
         reason:
           locale === "ru"
             ? "На сегодня есть обязательный платёж."
@@ -136,8 +136,8 @@ export function buildMainAction(
         type: "cover_deficit",
         title:
           locale === "ru"
-            ? `Закройте дефицит ${rub(decision.amount, locale)}`
-            : `Cover ${rub(decision.amount, locale)} deficit`,
+            ? "Закройте дефицит"
+            : "Cover the deficit",
         text:
           locale === "ru"
             ? `Нужно закрыть дефицит ${rub(decision.amount, locale)}.`
@@ -171,15 +171,15 @@ export function buildMainAction(
         type: "cover_deficit",
         title:
           locale === "ru"
-            ? `Найдите ${rub(decision.amount, locale)} до ${formatDayMonth(decision.riskDate, locale)}`
-            : `Find ${rub(decision.amount, locale)} by ${formatDayMonth(decision.riskDate, locale)}`,
+            ? "Подготовьте резерв"
+            : "Prepare a buffer",
         text:
           locale === "ru"
             ? `Найдите или высвободите ${rub(decision.amount, locale)} до ${formatDayMonth(decision.riskDate, locale)}.`
             : `Find or free up ${rub(decision.amount, locale)} by ${formatDayMonth(decision.riskDate, locale)}.`,
         description:
           locale === "ru"
-            ? `Без этого через ${daysUntilDeficit} дн. прогноз становится отрицательным.`
+            ? `${formatDayMonth(decision.riskDate, locale)} возможен дефицит.`
             : `Without this, the forecast turns negative in ${daysUntilDeficit} day${daysUntilDeficit === 1 ? "" : "s"}.`,
         reason: nextRiskReason(ctx, nextRisk),
         amount: decision.amount,
@@ -202,8 +202,8 @@ export function buildMainAction(
         type: "reserve_for_risk",
         title:
           locale === "ru"
-            ? `Сохраните резерв до ${formatDayMonth(decision.dueDate, locale)}`
-            : `Keep a reserve until ${formatDayMonth(decision.dueDate, locale)}`,
+            ? "Сохраните резерв"
+            : "Keep the reserve",
         text:
           locale === "ru"
             ? decision.amount > 0
@@ -214,7 +214,7 @@ export function buildMainAction(
               : `Do not add new spending before ${formatDayMonth(decision.dueDate, locale)}.`,
         description:
           locale === "ru"
-            ? "Это ближайшая точка, где запас денег становится минимальным."
+            ? `До ${formatDayMonth(decision.dueDate, locale)} запас денег станет минимальным.`
             : "This is the nearest point where your cash buffer becomes minimal.",
         reason: nextRiskReason(ctx, nextRisk),
         amount: decision.amount > 0 ? decision.amount : null,

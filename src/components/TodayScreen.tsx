@@ -1,20 +1,14 @@
 "use client";
 
-import {
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  CircleDollarSign,
-  ShieldAlert,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
 import { useMemo, useState } from "react";
 import { QuickAddOperationDialog } from "@/components/today/QuickAddOperationDialog";
+import { TodayHero } from "@/components/today/TodayHero";
+import { TodayOverview } from "@/components/today/TodayOverview";
+import { TodaySecondaryInsights } from "@/components/today/TodaySecondaryInsights";
 import {
   executeMainActionCommand,
-  getMainActionButtonLabel,
 } from "@/components/today/main-action-resolver";
+import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
 import { MoneySetupDialog } from "@/components/MoneySetupDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,23 +20,6 @@ import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
 import { hasPartnerBudget } from "@/lib/owner-labels";
 import { useViewerMappedTransactions, useHouseholdBalances, useStore } from "@/store/useStore";
-
-function TodayCardTitle({
-  icon: Icon,
-  title,
-}: {
-  icon: LucideIcon;
-  title: string;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Icon className="h-4 w-4" />
-      </div>
-      <p className="text-sm font-semibold text-foreground">{title}</p>
-    </div>
-  );
-}
 
 export function TodayScreen({
   onNavigateToTab,
@@ -71,6 +48,7 @@ export function TodayScreen({
   >(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const showHouseholdToggle = hasPartnerBudget(partnerName, partnerKeywords);
   const today = getLocalTodayIsoDate();
@@ -102,13 +80,37 @@ export function TodayScreen({
       transactions,
     ],
   );
-  const mainActionButtonLabel = getMainActionButtonLabel(
-    decision.mainAction.command,
-    locale,
+  const view = useMemo(
+    () =>
+      buildTodayScreenView({
+        decision,
+        locale,
+        transactionCount: transactions.length,
+        moneySetup,
+        balances,
+      }),
+    [balances, decision, locale, moneySetup, transactions.length],
   );
+  const zeroState = isTodayZeroState({
+    decision,
+    locale,
+    transactionCount: transactions.length,
+    moneySetup,
+    balances,
+  });
 
   async function handleMainAction() {
-    if (actionBusy || decision.mainAction.command.type === "none") return;
+    if (actionBusy) return;
+
+    setActionError(null);
+
+    if (zeroState) {
+      setMoneySetupSection(null);
+      setMoneySetupOpen(true);
+      return;
+    }
+
+    if (decision.mainAction.command.type === "none") return;
 
     setActionBusy(true);
     const result = await executeMainActionCommand(decision.mainAction.command, {
@@ -124,10 +126,13 @@ export function TodayScreen({
     });
 
     if (!result.ok) {
-      toast(
+      const message =
         locale === "ru"
-          ? "Действие не удалось выполнить. Проверьте, что платёж или запись ещё актуальны."
-          : "The action could not be completed. Check that the item still exists.",
+          ? "Не получилось выполнить действие. Обновите экран или попробуйте ещё раз."
+          : "The action could not be completed. Refresh the screen or try again.";
+      setActionError(message);
+      toast(
+        message,
         "error",
       );
     }
@@ -148,103 +153,21 @@ export function TodayScreen({
         </p>
       </section>
 
-      <Card className={decision.status.toneClassName}>
-        <CardContent className="space-y-2 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">
-            {locale === "ru" ? "Статус дня" : "Day status"}
-          </p>
-          <div className="flex items-center gap-2">
-            {decision.status.key === "calm" ? (
-              <CheckCircle2 className="h-5 w-5" />
-            ) : decision.status.key === "risk" ? (
-              <AlertTriangle className="h-5 w-5" />
-            ) : (
-              <ShieldAlert className="h-5 w-5" />
-            )}
-            <p className="text-xl font-semibold">{decision.status.title}</p>
-          </div>
-          {decision.status.note ? (
-            <p className="text-sm leading-snug opacity-90">{decision.status.note}</p>
-          ) : null}
-        </CardContent>
-      </Card>
+      <TodayHero
+        hero={view.hero}
+        actionBusy={actionBusy}
+        actionError={actionError}
+        onAction={handleMainAction}
+      />
 
-      <Card className="border-primary/25 bg-primary/5 shadow-none">
-        <CardContent className="space-y-3 p-4">
-          <TodayCardTitle
-            icon={Sparkles}
-            title={locale === "ru" ? "Главное действие" : "Main action"}
-          />
-          <div className="space-y-2">
-            <p className="text-xl font-semibold leading-snug text-foreground">
-              {decision.mainAction.title}
-            </p>
-            {decision.mainAction.description ? (
-              <p className="text-sm leading-snug text-foreground/90">
-                {decision.mainAction.description}
-              </p>
-            ) : null}
-            {decision.mainAction.reason ? (
-              <p className="text-sm leading-snug text-muted-foreground">
-                {locale === "ru" ? "Почему:" : "Why:"} {decision.mainAction.reason}
-              </p>
-            ) : null}
-          </div>
-          {mainActionButtonLabel ? (
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleMainAction}
-              disabled={actionBusy}
-            >
-              {mainActionButtonLabel}
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      <TodayOverview title={view.overviewTitle} items={view.overviewItems} />
 
-      <Card className="border-border/25 bg-card/95 shadow-none">
-        <CardContent className="space-y-2 p-4">
-          <TodayCardTitle
-            icon={CircleDollarSign}
-            title={locale === "ru" ? "Денег хватит до" : "Money will last until"}
-          />
-          <p className="text-2xl font-semibold tracking-tight text-foreground">
-            {decision.safeUntil.title}
-          </p>
-          {decision.safeUntil.note ? (
-            <p className="text-sm leading-snug text-muted-foreground">
-              {decision.safeUntil.note}
-            </p>
-          ) : null}
-          {decision.safeUntil.needsSetup ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setMoneySetupOpen(true)}
-            >
-              {locale === "ru" ? "Уточнить данные" : "Complete setup"}
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/25 bg-card/95 shadow-none">
-        <CardContent className="space-y-3 p-4">
-          <TodayCardTitle
-            icon={CalendarClock}
-            title={locale === "ru" ? "Сегодня оплатить" : "Pay today"}
-          />
-          {decision.todayPayments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {locale === "ru"
-                ? "На сегодня обязательных оплат нет."
-                : "No required payments today."}
-            </p>
-          ) : (
+      {view.payments ? (
+        <Card className="border-border/25 bg-card/95 shadow-none">
+          <CardContent className="space-y-3 p-4">
+            <p className="text-sm font-semibold text-foreground">{view.payments.title}</p>
             <div className="space-y-2">
-              {decision.todayPayments.map((payment) => (
+              {view.payments.items.map((payment) => (
                 <TodayPaymentRow
                   key={payment.id}
                   id={payment.id}
@@ -253,101 +176,30 @@ export function TodayScreen({
                 />
               ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {decision.nextRisk ? (
-        <Card className="border-border/25 bg-card/95 shadow-none">
-          <CardContent className="space-y-2 p-4">
-            <TodayCardTitle
-              icon={AlertTriangle}
-              title={locale === "ru" ? "Следующий риск" : "Next risk"}
-            />
-            <p className="text-lg font-semibold text-foreground">
-              {decision.nextRisk.title}
-            </p>
-            <p className="text-sm font-medium text-foreground">
-              {formatMoney(decision.nextRisk.amount, locale)}{" "}
-              {locale === "ru" ? "₽" : "RUB"}
-            </p>
-            <p className="text-sm text-muted-foreground">{decision.nextRisk.label}</p>
-            {decision.nextRisk.note ? (
-              <p className="text-xs leading-snug text-muted-foreground">
-                {decision.nextRisk.note}
-              </p>
-            ) : null}
           </CardContent>
         </Card>
       ) : null}
 
-      {decision.avoid.text ? (
-        <Card className="border-amber-500/25 bg-amber-500/5 shadow-none">
-          <CardContent className="space-y-2 p-4">
-            <TodayCardTitle
-              icon={ShieldAlert}
-              title={
-                locale === "ru"
-                  ? "Сегодня не рекомендуется"
-                : "Not recommended today"
-              }
-            />
-            <p className="text-sm leading-snug text-foreground">{decision.avoid.text}</p>
-            {decision.avoid.reason ? (
-              <p className="text-xs leading-snug text-muted-foreground">
-                {decision.avoid.reason}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card className="border-border/25 bg-card/95 shadow-none">
-        <CardContent className="space-y-2 p-4">
-          <TodayCardTitle
-            icon={CheckCircle2}
-            title={locale === "ru" ? "Сегодня можно" : "Today you can"}
-          />
-          <p className="text-sm leading-snug text-foreground">{decision.allowed.text}</p>
-          {decision.allowed.reason ? (
-            <p className="text-xs leading-snug text-muted-foreground">
-              {decision.allowed.reason}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/25 bg-card/95 shadow-none">
-        <CardContent className="space-y-2 p-4">
-          <TodayCardTitle
-            icon={Sparkles}
-            title={locale === "ru" ? "Индекс спокойствия" : "Calm index"}
-          />
-          <div className="flex items-end justify-between gap-3">
-            <p className="text-3xl font-semibold tracking-tight text-foreground">
-              {decision.peaceIndex.value}
-            </p>
-            <p className="text-sm text-muted-foreground">{decision.peaceIndex.note}</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {!decision.hasHistory ? (
-        <Card className="border-primary/20 bg-primary/5 shadow-none">
-          <CardContent className="space-y-2 p-4">
-            <p className="text-sm font-semibold text-foreground">
-              {locale === "ru"
-                ? "Добавьте первую операцию, и экран станет точнее."
-                : "Add the first entry and this screen will become more accurate."}
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+      <TodaySecondaryInsights avoid={view.avoid} peaceIndex={view.peaceIndex} />
 
       <QuickAddOperationDialog
         open={quickAddOpen}
         onOpenChange={setQuickAddOpen}
       />
+
+      <div className="sticky bottom-20 z-20 pt-2">
+        <Button
+          type="button"
+          variant={view.showQuickAddHint ? "outline" : "secondary"}
+          className="h-12 w-full rounded-xl text-base font-semibold"
+          onClick={() => {
+            setActionError(null);
+            setQuickAddOpen(true);
+          }}
+        >
+          {locale === "ru" ? "Добавить операцию" : "Add entry"}
+        </Button>
+      </div>
 
       <MoneySetupDialog
         open={moneySetupOpen}

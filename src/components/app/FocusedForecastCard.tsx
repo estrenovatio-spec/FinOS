@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatTransactionDate, normalizeIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import { buildFocusedForecastView } from "@/components/app/focused-forecast-presenter";
 import {
   groupForecastEventsByDate,
   resolveForecastFocus,
@@ -32,23 +33,6 @@ function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   }
 }
 
-function focusReasonText(focus: ForecastFocus, locale: Locale): string {
-  switch (focus.reason) {
-    case "current_deficit":
-      return locale === "ru"
-        ? "Дефицит уже начался. Ниже показано, как прогноз развивается дальше."
-        : "The deficit has already started. The forecast below shows what happens next.";
-    case "future_deficit":
-      return locale === "ru"
-        ? "Это дата, на которой прогноз уходит в минус."
-        : "This is the date where the forecast turns negative.";
-    case "reserve_required":
-      return locale === "ru"
-        ? "Это ближайшая дата, где запас денег становится критически малым."
-        : "This is the nearest date where the cash buffer becomes critically small.";
-  }
-}
-
 export function FocusedForecastCard({
   locale,
   forecast,
@@ -63,13 +47,17 @@ export function FocusedForecastCard({
     () => resolveForecastFocus(forecast, focus),
     [focus, forecast],
   );
+  const view = useMemo(
+    () => buildFocusedForecastView(forecast, focus, locale),
+    [focus, forecast, locale],
+  );
   const [manualSelectedDate, setManualSelectedDate] = useState<string | null>(null);
-  const selectedDate = manualSelectedDate ?? focusResolution.selectedDate;
+  const selectedDate = manualSelectedDate ?? view.selectedDate;
   const selectedGroup = useMemo(
     () => groups.find((group) => group.date === selectedDate) ?? null,
     [groups, selectedDate],
   );
-  const selectedEventId = focusResolution.selectedEventId;
+  const selectedEventId = view.selectedEventId;
   const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const eventRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastAppliedFocusKeyRef = useRef<string | null>(null);
@@ -102,26 +90,6 @@ export function FocusedForecastCard({
     }
   }, [focus, selectedDate, selectedEventId]);
 
-  const message = useMemo(() => {
-    if (!focus) return null;
-    if (focusResolution.outOfHorizon) {
-      return locale === "ru"
-        ? "Дата риска находится за пределами текущего прогноза."
-        : "The risk date is outside the current forecast horizon.";
-    }
-    if (!focusResolution.selectedDate) {
-      return locale === "ru"
-        ? "Прогноз пока не содержит событий на нужную дату."
-        : "The forecast does not have events for that date yet.";
-    }
-    if (!focusResolution.exactMatch) {
-      return locale === "ru"
-        ? `Точной точки на ${formatTransactionDate(focus.date, locale)} нет, поэтому показана ближайшая доступная дата.`
-        : `There is no exact point for ${formatTransactionDate(focus.date, locale)}, so the nearest available date is shown.`;
-    }
-    return focusReasonText(focus, locale);
-  }, [focus, focusResolution, locale]);
-
   return (
     <Card className="border-primary/20 bg-primary/5 shadow-none">
       <CardContent className="space-y-4 p-4">
@@ -134,7 +102,7 @@ export function FocusedForecastCard({
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
             {focus
-              ? message
+              ? view.message
               : locale === "ru"
                 ? "Здесь показана та же прогнозная линия, на которую опирается экран «Сегодня»."
                 : "This uses the same forecast line that powers Today."}
@@ -149,9 +117,9 @@ export function FocusedForecastCard({
           </div>
         ) : null}
 
-        {focus && focusResolution.outOfHorizon ? (
+        {focus && view.outOfHorizon ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground">
-            {message}
+            {view.message}
           </div>
         ) : null}
 
@@ -171,7 +139,7 @@ export function FocusedForecastCard({
                     className={[
                       "h-auto w-full justify-between rounded-xl border px-3 py-3 text-left",
                       isSelected
-                        ? "border-primary bg-primary/10"
+                        ? "border-primary bg-primary/10 ring-1 ring-primary/25"
                         : "border-border/70 bg-background/70",
                     ].join(" ")}
                     onClick={() => setManualSelectedDate(group.date)}
@@ -203,7 +171,32 @@ export function FocusedForecastCard({
             </div>
 
             {selectedGroup ? (
-              <div className="space-y-3 rounded-xl border border-border/70 bg-background/80 p-3">
+              <div className="space-y-3 rounded-xl border border-primary/20 bg-background/80 p-3">
+                {focus ? (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/80">
+                      {locale === "ru"
+                        ? "Почему FIN OS привёл вас сюда"
+                        : "Why FIN OS brought you here"}
+                    </p>
+                    {view.contextTitle ? (
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {view.contextTitle}
+                      </p>
+                    ) : null}
+                    {view.contextDeficit ? (
+                      <p className="mt-1 text-sm font-medium text-rose-600">
+                        {view.contextDeficit}
+                      </p>
+                    ) : view.contextBalance ? (
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        {locale === "ru"
+                          ? `Баланс после событий: ${view.contextBalance}`
+                          : `Balance after events: ${view.contextBalance}`}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-foreground">

@@ -10,13 +10,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCategoryLabel, sortCategoriesByLabel } from "@/lib/categories";
+import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import {
   MONEY_SETUP_INCOME_SOURCE_KINDS,
   type MoneySetupIncomeSource,
   type MoneySetupIncomeSourceKind,
 } from "@/lib/money-setup";
 import { useToast } from "@/components/ui/toast";
-import { useStore } from "@/store/useStore";
+import { useHouseholdBalances, useStore } from "@/store/useStore";
 
 type MoneySetupDialogProps = {
   open: boolean;
@@ -119,6 +120,7 @@ export function MoneySetupDialog({
   const recurringTransactions = useStore((s) => s.recurringTransactions);
   const categories = useStore((s) => s.categories);
   const updateMoneySetup = useStore((s) => s.updateMoneySetup);
+  const balances = useHouseholdBalances();
   const { toast } = useToast();
 
   const recurringOptions = useMemo(
@@ -211,6 +213,10 @@ export function MoneySetupDialog({
                         : "Other",
       })),
     [locale],
+  );
+  const progress = useMemo(
+    () => buildMoneySetupProgress({ locale, moneySetup, balances }),
+    [balances, locale, moneySetup],
   );
 
   useEffect(() => {
@@ -339,6 +345,41 @@ export function MoneySetupDialog({
               ? "Коротко укажите доход и обязательные расходы."
               : "Quickly add your income and must-cover expenses."}
           </p>
+          <div className="mt-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {progress.title}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {progress.summary}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {progress.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span
+                    className={
+                      item.done ? "font-medium text-foreground" : "text-muted-foreground"
+                    }
+                  >
+                    {item.done
+                      ? locale === "ru"
+                        ? "Готово"
+                        : "Done"
+                      : locale === "ru"
+                        ? "Нужно заполнить"
+                        : "Needs input"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto px-4 py-4">
