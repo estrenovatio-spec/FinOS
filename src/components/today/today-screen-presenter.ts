@@ -108,6 +108,11 @@ function rub(amount: number | null | undefined, locale: Locale): string | null {
   return `${formatMoney(amount, locale)} ${locale === "ru" ? "₽" : "RUB"}`;
 }
 
+function moneyValue(amount: number | null | undefined, locale: Locale): string | null {
+  if (amount == null || !Number.isFinite(amount)) return null;
+  return `${formatMoney(amount, locale)} ${locale === "ru" ? "₽" : "RUB"}`;
+}
+
 function hasAnyMoneySetup(setup: MoneySetup): boolean {
   return Boolean(
     setup.nextIncomeDate ||
@@ -173,9 +178,26 @@ function getHeroStatusLabel(
 function buildHeroTitle(mainAction: DecisionMainAction, locale: Locale): string {
   switch (mainAction.type) {
     case "cover_deficit":
-      return locale === "ru" ? "Подготовьте резерв" : "Prepare a buffer";
+      if (mainAction.command.type === "open_forecast" && mainAction.command.reason === "current_deficit") {
+        return locale === "ru"
+          ? "Сейчас денег не хватает"
+          : "You do not have enough money right now";
+      }
+      return mainAction.dueDate
+        ? locale === "ru"
+          ? `${formatDayMonth(mainAction.dueDate, locale)} денег может не хватить`
+          : `Money may run short on ${formatDayMonth(mainAction.dueDate, locale)}`
+        : locale === "ru"
+          ? "Сейчас денег не хватает"
+          : "You do not have enough money right now";
     case "reserve_for_risk":
-      return locale === "ru" ? "Сохраните резерв" : "Keep the reserve";
+      return locale === "ru" ? "Лучше оставить" : "Better to keep";
+    case "complete_balance_setup":
+      return locale === "ru" ? "Укажите, сколько денег сейчас" : "Set your current balance";
+    case "complete_required_expenses_setup":
+      return locale === "ru" ? "Добавьте обязательные платежи" : "Add required payments";
+    case "hold":
+      return locale === "ru" ? "Сегодня всё спокойно" : "Today is calm";
     default:
       return mainAction.title;
   }
@@ -194,12 +216,10 @@ function buildHeroDue(mainAction: DecisionMainAction, locale: Locale): string | 
     case "cover_deficit":
       if (!mainAction.dueDate) {
         return locale === "ru"
-          ? "Баланс уже ушёл в минус"
-          : "The balance is already negative";
+          ? null
+          : null;
       }
-      return locale === "ru"
-        ? `${formatDayMonth(mainAction.dueDate, locale)} возможен дефицит`
-        : `Possible deficit on ${formatDayMonth(mainAction.dueDate, locale)}`;
+      return null;
     case "reserve_for_risk":
       return mainAction.dueDate
         ? locale === "ru"
@@ -209,22 +229,88 @@ function buildHeroDue(mainAction: DecisionMainAction, locale: Locale): string | 
     case "hold":
       return mainAction.dueDate
         ? locale === "ru"
-          ? `Деньги под контролем до ${formatDayMonth(mainAction.dueDate, locale)}`
-          : `Money is under control until ${formatDayMonth(mainAction.dueDate, locale)}`
+          ? `Денег хватает до ${formatDayMonth(mainAction.dueDate, locale)}`
+          : `Your money lasts until ${formatDayMonth(mainAction.dueDate, locale)}`
         : null;
     default:
       return null;
   }
 }
 
-function buildHeroReason(mainAction: DecisionMainAction): string | null {
-  return mainAction.reason ?? mainAction.description ?? null;
+function buildHeroReason(
+  decision: DecisionCoreResult,
+  locale: Locale,
+  currentBalanceKnown: boolean,
+): string | null {
+  const { mainAction } = decision;
+  switch (mainAction.type) {
+    case "pay_overdue":
+      return locale === "ru"
+        ? "Этот платёж уже должен был быть оплачен."
+        : "This payment should already have been paid.";
+    case "pay_today":
+      return locale === "ru"
+        ? "После оплаты прогноз пересчитается автоматически."
+        : "The forecast will recalculate after payment.";
+    case "cover_deficit":
+      if (mainAction.command.type === "open_forecast" && mainAction.command.reason === "current_deficit") {
+        return locale === "ru"
+          ? "Посмотрите, какие поступления и платежи влияют на остаток."
+          : "See which incomes and payments are affecting your balance.";
+      }
+      return locale === "ru"
+        ? "После ближайших платежей баланс уйдёт в минус."
+        : "After the nearest payments, the balance turns negative.";
+    case "reserve_for_risk":
+      return decision.nextRisk?.title
+        ? locale === "ru"
+          ? `После ${decision.nextRisk.title.toLocaleLowerCase("ru-RU")} свободных денег почти не останется.`
+          : `After ${decision.nextRisk.title}, almost no free money remains.`
+        : locale === "ru"
+          ? "До ближайшего обязательства эту сумму лучше не трогать."
+          : "It is better not to touch this money before the next obligation.";
+    case "complete_balance_setup":
+      return locale === "ru"
+        ? "Это отправная точка для прогноза."
+        : "This is the starting point for the forecast.";
+    case "complete_income_setup":
+      return locale === "ru"
+        ? "Без даты поступления нельзя точно сказать, сколько можно потратить."
+        : "Without the next income date, the app cannot tell how much you can safely spend.";
+    case "complete_required_expenses_setup":
+      return locale === "ru"
+        ? "Так будет понятно, какие деньги уже заняты обязательствами."
+        : "This tells the app which money is already spoken for.";
+    case "add_first_entry":
+      return currentBalanceKnown
+        ? locale === "ru"
+          ? "Добавьте доход или обязательный платёж, чтобы прогноз стал полезным."
+          : "Add income or a required payment so the forecast becomes useful."
+        : locale === "ru"
+          ? "Сначала укажите текущий остаток."
+          : "Start with your current balance.";
+    case "hold":
+      return locale === "ru"
+        ? "Можно спокойно заниматься обычными делами."
+        : "You can go about your day calmly.";
+    default:
+      return mainAction.reason ?? mainAction.description ?? null;
+  }
+}
+
+function getCurrentBalance(input: TodayPresentationInput): number | null {
+  const currentBalance = input.moneySetup.useHouseholdBalance
+    ? input.balances.all
+    : input.balances.me;
+  if (!Number.isFinite(currentBalance) || currentBalance === 0) return null;
+  return currentBalance;
 }
 
 function buildHero(input: TodayPresentationInput): TodayHeroView {
   const { decision, locale } = input;
   const emptyState = isTodayZeroState(input);
   const status = getHeroStatusLabel(decision, locale, emptyState);
+  const currentBalance = getCurrentBalance(input);
 
   if (emptyState) {
     return {
@@ -232,15 +318,15 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
       tone: status.tone,
       title:
         locale === "ru"
-          ? "Настройте деньги, чтобы FIN OS сказал, что делать сегодня"
-          : "Set up your money so FIN OS can tell you what to do today",
+          ? "Укажите, сколько денег сейчас"
+          : "Set your current balance",
       amount: null,
       due: null,
       reason:
         locale === "ru"
-          ? "Для начала добавьте текущий остаток, ближайший доход и обязательные платежи."
-          : "Start with your current balance, next income, and required payments.",
-      ctaLabel: locale === "ru" ? "Настроить деньги" : "Set up money",
+          ? "Это отправная точка для прогноза."
+          : "This is the starting point for the forecast.",
+      ctaLabel: locale === "ru" ? "Указать остаток" : "Set balance",
       isEmptyState: true,
     };
   }
@@ -251,9 +337,32 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
     title: buildHeroTitle(decision.mainAction, locale),
     amount: rub(decision.mainAction.amount ?? null, locale),
     due: buildHeroDue(decision.mainAction, locale),
-    reason: buildHeroReason(decision.mainAction),
+    reason: buildHeroReason(decision, locale, currentBalance != null),
     ctaLabel: getMainActionButtonLabel(decision.mainAction.command, locale),
     isEmptyState: false,
+  };
+}
+
+function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewItem {
+  const { locale } = input;
+  const currentBalance = getCurrentBalance(input);
+  return {
+    id: "current-balance",
+    label: locale === "ru" ? "Сейчас в кошельке" : "Available now",
+    value:
+      currentBalance == null
+        ? locale === "ru"
+          ? "Текущий остаток не указан"
+          : "Current balance is not set"
+        : (moneyValue(currentBalance, locale) ?? ""),
+    caption:
+      currentBalance == null
+        ? locale === "ru"
+          ? "Укажите остаток, чтобы прогноз стал честным."
+          : "Add your balance so the forecast can be reliable."
+        : locale === "ru"
+          ? "От этой суммы строится прогноз."
+          : "The forecast starts from this amount.",
   };
 }
 
@@ -261,26 +370,49 @@ function buildAllowedItem(allowed: DecisionAllowed, locale: Locale): TodayOvervi
   if (allowed.status === "available" && allowed.amount != null) {
     return {
       id: "allowed",
-      label: locale === "ru" ? "Можно потратить" : "You can spend",
+      label: locale === "ru" ? "Можно потратить сегодня" : "You can spend today",
       value: rub(allowed.amount, locale) ?? "",
-      caption: locale === "ru" ? "сегодня" : "today",
+      caption:
+        locale === "ru"
+          ? allowed.horizonDate
+            ? `Сумма рассчитана с учётом всех платежей до ${formatDayMonth(allowed.horizonDate, locale)}.`
+            : "Сумма рассчитана с учётом известных обязательств."
+          : allowed.horizonDate
+            ? `Calculated with all payments until ${formatDayMonth(allowed.horizonDate, locale)}.`
+            : "Calculated with the known obligations.",
     };
   }
 
   if (allowed.status === "restricted") {
     return {
       id: "allowed",
-      label: locale === "ru" ? "Необязательные траты" : "Discretionary spending",
-      value: locale === "ru" ? "лучше отложить" : "better to delay",
-      caption: allowed.reason ?? null,
+      label:
+        locale === "ru"
+          ? "Сегодня лучше не тратить лишнее"
+          : "Better not to spend extra today",
+      value:
+        locale === "ru"
+          ? "Свободные покупки лучше отложить"
+          : "Free spending is better postponed",
+      caption:
+        locale === "ru"
+          ? allowed.horizonDate
+            ? `Эти деньги понадобятся до ${formatDayMonth(allowed.horizonDate, locale)}.`
+            : "Сначала разберитесь с обязательными платежами."
+          : allowed.horizonDate
+            ? `This money is needed until ${formatDayMonth(allowed.horizonDate, locale)}.`
+            : "Handle the required payments first.",
     };
   }
 
   return {
     id: "allowed",
-    label: locale === "ru" ? "Безопасная сумма" : "Safe amount",
-    value: locale === "ru" ? "пока неизвестна" : "unknown for now",
-    caption: allowed.reason ?? null,
+    label: locale === "ru" ? "Сколько можно потратить" : "Safe spending today",
+    value: locale === "ru" ? "пока неизвестно" : "unknown for now",
+    caption:
+      locale === "ru"
+        ? "Не хватает данных о ближайшем доходе или обязательных тратах."
+        : "Key data about the next income or required spending is missing.",
   };
 }
 
@@ -295,7 +427,66 @@ function isAvoidDuplicate(mainAction: DecisionMainAction, text: string | null): 
   if (mainAction.type === "complete_income_setup") {
     return true;
   }
+  if (mainAction.type === "complete_balance_setup") {
+    return true;
+  }
   return false;
+}
+
+function buildReserveItem(input: TodayPresentationInput): TodayOverviewItem | null {
+  const { decision, locale } = input;
+  if (decision.mainAction.type !== "reserve_for_risk" || decision.mainAction.amount == null) {
+    return null;
+  }
+
+  return {
+    id: "reserve",
+    label:
+      decision.mainAction.dueDate && locale === "ru"
+        ? `Лучше оставить до ${formatDayMonth(decision.mainAction.dueDate, locale)}`
+        : locale === "ru"
+          ? "Лучше не тратить"
+          : "Better to keep",
+    value: rub(decision.mainAction.amount, locale) ?? "",
+    caption:
+      decision.nextRisk?.title && locale === "ru"
+        ? `После ${decision.nextRisk.title.toLocaleLowerCase("ru-RU")} свободных денег почти не останется.`
+        : decision.mainAction.reason ?? null,
+  };
+}
+
+function buildTimingItem(input: TodayPresentationInput): TodayOverviewItem | null {
+  const { decision, locale } = input;
+
+  if (
+    decision.nextRisk &&
+    decision.mainAction.type !== "reserve_for_risk" &&
+    !(decision.mainAction.type === "cover_deficit" && decision.mainAction.dueDate === decision.nextRisk.date) &&
+    decision.mainAction.type !== "pay_today" &&
+    decision.mainAction.type !== "pay_overdue"
+  ) {
+    return {
+      id: "next-payment",
+      label: locale === "ru" ? "Ближайший платёж" : "Next payment",
+      value: decision.nextRisk.title,
+      caption: formatDayMonth(decision.nextRisk.date, locale),
+    };
+  }
+
+  if (decision.safeUntil.title) {
+    return {
+      id: "safe-until",
+      label: locale === "ru" ? "Денег хватит до" : "Money lasts until",
+      value: decision.safeUntil.title,
+      caption:
+        decision.safeUntil.note &&
+        !decision.safeUntil.note.toLocaleLowerCase("ru-RU").includes("прогноз")
+          ? decision.safeUntil.note
+          : null,
+    };
+  }
+
+  return null;
 }
 
 function buildOverview(input: TodayPresentationInput): {
@@ -306,7 +497,7 @@ function buildOverview(input: TodayPresentationInput): {
   const { decision, locale } = input;
   if (isTodayZeroState(input)) {
     return {
-      items: [],
+      items: [buildCurrentBalanceItem(input)],
       hiddenPrimaryPaymentId: null,
       payments: null,
     };
@@ -321,7 +512,19 @@ function buildOverview(input: TodayPresentationInput): {
   );
   const paymentsToSummarize =
     remainingPayments.length > 0 ? remainingPayments : decision.todayPayments;
-  const items: TodayOverviewItem[] = [];
+  const items: TodayOverviewItem[] = [buildCurrentBalanceItem(input)];
+
+  const reserveItem = buildReserveItem(input);
+  if (reserveItem) {
+    items.push(reserveItem);
+  }
+
+  items.push(buildAllowedItem(decision.allowed, locale));
+
+  const timingItem = buildTimingItem(input);
+  if (timingItem) {
+    items.push(timingItem);
+  }
 
   if (paymentsToSummarize.length > 0) {
     const total = paymentsToSummarize.reduce((sum, payment) => sum + payment.amount, 0);
@@ -343,26 +546,6 @@ function buildOverview(input: TodayPresentationInput): {
             : `${paymentsToSummarize.length} items`
           : null,
     });
-  }
-
-  if (decision.nextRisk) {
-    items.push({
-      id: "next-risk",
-      label: locale === "ru" ? "Ближайший риск" : "Next risk",
-      value: formatDayMonth(decision.nextRisk.date, locale) ?? decision.nextRisk.label,
-      caption: decision.nextRisk.title,
-    });
-  } else if (decision.mainAction.type === "hold" && decision.safeUntil.title) {
-    items.push({
-      id: "safe-until",
-      label: locale === "ru" ? "Спокойно до" : "Calm until",
-      value: decision.safeUntil.title,
-      caption: null,
-    });
-  }
-
-  if (!isTodayZeroState(input)) {
-    items.push(buildAllowedItem(decision.allowed, locale));
   }
 
   return {
@@ -403,8 +586,8 @@ export function buildTodayScreenView(input: TodayPresentationInput): TodayScreen
       : {
           title:
             locale === "ru"
-              ? `Финансовое спокойствие: ${decision.peaceIndex.value} из 100`
-              : `Financial calm: ${decision.peaceIndex.value} of 100`,
+              ? `Индекс спокойствия: ${decision.peaceIndex.value} из 100`
+              : `Peace index: ${decision.peaceIndex.value} of 100`,
           value: decision.peaceIndex.note,
           caption: null,
         };

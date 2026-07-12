@@ -15,7 +15,7 @@ export type TodayActionExecutionResult =
 export type TodayActionExecutor = {
   confirmPendingTransaction: (paymentId: string) => boolean;
   openMoneySetup: (
-    scope: "income" | "required_expenses" | "essential_budgets",
+    scope: "balance" | "income" | "required_expenses" | "essential_budgets",
   ) => void;
   openQuickAdd: () => void;
   navigateToTab: (
@@ -47,6 +47,9 @@ export function getMainActionButtonLabel(
     case "confirm_payment":
       return locale === "ru" ? "Отметить оплаченным" : "Mark as paid";
     case "open_money_setup":
+      if (command.scope === "balance") {
+        return locale === "ru" ? "Указать остаток" : "Set balance";
+      }
       if (command.scope === "income") {
         return locale === "ru" ? "Добавить доход" : "Add income";
       }

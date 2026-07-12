@@ -56,7 +56,7 @@ export type DecisionMainActionCommand =
     }
   | {
       type: "open_money_setup";
-      scope: "income" | "required_expenses" | "essential_budgets";
+      scope: "balance" | "income" | "required_expenses" | "essential_budgets";
     }
   | {
       type: "open_forecast";
@@ -88,6 +88,7 @@ export type DecisionMainAction = {
     | "pay_today"
     | "cover_deficit"
     | "reserve_for_risk"
+    | "complete_balance_setup"
     | "complete_income_setup"
     | "complete_required_expenses_setup"
     | "add_first_entry"

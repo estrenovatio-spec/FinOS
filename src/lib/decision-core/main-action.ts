@@ -229,10 +229,38 @@ export function buildMainAction(
         },
       };
     case "missing_data": {
+      const missingBalance = decision.missing.includes("balance");
       const missingIncome = decision.missing.includes("income");
       const missingExpenses =
         decision.missing.includes("required_expenses") ||
         decision.missing.includes("essential_budgets");
+
+      if (missingBalance) {
+        return {
+          type: "complete_balance_setup",
+          title:
+            locale === "ru"
+              ? "Укажите, сколько денег сейчас"
+              : "Set your current balance",
+          text:
+            locale === "ru"
+              ? "Укажите текущий остаток."
+              : "Enter your current balance.",
+          description:
+            locale === "ru"
+              ? "Это отправная точка для прогноза."
+              : "This is the starting point for the forecast.",
+          reason:
+            locale === "ru"
+              ? "Без текущего остатка нельзя честно посчитать, сколько денег у вас сейчас."
+              : "Without the current balance, the app cannot honestly calculate what you have right now.",
+          priority: "high",
+          command: {
+            type: "open_money_setup",
+            scope: "balance",
+          },
+        };
+      }
 
       if (missingIncome) {
         return {

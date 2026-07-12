@@ -4,6 +4,7 @@ import {
   CalendarSync,
   ChartColumn,
   House,
+  ReceiptText,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -11,7 +12,7 @@ import type { AppTabId } from "@/lib/app-bottom-nav";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/store/useStore";
 
-const TABS: {
+export const APP_BOTTOM_NAV_TABS: {
   id: AppTabId;
   icon: LucideIcon;
   labelKey:
@@ -22,7 +23,7 @@ const TABS: {
     | "appTabMore";
 }[] = [
   { id: "today", icon: House, labelKey: "appTabHome" },
-  { id: "operations", icon: ChartColumn, labelKey: "appTabSummary" },
+  { id: "operations", icon: ReceiptText, labelKey: "appTabSummary" },
   { id: "forecast", icon: ChartColumn, labelKey: "appTabAdvisor" },
   { id: "recurring", icon: CalendarSync, labelKey: "appTabBusiness" },
   { id: "settings", icon: Settings, labelKey: "appTabMore" },
@@ -44,7 +45,7 @@ export function AppBottomNav({
       aria-label={t(locale, "appBottomNavAria")}
     >
       <div className="mx-auto grid max-w-lg grid-cols-5">
-        {TABS.map(({ id, icon: Icon, labelKey }) => {
+        {APP_BOTTOM_NAV_TABS.map(({ id, icon: Icon, labelKey }) => {
           const selected = active === id;
           return (
             <button

@@ -1,17 +1,21 @@
 "use client";
 
-import { CalendarClock, CircleDollarSign, Wallet } from "lucide-react";
+import { CalendarClock, CircleDollarSign, PiggyBank, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { TodayOverviewItem } from "@/components/today/today-screen-presenter";
 
 function iconForItem(id: TodayOverviewItem["id"]) {
   switch (id) {
+    case "current-balance":
+      return Wallet;
     case "payments":
       return CalendarClock;
-    case "next-risk":
+    case "next-payment":
       return CalendarClock;
     case "allowed":
       return Wallet;
+    case "reserve":
+      return PiggyBank;
     case "safe-until":
       return CircleDollarSign;
   }

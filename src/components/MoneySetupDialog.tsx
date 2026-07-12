@@ -32,7 +32,7 @@ type MoneySetupDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   showHouseholdToggle: boolean;
-  initialSection?: "income" | "required_expenses" | "essential_budgets" | null;
+  initialSection?: "balance" | "income" | "required_expenses" | "essential_budgets" | null;
 };
 
 const ESSENTIAL_PRIORITY_IDS = [
@@ -238,7 +238,9 @@ export function MoneySetupDialog({
     if (!open || !initialSection) return;
 
     const target =
-      initialSection === "income"
+      initialSection === "balance"
+        ? null
+        : initialSection === "income"
         ? incomeSectionRef.current
         : initialSection === "required_expenses"
           ? requiredExpensesSectionRef.current

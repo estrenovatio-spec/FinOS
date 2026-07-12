@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { APP_BOTTOM_NAV_TABS } from "@/components/app/AppBottomNav";
 import { buildFocusedForecastView } from "@/components/app/focused-forecast-presenter";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
 import { emptyMoneySetup } from "@/lib/money-setup";
 import type { BalanceForecast, DecisionCoreResult } from "@/lib/decision-core/types";
+import { ChartColumn, House, ReceiptText } from "lucide-react";
 
 function makeDecision(
   partial?: Partial<DecisionCoreResult>,
@@ -128,8 +130,10 @@ test("empty user sees one primary setup action and no fake analytics", () => {
   });
 
   assert.equal(view.hero.isEmptyState, true);
-  assert.equal(view.hero.ctaLabel, "Настроить деньги");
-  assert.equal(view.overviewItems.length, 0);
+  assert.equal(view.hero.ctaLabel, "Указать остаток");
+  assert.equal(view.overviewItems.length, 1);
+  assert.equal(view.overviewItems[0]?.label, "Сейчас в кошельке");
+  assert.equal(view.overviewItems[0]?.value, "Текущий остаток не указан");
   assert.equal(view.peaceIndex, null);
 });
 
@@ -163,7 +167,7 @@ test("hero shows executable CTA for income setup", () => {
   assert.equal(view.hero.title, "Добавьте ближайший доход");
   assert.equal(view.hero.ctaLabel, "Добавить доход");
   assert.equal(view.hero.amount, null);
-  assert.match(view.hero.reason ?? "", /ключевых данных/);
+  assert.match(view.hero.reason ?? "", /нельзя точно сказать/);
 });
 
 test("hero without urgent action does not show forced CTA", () => {
@@ -181,6 +185,24 @@ test("hero without urgent action does not show forced CTA", () => {
 
   assert.equal(view.hero.ctaLabel, null);
   assert.match(view.hero.due ?? "", /25 июля/);
+  assert.equal(view.hero.title, "Сегодня всё спокойно");
+});
+
+test("current balance is always visible when known", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision(),
+    locale: "ru",
+    transactionCount: 2,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+    },
+    balances: { all: 40000, me: 40000, partner: 0 },
+  });
+
+  const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
+  assert.equal(currentBalance?.label, "Сейчас в кошельке");
+  assert.match(currentBalance?.value ?? "", /40[\s\u00A0]000 ₽/);
 });
 
 test("allowed available shows amount instead of prose", () => {
@@ -196,7 +218,7 @@ test("allowed available shows amount instead of prose", () => {
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Можно потратить");
+  assert.equal(allowed?.label, "Можно потратить сегодня");
   assert.match(allowed?.value ?? "", /3[\s\u00A0]500 ₽/);
 });
 
@@ -222,7 +244,8 @@ test("allowed restricted does not show false amount", () => {
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.value, "лучше отложить");
+  assert.equal(allowed?.label, "Сегодня лучше не тратить лишнее");
+  assert.equal(allowed?.value, "Свободные покупки лучше отложить");
 });
 
 test("allowed unknown shows uncertainty instead of zero", () => {
@@ -244,7 +267,7 @@ test("allowed unknown shows uncertainty instead of zero", () => {
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.value, "пока неизвестна");
+  assert.equal(allowed?.value, "пока неизвестно");
 });
 
 test("main payment is not duplicated as equal secondary card", () => {
@@ -349,6 +372,55 @@ test("calm state stays non-alarming and keeps quick add available", () => {
   assert.equal(view.showQuickAddHint, true);
 });
 
+test("reserve required uses human copy and keeps amounts separate", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "reserve_for_risk",
+        title: "Сохраните резерв",
+        text: "Сохраните минимум 18 000 ₽ до 20 июля.",
+        description: "До 20 июля запас денег станет минимальным.",
+        reason: "Это ближайшая точка, где запас денег становится минимальным.",
+        amount: 18000,
+        dueDate: "2026-07-20",
+        relatedEntityId: "rent",
+        priority: "medium",
+        command: {
+          type: "open_forecast",
+          focusDate: "2026-07-20",
+          reason: "reserve_required",
+          eventId: "rent-2026-07-20",
+        },
+      },
+      nextRisk: {
+        kind: "payment",
+        title: "ЖКХ",
+        amount: 18000,
+        date: "2026-07-20",
+        daysAway: 8,
+        label: "через 8 дней",
+      },
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+    },
+    balances: { all: 50000, me: 50000, partner: 0 },
+  });
+
+  assert.equal(view.hero.title, "Лучше оставить");
+  assert.doesNotMatch(view.hero.title, /Сохраните резерв/);
+  const reserve = view.overviewItems.find((item) => item.id === "reserve");
+  assert.match(reserve?.label ?? "", /Лучше оставить до 20 июля/);
+  assert.match(reserve?.value ?? "", /18[\s\u00A0]000 ₽/);
+  assert.notEqual(
+    view.overviewItems.find((item) => item.id === "current-balance")?.label,
+    reserve?.label,
+  );
+});
+
 test("avoid is suppressed when it only repeats reserve wording", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
@@ -384,6 +456,106 @@ test("avoid is suppressed when it only repeats reserve wording", () => {
   });
 
   assert.equal(view.avoid, null);
+});
+
+test("future deficit says money may run short", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "cover_deficit",
+        title: "Подготовьте резерв",
+        text: "Найдите или высвободите 8 500 ₽ до 27 июля.",
+        description: "27 июля возможен дефицит.",
+        reason: "Это ближайший риск на прогнозной линии.",
+        amount: 8500,
+        dueDate: "2026-07-27",
+        relatedEntityId: "rent",
+        priority: "high",
+        command: {
+          type: "open_forecast",
+          focusDate: "2026-07-27",
+          reason: "future_deficit",
+          eventId: "rent-2026-07-27",
+        },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 2,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-30",
+    },
+    balances: { all: 12000, me: 12000, partner: 0 },
+  });
+
+  assert.match(view.hero.title, /27 июля денег может не хватить/);
+  assert.match(view.hero.reason ?? "", /баланс уйдёт в минус/);
+});
+
+test("current deficit says money is missing right now", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "cover_deficit",
+        title: "Закройте дефицит",
+        text: "Нужно закрыть дефицит 8 500 ₽.",
+        description: "Баланс уже ушёл в минус или делает это сегодня.",
+        reason: "Пока дефицит не закрыт, остальные рекомендации вторичны.",
+        amount: 8500,
+        dueDate: "2026-07-12",
+        relatedEntityId: null,
+        priority: "critical",
+        command: {
+          type: "open_forecast",
+          focusDate: "2026-07-12",
+          reason: "current_deficit",
+          eventId: null,
+        },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 2,
+    moneySetup: emptyMoneySetup(),
+    balances: { all: -500, me: -500, partner: 0 },
+  });
+
+  assert.equal(view.hero.title, "Сейчас денег не хватает");
+  assert.match(view.hero.reason ?? "", /влияют на остаток/);
+});
+
+test("payment today uses a concrete payment name", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "pay_today",
+        title: "Оплатите интернет",
+        text: "Оплатите интернет — 1 200 ₽ сегодня.",
+        description: "Срок — сегодня.",
+        reason: "На сегодня есть обязательный платёж.",
+        amount: 1200,
+        dueDate: "2026-07-12",
+        relatedEntityId: "internet",
+        priority: "high",
+        command: { type: "confirm_payment", paymentId: "internet" },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 4,
+    moneySetup: emptyMoneySetup(),
+    balances: { all: 9000, me: 9000, partner: 0 },
+  });
+
+  assert.equal(view.hero.title, "Оплатите интернет");
+});
+
+test("operations nav icon uses receipt text while other tabs stay unchanged", () => {
+  const operations = APP_BOTTOM_NAV_TABS.find((tab) => tab.id === "operations");
+  const today = APP_BOTTOM_NAV_TABS.find((tab) => tab.id === "today");
+  const forecast = APP_BOTTOM_NAV_TABS.find((tab) => tab.id === "forecast");
+
+  assert.equal(operations?.icon, ReceiptText);
+  assert.equal(today?.icon, House);
+  assert.equal(forecast?.icon, ChartColumn);
 });
 
 test("focused forecast view explains why the selected context is shown", () => {

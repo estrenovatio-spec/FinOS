@@ -44,7 +44,7 @@ export function TodayScreen({
   const { toast } = useToast();
   const [moneySetupOpen, setMoneySetupOpen] = useState(false);
   const [moneySetupSection, setMoneySetupSection] = useState<
-    "income" | "required_expenses" | "essential_budgets" | null
+    "balance" | "income" | "required_expenses" | "essential_budgets" | null
   >(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -105,7 +105,7 @@ export function TodayScreen({
     setActionError(null);
 
     if (zeroState) {
-      setMoneySetupSection(null);
+      setMoneySetupSection("balance");
       setMoneySetupOpen(true);
       return;
     }
@@ -146,11 +146,6 @@ export function TodayScreen({
         <h1 className="text-[1.45rem] font-semibold tracking-tight text-foreground">
           {locale === "ru" ? "Сегодня" : "Today"}
         </h1>
-        <p className="text-sm leading-snug text-muted-foreground">
-          {locale === "ru"
-            ? "Главная точка дня: хватит ли денег, что оплатить и можно ли спокойно выдохнуть."
-            : "Your day center: enough money, what to pay, and whether you can rest."}
-        </p>
       </section>
 
       <TodayHero
