@@ -185,6 +185,7 @@ export function TodayScreen({
       <QuickAddOperationDialog
         open={quickAddOpen}
         onOpenChange={setQuickAddOpen}
+        showTrigger={false}
       />
 
       <div className="sticky bottom-20 z-20 pt-2">
