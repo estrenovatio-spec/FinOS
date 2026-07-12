@@ -866,11 +866,95 @@ test("Reserve-required focuses the first limiting date instead of the nearest pa
   assert.ok((august3?.balanceAfter ?? 0) <= getRequiredFloor(scenario.ctx));
   assert.equal(scenario.primaryDecision.type, "reserve_required");
   assert.equal(scenario.primaryDecision.dueDate, "2026-08-03");
+  assert.equal(scenario.result.safeUntil.title, "До 3 августа");
+  assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
+  assert.equal(scenario.result.allowed.horizonDate, "2026-08-03");
   assert.equal(scenario.result.mainAction.command.type, "open_forecast");
   if (scenario.result.mainAction.command.type === "open_forecast") {
     assert.equal(scenario.result.mainAction.command.focusDate, "2026-08-03");
     assert.equal(scenario.result.mainAction.command.eventId, "recurring-final-risk-2026-08-03");
   }
+});
+
+test("safeUntil and allowed use the same later constraint point instead of the earlier next income", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 69691, me: 69691, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "utilities",
+          amount: 14000,
+          type: "expense",
+          categoryId: "services",
+          note: "ЖКХ",
+          nextRunDate: "2026-07-15",
+          frequency: "monthly",
+          dayOfMonth: 15,
+        }),
+        recurring({
+          id: "late-risk",
+          amount: 14900,
+          type: "expense",
+          categoryId: "shopping",
+          note: "Крупный платёж",
+          nextRunDate: "2026-07-25",
+          frequency: "monthly",
+          dayOfMonth: 25,
+        }),
+        recurring({
+          id: "groceries-topup",
+          amount: 791,
+          type: "expense",
+          categoryId: "groceries",
+          note: "Продукты",
+          nextRunDate: "2026-08-02",
+          frequency: "monthly",
+          dayOfMonth: 2,
+        }),
+        recurring({
+          id: "final-risk",
+          amount: 40000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Финальный платёж",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+      ],
+      transactions: [
+        tx({
+          id: "groceries-spent",
+          amount: 19200,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-07-04",
+          confirmed: true,
+        }),
+      ],
+      categoryBudgets: [
+        {
+          categoryId: "groceries",
+          monthlyLimit: 30000,
+        },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-07-13",
+        expectedIncomeAmount: 1000,
+        hasNoRequiredFixedExpenses: true,
+        essentialCategoryIds: ["groceries"],
+      },
+    }),
+  );
+
+  assert.equal(scenario.ctx.forecast.nextIncomeDate, "2026-07-13");
+  assert.equal(findConstraintEvent(scenario.ctx)?.date, "2026-08-03");
+  assert.equal(scenario.result.safeUntil.title, "До 3 августа");
+  assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
+  assert.equal(scenario.result.allowed.horizonDate, "2026-08-03");
+  assert.equal(scenario.result.mainAction.dueDate, "2026-08-03");
 });
 
 test("Nearest payment with healthy balance does not become the next risk", () => {

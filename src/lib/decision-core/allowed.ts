@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/format-money";
+import { getConstraintDate } from "@/lib/decision-core/constraint-point";
 import type {
   DecisionAllowed,
   DecisionCoreContext,
@@ -13,7 +14,7 @@ export function buildAllowed(
   decision: PrimaryDecision,
   ctx: DecisionCoreContext,
 ): DecisionAllowed {
-  const horizonDate = ctx.forecast.nextIncomeDate;
+  const horizonDate = getConstraintDate(ctx) ?? ctx.forecast.nextIncomeDate;
   const hasKnownIncomeHorizon = Boolean(horizonDate);
   const essentialReserve = ctx.essentialBudgetReserve.totalRemaining;
   const discretionaryAmount = Math.max(

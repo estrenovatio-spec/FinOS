@@ -1,5 +1,6 @@
 import { calculateSafeSpending } from "@/lib/safe-spending";
 import { daysInclusiveUntilDate } from "@/lib/format-date";
+import { getConstraintPoint } from "@/lib/decision-core/constraint-point";
 import type { DecisionCoreContext, DecisionCoreState, DecisionSafeUntil } from "@/lib/decision-core/types";
 
 const MONTHS_RU = [
@@ -55,6 +56,7 @@ export function calculateDecisionSafeSpending(state: DecisionCoreState) {
 
 export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
   const { locale, moneySetup, safeSpending, forecast } = ctx;
+  const constraintPoint = getConstraintPoint(ctx);
 
   if (!Number.isFinite(ctx.availableNow) || ctx.availableNow <= 0) {
     return {
@@ -101,10 +103,10 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
     };
   }
 
-  if (forecast.firstDeficitDate) {
+  if (constraintPoint?.kind === "deficit") {
     const deficitDays = Math.max(
       0,
-      (daysInclusiveUntilDate(forecast.firstDeficitDate, ctx.today) ?? 1) - 1,
+      (daysInclusiveUntilDate(constraintPoint.event.date, ctx.today) ?? 1) - 1,
     );
 
     return {
@@ -114,12 +116,30 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
           : `Deficit in ${deficitDays} day${deficitDays === 1 ? "" : "s"}`,
       note:
         locale === "ru"
-          ? `По прогнозной линии баланс уйдёт в минус ${formatDayMonth(forecast.firstDeficitDate, locale)}.`
-          : `The forecast balance turns negative on ${formatDayMonth(forecast.firstDeficitDate, locale)}.`,
+          ? `По прогнозной линии баланс уйдёт в минус ${formatDayMonth(constraintPoint.event.date, locale)}.`
+          : `The forecast balance turns negative on ${formatDayMonth(constraintPoint.event.date, locale)}.`,
       isReady: true,
       needsSetup: false,
       rawStatus: "ready",
       safeToday: 0,
+      nextIncomeDate: forecast.nextIncomeDate,
+    };
+  }
+
+  if (constraintPoint?.kind === "reserve") {
+    return {
+      title:
+        locale === "ru"
+          ? `До ${formatDayMonth(constraintPoint.event.date, locale)}`
+          : `Until ${formatDayMonth(constraintPoint.event.date, locale)}`,
+      note:
+        locale === "ru"
+          ? `Это первая ограничивающая точка на прогнозной линии: после неё баланс опускается до обязательного минимума ${constraintPoint.requiredFloor} ₽.`
+          : `This is the first limiting point on the forecast line: after it the balance drops to the required floor.`,
+      isReady: true,
+      needsSetup: false,
+      rawStatus: "ready",
+      safeToday: Math.max(0, forecast.minBalance - constraintPoint.requiredFloor),
       nextIncomeDate: forecast.nextIncomeDate,
     };
   }

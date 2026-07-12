@@ -4,21 +4,47 @@ export function getRequiredFloor(ctx: DecisionCoreContext): number {
   return Math.ceil(ctx.essentialBudgetReserve.totalRemaining);
 }
 
-export function findConstraintEvent(ctx: DecisionCoreContext): ForecastEvent | null {
+export type ConstraintPoint = {
+  event: ForecastEvent;
+  kind: "deficit" | "reserve";
+  requiredFloor: number;
+};
+
+export function getConstraintPoint(ctx: DecisionCoreContext): ConstraintPoint | null {
   if (ctx.forecast.firstDeficitDate) {
-    return (
+    const event =
       ctx.forecast.events.find(
-        (event) => event.date === ctx.forecast.firstDeficitDate && event.balanceAfter < 0,
-      ) ?? null
-    );
+        (entry) => entry.date === ctx.forecast.firstDeficitDate && entry.balanceAfter < 0,
+      ) ?? null;
+    return event
+      ? {
+          event,
+          kind: "deficit",
+          requiredFloor: getRequiredFloor(ctx),
+        }
+      : null;
   }
 
   const requiredFloor = getRequiredFloor(ctx);
   if (requiredFloor <= 0) return null;
 
-  return (
+  const event =
     ctx.forecast.events.find(
-      (event) => event.amount < 0 && event.balanceAfter <= requiredFloor,
-    ) ?? null
-  );
+      (entry) => entry.amount < 0 && entry.balanceAfter <= requiredFloor,
+    ) ?? null;
+  return event
+    ? {
+        event,
+        kind: "reserve",
+        requiredFloor,
+      }
+    : null;
+}
+
+export function findConstraintEvent(ctx: DecisionCoreContext): ForecastEvent | null {
+  return getConstraintPoint(ctx)?.event ?? null;
+}
+
+export function getConstraintDate(ctx: DecisionCoreContext): string | null {
+  return getConstraintPoint(ctx)?.event.date ?? null;
 }
