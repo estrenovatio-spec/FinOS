@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { decisionCore } from "@/lib/decision-core";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
+import { buildEssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
 import { buildForecastLine } from "@/lib/decision-core/forecast-line";
 import { buildMainAction } from "@/lib/decision-core/main-action";
 import { buildNextRisk } from "@/lib/decision-core/next-risk";
@@ -103,6 +104,7 @@ function buildState(input?: {
     debts: input?.debts ?? [],
     moneySetup: input?.moneySetup ?? emptyMoneySetup(),
     categoryBudgets: input?.categoryBudgets ?? [],
+    budgetMonthStartDay: 1,
     balances: input?.balances ?? { all: 0, me: 0, partner: 0 },
   };
 }
@@ -126,8 +128,15 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     debts: state.debts,
     moneySetup: state.moneySetup,
     categoryBudgets: state.categoryBudgets,
+    budgetMonthStartDay: state.budgetMonthStartDay,
     availableNow,
     safeSpending: calculateDecisionSafeSpending(state),
+    essentialBudgetReserve: {
+      totalRemaining: 0,
+      periodFrom: state.today,
+      periodTo: state.today,
+      items: [],
+    },
     forecast: {
       startBalance: availableNow,
       minBalance: availableNow,
@@ -139,6 +148,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     },
   };
 
+  ctx.essentialBudgetReserve = buildEssentialBudgetReserve(ctx);
   ctx.forecast = buildForecastLine(ctx);
   return ctx;
 }
@@ -404,6 +414,76 @@ test("Allowed uses the next income as its horizon when confidence is available",
   assert.ok((scenario.result.allowed.amount ?? 0) > 0);
 });
 
+test("Allowed subtracts remaining essential limits without double counting spent", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 40000, me: 40000, partner: 0 },
+      transactions: [
+        tx({
+          id: "groceries-spent",
+          amount: 19200,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-07-05",
+          confirmed: true,
+        }),
+      ],
+      categoryBudgets: [
+        {
+          categoryId: "groceries",
+          monthlyLimit: 30000,
+        },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-07-20",
+        expectedIncomeAmount: 60000,
+        hasNoRequiredFixedExpenses: true,
+        essentialCategoryIds: ["groceries"],
+      },
+    }),
+  );
+
+  assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 10800);
+  assert.equal(scenario.result.allowed.status, "available");
+  assert.equal(scenario.result.allowed.amount, 29200);
+});
+
+test("Spent above the essential limit does not create a negative reserve", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 20000, me: 20000, partner: 0 },
+      transactions: [
+        tx({
+          id: "groceries-over",
+          amount: 35000,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-07-05",
+          confirmed: true,
+        }),
+      ],
+      categoryBudgets: [
+        {
+          categoryId: "groceries",
+          monthlyLimit: 30000,
+        },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-07-20",
+        expectedIncomeAmount: 30000,
+        hasNoRequiredFixedExpenses: true,
+        essentialCategoryIds: ["groceries"],
+      },
+    }),
+  );
+
+  assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 0);
+});
+
 test("Missing required expenses returns a targeted setup command", () => {
   const scenario = evaluate(
     buildState({
@@ -507,8 +587,134 @@ test("Reserve-required uses forecast instead of a fake reserve confirmation", ()
     type: "open_forecast",
     focusDate: scenario.primaryDecision.dueDate,
     reason: "reserve_required",
-    eventId: "recurring-utilities-2026-07-14",
+    eventId: "recurring-school-2026-07-16",
   });
+});
+
+test("Reserve-required focuses the first limiting date instead of the nearest payment", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 69691, me: 69691, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "utilities",
+          amount: 14000,
+          type: "expense",
+          categoryId: "services",
+          note: "ЖКХ",
+          nextRunDate: "2026-07-15",
+          frequency: "monthly",
+          dayOfMonth: 15,
+        }),
+        recurring({
+          id: "late-risk",
+          amount: 14900,
+          type: "expense",
+          categoryId: "shopping",
+          note: "Крупный платёж",
+          nextRunDate: "2026-07-25",
+          frequency: "monthly",
+          dayOfMonth: 25,
+        }),
+        recurring({
+          id: "groceries-topup",
+          amount: 791,
+          type: "expense",
+          categoryId: "groceries",
+          note: "Продукты",
+          nextRunDate: "2026-08-02",
+          frequency: "monthly",
+          dayOfMonth: 2,
+        }),
+        recurring({
+          id: "final-risk",
+          amount: 40000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Финальный платёж",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+      ],
+      transactions: [
+        tx({
+          id: "groceries-spent",
+          amount: 19200,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-07-04",
+          confirmed: true,
+        }),
+      ],
+      categoryBudgets: [
+        {
+          categoryId: "groceries",
+          monthlyLimit: 30000,
+        },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-08-10",
+        expectedIncomeAmount: 100000,
+        hasNoRequiredFixedExpenses: true,
+        essentialCategoryIds: ["groceries"],
+      },
+    }),
+  );
+
+  const july15 = scenario.ctx.forecast.events.find((event) => event.id === "recurring-utilities-2026-07-15");
+  assert.equal(july15?.balanceAfter, 55691);
+  assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 10800);
+  assert.equal(scenario.primaryDecision.type, "reserve_required");
+  assert.equal(scenario.primaryDecision.dueDate, "2026-08-03");
+  assert.equal(scenario.result.mainAction.command.type, "open_forecast");
+  if (scenario.result.mainAction.command.type === "open_forecast") {
+    assert.equal(scenario.result.mainAction.command.focusDate, "2026-08-03");
+    assert.equal(scenario.result.mainAction.command.eventId, "recurring-final-risk-2026-08-03");
+  }
+});
+
+test("Nearest payment with healthy balance does not become the next risk", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 69691, me: 69691, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "utilities",
+          amount: 14000,
+          type: "expense",
+          categoryId: "services",
+          note: "ЖКХ",
+          nextRunDate: "2026-07-15",
+          frequency: "monthly",
+          dayOfMonth: 15,
+        }),
+        recurring({
+          id: "later",
+          amount: 55000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Большой платёж",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-08-10",
+        expectedIncomeAmount: 100000,
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(scenario.ctx.forecast.events.find((event) => event.id === "recurring-utilities-2026-07-15")?.balanceAfter, 55691);
+  assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
+  assert.notEqual(scenario.result.nextRisk?.date, "2026-07-15");
 });
 
 test("Locale changes text but not the underlying command", () => {
@@ -846,7 +1052,7 @@ test("Dates around midnight are normalized by local day slices", () => {
   assert.equal(result.mainAction.type, "pay_overdue");
 });
 
-test("Debt due today becomes the next risk when no payment has higher priority", () => {
+test("Debt that does not constrain the balance is not treated as the next risk", () => {
   const result = decisionCore(
     buildState({
       balances: { all: 10000, me: 10000, partner: 0 },
@@ -867,6 +1073,5 @@ test("Debt due today becomes the next risk when no payment has higher priority",
     }),
   );
 
-  assert.equal(result.nextRisk?.kind, "debt");
-  assert.equal(result.nextRisk?.date, "2026-07-10");
+  assert.equal(result.nextRisk, null);
 });

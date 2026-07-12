@@ -52,6 +52,7 @@ function buildState(input?: {
     debts: [],
     moneySetup: input?.moneySetup ?? emptyMoneySetup(),
     categoryBudgets: [],
+    budgetMonthStartDay: 1,
     balances: input?.balances ?? { all: 0, me: 0, partner: 0 },
   };
 }

@@ -35,6 +35,7 @@ export function TodayScreen({
   const recurringTransactions = useStore((s) => s.recurringTransactions);
   const debts = useStore((s) => s.debts);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
+  const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
   const householdFilter = useStore((s) => s.householdFilter);
   const partnerName = useStore((s) => s.partnerName);
   const partnerKeywords = useStore((s) => s.partnerKeywords);
@@ -65,12 +66,14 @@ export function TodayScreen({
         debts,
         moneySetup,
         categoryBudgets,
+        budgetMonthStartDay,
         balances,
       }),
     [
       balances,
       categories,
       categoryBudgets,
+      budgetMonthStartDay,
       debts,
       householdFilter,
       locale,

@@ -1,4 +1,5 @@
 import { daysInclusiveUntilDate } from "@/lib/format-date";
+import { findConstraintEvent } from "@/lib/decision-core/constraint-point";
 import type { DecisionCoreContext, DecisionNextRisk } from "@/lib/decision-core/types";
 
 function formatRiskDistance(daysAway: number, locale: DecisionCoreContext["locale"]): string {
@@ -16,27 +17,21 @@ function formatRiskDistance(daysAway: number, locale: DecisionCoreContext["local
 }
 
 export function buildNextRisk(ctx: DecisionCoreContext): DecisionNextRisk | null {
-  const { locale, today, forecast } = ctx;
+  const { locale, today } = ctx;
+  const constrained = findConstraintEvent(ctx);
 
-  const nearest = forecast.events
-    .filter((event) => event.amount < 0)
-    .map((event) => ({
-      eventId: event.id,
-      eventSource: event.source,
-      kind: event.source === "debt_payment" ? ("debt" as const) : ("payment" as const),
-      title: event.title,
-      amount: Math.abs(event.amount),
-      date: event.date,
-      daysAway: Math.max(0, (daysInclusiveUntilDate(event.date, today) ?? 1) - 1),
-      balanceAfter: event.balanceAfter,
-    }))
-    .sort((left, right) => {
-      if (left.daysAway !== right.daysAway) return left.daysAway - right.daysAway;
-      if (left.balanceAfter !== right.balanceAfter) return left.balanceAfter - right.balanceAfter;
-      return right.amount - left.amount;
-    })[0];
+  if (!constrained) return null;
 
-  if (!nearest) return null;
+  const nearest = {
+    eventId: constrained.id,
+    eventSource: constrained.source,
+    kind: constrained.source === "debt_payment" ? ("debt" as const) : ("payment" as const),
+    title: constrained.title,
+    amount: Math.abs(constrained.amount),
+    date: constrained.date,
+    daysAway: Math.max(0, (daysInclusiveUntilDate(constrained.date, today) ?? 1) - 1),
+    balanceAfter: constrained.balanceAfter,
+  };
 
   return {
     ...nearest,
@@ -45,9 +40,9 @@ export function buildNextRisk(ctx: DecisionCoreContext): DecisionNextRisk | null
       locale === "ru"
         ? nearest.balanceAfter < 0
           ? "После этого события прогноз уходит в минус."
-          : "После этого события запас денег становится минимальным."
+          : "После этого события свободный запас денег заканчивается."
         : nearest.balanceAfter < 0
           ? "This event turns the forecast negative."
-          : "This event leaves the smallest cash buffer.",
+          : "This event uses up the free cash buffer.",
   };
 }

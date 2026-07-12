@@ -1,6 +1,7 @@
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
+import { buildEssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
 import { buildForecastLine } from "@/lib/decision-core/forecast-line";
 import { buildMainAction } from "@/lib/decision-core/main-action";
 import { buildNextRisk } from "@/lib/decision-core/next-risk";
@@ -36,8 +37,15 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     debts: state.debts,
     moneySetup: state.moneySetup,
     categoryBudgets: state.categoryBudgets,
+    budgetMonthStartDay: state.budgetMonthStartDay,
     availableNow,
     safeSpending,
+    essentialBudgetReserve: {
+      totalRemaining: 0,
+      periodFrom: state.today,
+      periodTo: state.today,
+      items: [],
+    },
     forecast: {
       startBalance: availableNow,
       minBalance: availableNow,
@@ -52,6 +60,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
 
 export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnapshot {
   const ctx = buildContext(state);
+  ctx.essentialBudgetReserve = buildEssentialBudgetReserve(ctx);
   ctx.forecast = buildForecastLine(ctx);
   const safeUntil = buildSafeUntil(ctx);
   const todayPayments = buildTodayPayments(ctx);

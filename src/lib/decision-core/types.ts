@@ -7,6 +7,7 @@ import type {
   Transaction,
 } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction } from "@/types/planning";
+import type { EssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
 
 export type DecisionStatusKey = "calm" | "risk" | "action";
 
@@ -149,6 +150,7 @@ export type DecisionCoreState = {
   debts: DebtItem[];
   moneySetup: MoneySetup;
   categoryBudgets: CategoryBudget[];
+  budgetMonthStartDay: number;
   balances: {
     all: number;
     me: number;
@@ -166,8 +168,10 @@ export type DecisionCoreContext = {
   debts: DebtItem[];
   moneySetup: MoneySetup;
   categoryBudgets: CategoryBudget[];
+  budgetMonthStartDay: number;
   availableNow: number;
   safeSpending: SafeSpendingResult;
+  essentialBudgetReserve: EssentialBudgetReserve;
   forecast: BalanceForecast;
 };
 

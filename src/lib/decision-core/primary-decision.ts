@@ -5,6 +5,7 @@ import type {
   DecisionTodayPayment,
   PrimaryDecision,
 } from "@/lib/decision-core/types";
+import { getReserveFloor } from "@/lib/decision-core/constraint-point";
 
 type ResolvePrimaryDecisionInput = {
   ctx: DecisionCoreContext;
@@ -109,11 +110,12 @@ export function resolvePrimaryDecision(
 
   if (
     nextRisk &&
-    ctx.forecast.minBalance <= Math.max(ctx.forecast.startBalance * 0.25, 1000)
+    !ctx.forecast.firstDeficitDate &&
+    ctx.forecast.minBalance <= getReserveFloor(ctx)
   ) {
     return {
       type: "reserve_required",
-      amount: Math.max(0, ctx.forecast.minBalance),
+      amount: getReserveFloor(ctx),
       dueDate: nextRisk.date,
       title: nextRisk.title,
     };

@@ -15,7 +15,11 @@ export function buildAllowed(
 ): DecisionAllowed {
   const horizonDate = ctx.forecast.nextIncomeDate;
   const hasKnownIncomeHorizon = Boolean(horizonDate);
-  const discretionaryAmount = Math.max(0, Math.round(ctx.forecast.minBalance));
+  const essentialReserve = ctx.essentialBudgetReserve.totalRemaining;
+  const discretionaryAmount = Math.max(
+    0,
+    Math.round(ctx.forecast.minBalance - essentialReserve),
+  );
 
   switch (decision.type) {
     case "overdue_payment":
@@ -48,8 +52,8 @@ export function buildAllowed(
         horizonDate: decision.dueDate,
         reason:
           ctx.locale === "ru"
-            ? "Свободная сумма сегодня уже нужна как резерв под ближайший риск."
-            : "Today's free cash is already needed as a reserve for the next risk.",
+            ? "Свободная сумма сегодня уже нужна как резерв под ближайшую ограничивающую точку."
+            : "Today's free cash is already needed for the next limiting point.",
       };
     case "missing_data":
       return {
@@ -84,7 +88,11 @@ export function buildAllowed(
         };
       }
 
-      if (ctx.forecast.startBalance <= 0 || ctx.forecast.minBalance <= 0) {
+      if (
+        ctx.forecast.startBalance <= 0 ||
+        ctx.forecast.minBalance <= 0 ||
+        discretionaryAmount <= 0
+      ) {
         return {
           text:
             ctx.locale === "ru"
@@ -112,8 +120,12 @@ export function buildAllowed(
         horizonDate,
         reason:
           ctx.locale === "ru"
-            ? "Это сумма необязательных расходов сверх обязательств и минимального резерва до ближайшего дохода."
-            : "This is discretionary spending above obligations and the minimum reserve until the next income.",
+            ? essentialReserve > 0
+              ? "Это сумма сверх обязательных платежей и оставшихся обязательных лимитов до ближайшего дохода."
+              : "Это сумма необязательных расходов сверх обязательств и минимального резерва до ближайшего дохода."
+            : essentialReserve > 0
+              ? "This is the amount above required payments and the remaining essential category limits until the next income."
+              : "This is discretionary spending above obligations and the minimum reserve until the next income.",
       };
   }
 }

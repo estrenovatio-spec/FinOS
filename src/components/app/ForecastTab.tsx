@@ -24,6 +24,7 @@ export function ForecastTab({
   const recurringTransactions = useStore((s) => s.recurringTransactions);
   const debts = useStore((s) => s.debts);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
+  const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
   const householdFilter = useStore((s) => s.householdFilter);
   const balances = useHouseholdBalances();
   const transactions = useViewerMappedTransactions(false);
@@ -41,12 +42,14 @@ export function ForecastTab({
         debts,
         moneySetup,
         categoryBudgets,
+        budgetMonthStartDay,
         balances,
       }),
     [
       balances,
       categories,
       categoryBudgets,
+      budgetMonthStartDay,
       debts,
       householdFilter,
       locale,
