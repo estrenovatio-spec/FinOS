@@ -18,7 +18,12 @@ export type EssentialBudgetReserve = {
 export function buildEssentialBudgetReserve(
   ctx: Pick<
     DecisionCoreContext,
-    "today" | "budgetMonthStartDay" | "moneySetup" | "categoryBudgets" | "confirmedTransactions"
+    | "today"
+    | "budgetMonthStartDay"
+    | "moneySetup"
+    | "categoryBudgets"
+    | "confirmedTransactions"
+    | "recurringTransactions"
   >,
 ): EssentialBudgetReserve {
   const period = getCurrentBudgetPeriod(
@@ -29,6 +34,7 @@ export function buildEssentialBudgetReserve(
   const budgetsByCategory = new Map(
     ctx.categoryBudgets.map((item) => [item.categoryId, item] as const),
   );
+  const requiredRecurringIds = new Set(ctx.moneySetup.requiredRecurringIds);
 
   const items = essentialIds
     .map((categoryId) => {
@@ -46,7 +52,19 @@ export function buildEssentialBudgetReserve(
         )
         .reduce((sum, transaction) => sum + transaction.amount, 0);
 
-      const remaining = Math.max(0, budget.monthlyLimit - spent);
+      const recurringReserved = ctx.recurringTransactions
+        .filter(
+          (item) =>
+            requiredRecurringIds.has(item.id) &&
+            item.enabled &&
+            item.type === "expense" &&
+            item.categoryId === categoryId &&
+            isDateInBudgetPeriod(item.nextRunDate.slice(0, 10), period) &&
+            item.nextRunDate.slice(0, 10) >= ctx.today,
+        )
+        .reduce((sum, item) => sum + item.amount, 0);
+
+      const remaining = Math.max(0, budget.monthlyLimit - spent - recurringReserved);
 
       return {
         categoryId,

@@ -1,6 +1,7 @@
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
+import { getRequiredFloor } from "@/lib/decision-core/constraint-point";
 import { buildEssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
 import { buildForecastLine } from "@/lib/decision-core/forecast-line";
 import { buildMainAction } from "@/lib/decision-core/main-action";
@@ -84,6 +85,7 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     nextRisk,
     confirmedTransactionsCount: ctx.confirmedTransactions.length,
     forecast: ctx.forecast,
+    requiredFloor: getRequiredFloor(ctx),
     hasOverduePayments,
   });
   const mainAction = buildMainAction(primaryDecision, ctx, nextRisk);

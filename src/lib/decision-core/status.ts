@@ -13,6 +13,7 @@ type StatusInput = {
   nextRisk: DecisionNextRisk | null;
   confirmedTransactionsCount: number;
   forecast: BalanceForecast;
+  requiredFloor: number;
   hasOverduePayments: boolean;
 };
 
@@ -24,6 +25,7 @@ export function buildStatus(input: StatusInput): DecisionStatus {
     nextRisk,
     confirmedTransactionsCount,
     forecast,
+    requiredFloor,
     hasOverduePayments,
   } = input;
 
@@ -42,10 +44,8 @@ export function buildStatus(input: StatusInput): DecisionStatus {
         : "There is an immediate action affecting the forecast.";
   } else if (
     !safeUntil.isReady ||
-    forecast.minBalance <= forecast.startBalance * 0.25 ||
-    (nextRisk &&
-      nextRisk.daysAway <= 7 &&
-      forecast.minBalance <= forecast.startBalance * 0.4) ||
+    (requiredFloor > 0 && forecast.minBalance <= requiredFloor) ||
+    (nextRisk && nextRisk.daysAway <= 7 && requiredFloor > 0) ||
     (confirmedTransactionsCount === 0 && !safeUntil.isReady && forecast.events.length === 0)
   ) {
     key = "risk";

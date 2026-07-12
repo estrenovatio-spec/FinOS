@@ -1,12 +1,7 @@
 import type { DecisionCoreContext, ForecastEvent } from "@/lib/decision-core/types";
 
-export function getReserveFloor(ctx: DecisionCoreContext): number {
-  return Math.ceil(
-    Math.max(
-      ctx.essentialBudgetReserve.totalRemaining,
-      Math.max(ctx.forecast.startBalance * 0.25, 1000),
-    ),
-  );
+export function getRequiredFloor(ctx: DecisionCoreContext): number {
+  return Math.ceil(ctx.essentialBudgetReserve.totalRemaining);
 }
 
 export function findConstraintEvent(ctx: DecisionCoreContext): ForecastEvent | null {
@@ -18,10 +13,12 @@ export function findConstraintEvent(ctx: DecisionCoreContext): ForecastEvent | n
     );
   }
 
-  const reserveFloor = getReserveFloor(ctx);
+  const requiredFloor = getRequiredFloor(ctx);
+  if (requiredFloor <= 0) return null;
+
   return (
     ctx.forecast.events.find(
-      (event) => event.amount < 0 && event.balanceAfter <= reserveFloor,
+      (event) => event.amount < 0 && event.balanceAfter <= requiredFloor,
     ) ?? null
   );
 }
