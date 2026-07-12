@@ -20,6 +20,12 @@ function llmProvider(): string | undefined {
   return envFirst("LLM_PROVIDER")?.toLowerCase();
 }
 
+export function getLlmProvider(): string {
+  const provider = llmProvider();
+  if (provider) return provider;
+  return getLlmBaseUrl() ? "custom" : "openai";
+}
+
 /** Base URL прокси, напр. https://xinghuapi.com/v1 */
 export function getLlmBaseUrl(): string | undefined {
   const explicit = envFirst("LLM_BASE_URL", "OPENAI_BASE_URL");

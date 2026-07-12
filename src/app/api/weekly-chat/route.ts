@@ -3,6 +3,12 @@ import { z } from "zod";
 import type { AiCoachingContext } from "@/lib/ai-coaching-context";
 import { createLlmChatCompletion, getLlmClient, isLlmConfigured } from "@/lib/llm";
 import {
+  buildLlmFallbackLog,
+  classifyLlmError,
+  extractReplyFromChatCompletion,
+  logLlmFallback,
+} from "@/lib/llm-diagnostics";
+import {
   WEEKLY_CHAT_MAX_USER_MESSAGES,
   WEEKLY_CHAT_SYSTEM,
   WEEKLY_MIN_DAYS_TRACKED,
@@ -73,6 +79,8 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const requestId = crypto.randomUUID();
+    const startedAt = Date.now();
     const json: unknown = await request.json();
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
@@ -101,11 +109,29 @@ export async function POST(request: NextRequest) {
         : "AI is unavailable right now. Use the weekly review above for the main spending patterns and category growth. Try again later.";
 
     if (!isLlmConfigured()) {
+      logLlmFallback(
+        buildLlmFallbackLog({
+          requestId,
+          route: "weekly-chat",
+          failureKind: "missing_api_key",
+          durationMs: Date.now() - startedAt,
+          hasClient: false,
+        }),
+      );
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
 
     const openai = getLlmClient();
     if (!openai) {
+      logLlmFallback(
+        buildLlmFallbackLog({
+          requestId,
+          route: "weekly-chat",
+          failureKind: "client_init_failed",
+          durationMs: Date.now() - startedAt,
+          hasClient: false,
+        }),
+      );
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
 
@@ -130,11 +156,33 @@ export async function POST(request: NextRequest) {
         temperature: 0.5,
       });
 
-      const reply = completion.choices[0]?.message?.content?.trim();
-      if (!reply) throw new Error("Empty response");
+      const reply = extractReplyFromChatCompletion(completion);
+      if (!reply.ok) {
+        logLlmFallback(
+          buildLlmFallbackLog({
+            requestId,
+            route: "weekly-chat",
+            failureKind: reply.failureKind,
+            durationMs: Date.now() - startedAt,
+            hasClient: true,
+          }),
+        );
+        return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
+      }
 
-      return NextResponse.json({ success: true, reply });
-    } catch {
+      return NextResponse.json({ success: true, reply: reply.reply });
+    } catch (error) {
+      const meta = classifyLlmError(error);
+      logLlmFallback(
+        buildLlmFallbackLog({
+          requestId,
+          route: "weekly-chat",
+          failureKind: meta.failureKind,
+          statusCode: meta.statusCode,
+          durationMs: Date.now() - startedAt,
+          hasClient: true,
+        }),
+      );
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
   } catch {
