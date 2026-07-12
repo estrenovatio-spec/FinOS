@@ -11,8 +11,12 @@ import {
   sanitizeCategories,
 } from "@/lib/categories";
 import { APP_CURRENCY } from "@/lib/app-currency";
+import { matchAiMemoryType } from "@/lib/ai-memory";
 import { looksLikeGoalDeposit } from "@/lib/planning/parse-input";
-import { parseAmountFromTranscript, resolveTransactionAmount } from "@/lib/parse-amount";
+import {
+  parseAmountFromTranscript,
+  resolveTransactionAmount,
+} from "@/lib/parse-amount";
 import { extractSeparatedMoneyAmounts } from "@/lib/multiple-amounts";
 import { isGarbageTranscript } from "@/lib/transcript-guard";
 import { ownerHintsForPrompt } from "@/lib/detect-owner";
@@ -28,9 +32,22 @@ export const PARSE_PROMPT = (
   partnerKeywords?: readonly string[],
 ) => {
   const merged = sanitizeCategories(categories);
-  const expenseCatalog = formatCategoryCatalogForPrompt(merged, "expense", locale);
-  const incomeCatalog = formatCategoryCatalogForPrompt(merged, "income", locale);
-  const ownerHints = ownerHintsForPrompt(locale, partnerName, myName, partnerKeywords);
+  const expenseCatalog = formatCategoryCatalogForPrompt(
+    merged,
+    "expense",
+    locale,
+  );
+  const incomeCatalog = formatCategoryCatalogForPrompt(
+    merged,
+    "income",
+    locale,
+  );
+  const ownerHints = ownerHintsForPrompt(
+    locale,
+    partnerName,
+    myName,
+    partnerKeywords,
+  );
   const ownerBlock = ownerHints
     ? `\n## Кто совершил (для note, не в JSON)\n${ownerHints}\n- «возврат» / refund → type income, categoryId refund.\n`
     : "";
@@ -181,7 +198,13 @@ const INCOME_KEYWORDS_RU = [
   "оплатил клиент",
   "заказчик оплатил",
 ];
-const INCOME_KEYWORDS_EN = ["received", "salary", "income", "earned", "got paid"];
+const INCOME_KEYWORDS_EN = [
+  "received",
+  "salary",
+  "income",
+  "earned",
+  "got paid",
+];
 const EXPENSE_KEYWORDS_RU = [
   "потратил",
   "купил",
@@ -202,6 +225,11 @@ export function detectType(
   const fromVerbs = detectTypeFromVerbs(transcript, locale);
   if (fromVerbs) return fromVerbs;
   if (categories?.length) {
+    const fromMemory = matchAiMemoryType(
+      transcript,
+      sanitizeCategories(categories),
+    );
+    if (fromMemory) return fromMemory;
     const fromCats = detectTypeFromCategories(transcript, categories);
     if (fromCats) return fromCats;
   }
@@ -248,13 +276,21 @@ export function fallbackParse(
   const amount = parseAmountFromTranscript(transcript, locale);
 
   let resolvedType = type;
-  if (/возврат|вернули|вернула|refund|cashback|кэшбэк|кешбэк/i.test(transcript)) {
+  if (
+    /возврат|вернули|вернула|refund|cashback|кэшбэк|кешбэк/i.test(transcript)
+  ) {
     resolvedType = "income";
   }
 
-  let categoryId = detectCategoryId(transcript, resolvedType, sanitizeCategories(categories));
+  let categoryId = detectCategoryId(
+    transcript,
+    resolvedType,
+    sanitizeCategories(categories),
+  );
   if (/возврат|вернули|refund/i.test(transcript) && resolvedType === "income") {
-    const refundCat = sanitizeCategories(categories).find((c) => c.id === "refund");
+    const refundCat = sanitizeCategories(categories).find(
+      (c) => c.id === "refund",
+    );
     if (refundCat) categoryId = "refund";
   }
 
@@ -318,7 +354,8 @@ export function normalizeAiParsed(
   );
   if (categoryId === "goal_jar" && !looksLikeGoalDeposit(transcript, locale)) {
     const detected = detectCategoryId(transcript, raw.type, categories);
-    categoryId = detected !== "goal_jar" ? detected : getFallbackCategoryId(raw.type);
+    categoryId =
+      detected !== "goal_jar" ? detected : getFallbackCategoryId(raw.type);
   }
   const amount = resolveTransactionAmount(transcript, raw.amount, locale);
 
@@ -330,5 +367,11 @@ export function normalizeAiParsed(
     note: sanitizeTransactionNote(raw.note || transcript.slice(0, 120), amount),
     date: raw.date,
   };
-  return refineParsedTransaction(base, transcript, categories, detectType, locale);
+  return refineParsedTransaction(
+    base,
+    transcript,
+    categories,
+    detectType,
+    locale,
+  );
 }

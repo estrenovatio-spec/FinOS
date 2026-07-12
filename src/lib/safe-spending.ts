@@ -1,4 +1,7 @@
-import { daysInclusiveUntilDate, getLocalTodayIsoDate } from "@/lib/format-date";
+import {
+  daysInclusiveUntilDate,
+  getLocalTodayIsoDate,
+} from "@/lib/format-date";
 import type { MoneySetup } from "@/lib/money-setup";
 import type { CategoryDefinition } from "@/types";
 import type { CategoryBudget, RecurringTransaction } from "@/types/planning";
@@ -20,6 +23,12 @@ export type SafeSpendingResult = {
   expectedIncomeAmount: number | null;
   requiredFixedUntilIncome: number;
   essentialReserveUntilIncome: number;
+  essentialReserveBreakdown: {
+    categoryId: string;
+    monthlyLimit: number;
+    reserveUntilIncome: number;
+    dailyReserve: number;
+  }[];
   availableForDailySpending: number | null;
   reasons: string[];
   debug?: Record<string, unknown>;
@@ -53,7 +62,11 @@ function pickNearestIncome(
   moneySetup: MoneySetup,
   today: string,
   reasons: string[],
-): { nextIncomeDate: string | null; expectedIncomeAmount: number | null; debug: Record<string, unknown> } {
+): {
+  nextIncomeDate: string | null;
+  expectedIncomeAmount: number | null;
+  debug: Record<string, unknown>;
+} {
   if (moneySetup.incomeSources.length > 0) {
     const dated = moneySetup.incomeSources.filter(
       (source) =>
@@ -77,7 +90,9 @@ function pickNearestIncome(
 
     dated.sort((a, b) => a.expectedDate!.localeCompare(b.expectedDate!));
     const nearestDate = dated[0]!.expectedDate!;
-    const sameDay = dated.filter((source) => source.expectedDate === nearestDate);
+    const sameDay = dated.filter(
+      (source) => source.expectedDate === nearestDate,
+    );
     const expectedIncomeAmount = sameDay.reduce(
       (sum, source) => sum + (source.expectedAmount ?? 0),
       0,
@@ -140,6 +155,7 @@ export function calculateSafeSpending(
     expectedIncomeAmount,
     requiredFixedUntilIncome: 0,
     essentialReserveUntilIncome: 0,
+    essentialReserveBreakdown: [],
     availableForDailySpending: null,
     reasons,
     debug,
@@ -175,7 +191,10 @@ export function calculateSafeSpending(
   }
 
   const requiredIds = new Set(input.moneySetup.requiredRecurringIds);
-  if (requiredIds.size === 0 && input.moneySetup.hasNoRequiredFixedExpenses !== true) {
+  if (
+    requiredIds.size === 0 &&
+    input.moneySetup.hasNoRequiredFixedExpenses !== true
+  ) {
     reasons.push("required_recurring_ids_not_configured");
     return buildResult(base, "missing_required_expenses");
   }
@@ -217,9 +236,13 @@ export function calculateSafeSpending(
     const budgetsByCategory = new Map(
       input.categoryBudgets.map((item) => [item.categoryId, item] as const),
     );
-    const categoryIds = new Set(input.categories.map((category) => category.id));
+    const categoryIds = new Set(
+      input.categories.map((category) => category.id),
+    );
     let missingEssentialBudget = false;
     let essentialReserveUntilIncome = 0;
+    const essentialReserveBreakdown: SafeSpendingResult["essentialReserveBreakdown"] =
+      [];
 
     for (const categoryId of essentialIds) {
       if (!categoryIds.has(categoryId)) {
@@ -236,10 +259,21 @@ export function calculateSafeSpending(
         missingEssentialBudget = true;
         continue;
       }
-      essentialReserveUntilIncome += (budget.monthlyLimit / 30) * daysUntilIncome;
+      const dailyReserve = budget.monthlyLimit / 30;
+      const reserveUntilIncome = dailyReserve * daysUntilIncome;
+      essentialReserveUntilIncome += reserveUntilIncome;
+      essentialReserveBreakdown.push({
+        categoryId,
+        monthlyLimit: budget.monthlyLimit,
+        reserveUntilIncome,
+        dailyReserve,
+      });
     }
 
     base.essentialReserveUntilIncome = essentialReserveUntilIncome;
+    base.essentialReserveBreakdown = essentialReserveBreakdown.sort(
+      (left, right) => right.reserveUntilIncome - left.reserveUntilIncome,
+    );
     debug.essentialReserveUntilIncome = essentialReserveUntilIncome;
 
     if (missingEssentialBudget) {
@@ -247,12 +281,18 @@ export function calculateSafeSpending(
     }
   } else {
     base.essentialReserveUntilIncome = 0;
+    base.essentialReserveBreakdown = [];
     debug.essentialReserveUntilIncome = 0;
   }
 
   const availableForDailySpending =
-    input.availableNow - requiredFixedUntilIncome - base.essentialReserveUntilIncome;
-  const safeToday = Math.max(0, Math.floor(availableForDailySpending / daysUntilIncome));
+    input.availableNow -
+    requiredFixedUntilIncome -
+    base.essentialReserveUntilIncome;
+  const safeToday = Math.max(
+    0,
+    Math.floor(availableForDailySpending / daysUntilIncome),
+  );
 
   base.availableForDailySpending = availableForDailySpending;
   base.safeToday = safeToday;

@@ -74,6 +74,26 @@ function localIsoDateToMiddayMs(dateStr: string): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+export function normalizeIsoDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const raw = value.trim();
+  const parts = parseIsoDateParts(raw);
+  if (parts) {
+    const mo = String(parts.mo).padStart(2, "0");
+    const day = String(parts.d).padStart(2, "0");
+    return `${parts.y}-${mo}-${day}`;
+  }
+  const match = ISO_DATE.exec(raw);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+export function isoDateToLocalMiddayMs(dateStr: string): number | null {
+  const normalized = normalizeIsoDate(dateStr);
+  if (!normalized) return null;
+  return localIsoDateToMiddayMs(normalized);
+}
+
 /** YYYY-MM-DD → locale display */
 export function formatIsoDate(dateStr: string, locale: Locale = "ru"): string {
   const parts = parseIsoDateParts(dateStr);

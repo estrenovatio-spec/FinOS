@@ -1,4 +1,10 @@
-import type { CategoryDefinition, Locale, ParsedTransaction, Transaction, TxType } from "@/types";
+import type {
+  CategoryDefinition,
+  Locale,
+  ParsedTransaction,
+  Transaction,
+  TxType,
+} from "@/types";
 
 export type AiMemoryRule = {
   phrase: string;
@@ -92,7 +98,11 @@ function normalizeText(input: string): string {
 }
 
 function tokenSet(phrase: string): Set<string> {
-  return new Set(normalizeText(phrase).split(" ").filter((w) => w.length >= 3));
+  return new Set(
+    normalizeText(phrase)
+      .split(" ")
+      .filter((w) => w.length >= 3),
+  );
 }
 
 function phraseSimilarity(a: string, b: string): number {
@@ -108,12 +118,14 @@ function phraseSimilarity(a: string, b: string): number {
 
 function areSimilarPhrases(a: string, b: string): boolean {
   if (a === b) return true;
-  if (a.length >= 5 && b.length >= 5 && (a.includes(b) || b.includes(a))) return true;
+  if (a.length >= 5 && b.length >= 5 && (a.includes(b) || b.includes(a)))
+    return true;
   return phraseSimilarity(a, b) >= 0.72;
 }
 
 function mergePhraseLabel(current: string, next: string): string {
-  if (next.length < current.length && areSimilarPhrases(current, next)) return next;
+  if (next.length < current.length && areSimilarPhrases(current, next))
+    return next;
   return current;
 }
 
@@ -133,7 +145,10 @@ function phraseCandidates(input: string): string[] {
   return [...candidates].slice(0, 12);
 }
 
-export function getAiMemoryKeywordCandidates(input: string, limit = 3): string[] {
+export function getAiMemoryKeywordCandidates(
+  input: string,
+  limit = 3,
+): string[] {
   return phraseCandidates(input)
     .filter((phrase) => phrase.length >= 3 && phrase.length <= 40)
     .sort((a, b) => {
@@ -159,9 +174,9 @@ function readAiMemory(): AiUserMemory {
         .filter((r) =>
           Boolean(
             r &&
-              typeof r.phrase === "string" &&
-              typeof r.categoryId === "string" &&
-              (r.type === "income" || r.type === "expense"),
+            typeof r.phrase === "string" &&
+            typeof r.categoryId === "string" &&
+            (r.type === "income" || r.type === "expense"),
           ),
         )
         .map((r) => {
@@ -177,15 +192,20 @@ function readAiMemory(): AiUserMemory {
                 ? Math.max(1, Math.round(rule.weight))
                 : 1,
             signalCount:
-              typeof rule.signalCount === "number" && Number.isFinite(rule.signalCount)
+              typeof rule.signalCount === "number" &&
+              Number.isFinite(rule.signalCount)
                 ? Math.max(1, Math.round(rule.signalCount))
                 : 1,
             source:
-              rule.source === "correction" || rule.source === "voice" || rule.source === "text"
+              rule.source === "correction" ||
+              rule.source === "voice" ||
+              rule.source === "text"
                 ? rule.source
                 : "text",
             firstSeenAt:
-              typeof rule.firstSeenAt === "string" ? rule.firstSeenAt : lastSeenAt,
+              typeof rule.firstSeenAt === "string"
+                ? rule.firstSeenAt
+                : lastSeenAt,
             lastSeenAt,
           } satisfies AiMemoryRule;
         })
@@ -210,7 +230,9 @@ export function getAiMemoryRules(): AiMemoryRule[] {
   return readAiMemory().rules;
 }
 
-export function deleteAiMemoryRule(target: Pick<AiMemoryRule, "phrase" | "categoryId" | "type">): void {
+export function deleteAiMemoryRule(
+  target: Pick<AiMemoryRule, "phrase" | "categoryId" | "type">,
+): void {
   const memory = readAiMemory();
   writeAiMemory({
     version: 1,
@@ -243,7 +265,8 @@ function rememberRule(rule: Omit<AiMemoryRule, "lastSeenAt">): void {
     existing.weight = Math.min(99, existing.weight + rule.weight);
     existing.signalCount = Math.min(999, (existing.signalCount ?? 1) + 1);
     existing.phrase = mergePhraseLabel(existing.phrase, phrase);
-    existing.source = rule.source === "correction" ? "correction" : existing.source;
+    existing.source =
+      rule.source === "correction" ? "correction" : existing.source;
     existing.lastSeenAt = nowIso();
   } else {
     const seenAt = nowIso();
@@ -255,7 +278,9 @@ function rememberRule(rule: Omit<AiMemoryRule, "lastSeenAt">): void {
       lastSeenAt: seenAt,
     });
   }
-  memory.rules.sort((a, b) => b.weight - a.weight || b.lastSeenAt.localeCompare(a.lastSeenAt));
+  memory.rules.sort(
+    (a, b) => b.weight - a.weight || b.lastSeenAt.localeCompare(a.lastSeenAt),
+  );
   writeAiMemory({ version: 1, rules: memory.rules.slice(0, MAX_RULES) });
 }
 
@@ -284,7 +309,8 @@ export function recordAiCorrectionLearning(params: {
   after: Pick<Transaction, "categoryId" | "type" | "note">;
 }): void {
   const { before, after } = params;
-  if (before?.categoryId === after.categoryId && before?.type === after.type) return;
+  if (before?.categoryId === after.categoryId && before?.type === after.type)
+    return;
   const sourceText = `${before?.note ?? ""} ${after.note ?? ""}`.trim();
   const learnedPhrases = phraseCandidates(sourceText).slice(0, 6);
   for (const phrase of learnedPhrases) {
@@ -327,30 +353,59 @@ export function matchAiMemoryCategoryId(
   type: TxType,
   categories: CategoryDefinition[],
 ): string | null {
+  return matchAiMemoryRule(text, categories, type)?.categoryId ?? null;
+}
+
+export function matchAiMemoryType(
+  text: string,
+  categories: CategoryDefinition[],
+): TxType | null {
+  return matchAiMemoryRule(text, categories)?.type ?? null;
+}
+
+function matchAiMemoryRule(
+  text: string,
+  categories: CategoryDefinition[],
+  type?: TxType,
+): AiMemoryRule | null {
   const memory = readAiMemory();
   if (memory.rules.length === 0) return null;
 
-  const categoryIds = new Set(categories.filter((cat) => cat.type === type).map((cat) => cat.id));
-  const candidates = new Set(phraseCandidates(text));
+  const availableTypes = new Map(
+    categories.map((cat) => [cat.id, cat.type] as const),
+  );
+  const candidates = [...new Set(phraseCandidates(text))];
   let best: AiMemoryRule | null = null;
 
   for (const rule of memory.rules) {
-    if (rule.type !== type || !categoryIds.has(rule.categoryId)) continue;
-    const matches = candidates.has(rule.phrase) || [...candidates].some((candidate) => areSimilarPhrases(candidate, rule.phrase));
+    const categoryType = availableTypes.get(rule.categoryId);
+    if (!categoryType || categoryType !== rule.type) continue;
+    if (type && rule.type !== type) continue;
+    const matches =
+      candidates.includes(rule.phrase) ||
+      candidates.some((candidate) => areSimilarPhrases(candidate, rule.phrase));
     if (!matches) continue;
-    if (!best || rule.weight > best.weight || rule.lastSeenAt > best.lastSeenAt) {
+    if (
+      !best ||
+      rule.weight > best.weight ||
+      rule.lastSeenAt > best.lastSeenAt
+    ) {
       best = rule;
     }
   }
 
-  return best?.categoryId ?? null;
+  return best;
 }
 
 export function aiMemoryConfidence(rule: AiMemoryRule): number {
-  const sourceBoost = rule.source === "correction" ? 22 : rule.source === "voice" ? 10 : 4;
+  const sourceBoost =
+    rule.source === "correction" ? 22 : rule.source === "voice" ? 10 : 4;
   const weightScore = Math.min(45, Math.round(rule.weight * 3.2));
   const signalScore = Math.min(25, Math.round((rule.signalCount ?? 1) * 6));
-  return Math.max(35, Math.min(98, 28 + sourceBoost + weightScore + signalScore));
+  return Math.max(
+    35,
+    Math.min(98, 28 + sourceBoost + weightScore + signalScore),
+  );
 }
 
 export function aiMemoryReason(rule: AiMemoryRule, locale: Locale): string {
@@ -375,7 +430,12 @@ export function buildAiMemorySnapshot(
 ): {
   learnedRules: AiMemoryRule[];
   frequentMerchants: { phrase: string; categoryId: string; count: number }[];
-  categoryHabits: { category: string; count: number; avgAmount: number; sharePercent: number }[];
+  categoryHabits: {
+    category: string;
+    count: number;
+    avgAmount: number;
+    sharePercent: number;
+  }[];
   insights: AiMemoryInsight[];
 } {
   const memory = readAiMemory();
@@ -398,7 +458,8 @@ export function buildAiMemorySnapshot(
       category: label(categoryId),
       count: v.count,
       avgAmount: Math.round(v.amount / Math.max(1, v.count)),
-      sharePercent: totalExpense > 0 ? Math.round((v.amount / totalExpense) * 100) : 0,
+      sharePercent:
+        totalExpense > 0 ? Math.round((v.amount / totalExpense) * 100) : 0,
     }))
     .sort((a, b) => b.sharePercent - a.sharePercent)
     .slice(0, 6);
@@ -406,13 +467,20 @@ export function buildAiMemorySnapshot(
   const phraseMap = new Map<string, { categoryId: string; count: number }>();
   for (const tx of confirmed) {
     for (const phrase of phraseCandidates(tx.note).slice(0, 2)) {
-      const prev = phraseMap.get(phrase) ?? { categoryId: tx.categoryId, count: 0 };
+      const prev = phraseMap.get(phrase) ?? {
+        categoryId: tx.categoryId,
+        count: 0,
+      };
       prev.count += 1;
       phraseMap.set(phrase, prev);
     }
   }
   const frequentMerchants = [...phraseMap.entries()]
-    .map(([phrase, v]) => ({ phrase, categoryId: v.categoryId, count: v.count }))
+    .map(([phrase, v]) => ({
+      phrase,
+      categoryId: v.categoryId,
+      count: v.count,
+    }))
     .filter((x) => x.count >= 2)
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
@@ -421,7 +489,8 @@ export function buildAiMemorySnapshot(
   const top = categoryHabits[0];
   if (top) {
     insights.push({
-      title: locale === "ru" ? "Главная привычка периода" : "Main habit this period",
+      title:
+        locale === "ru" ? "Главная привычка периода" : "Main habit this period",
       detail:
         locale === "ru"
           ? `${top.category}: ${top.sharePercent}% расходов, средний чек ${top.avgAmount} ₽.`
@@ -431,7 +500,10 @@ export function buildAiMemorySnapshot(
   }
   if (memory.rules.some((r) => r.source === "correction")) {
     insights.push({
-      title: locale === "ru" ? "ИИ учится на исправлениях" : "AI learns from corrections",
+      title:
+        locale === "ru"
+          ? "ИИ учится на исправлениях"
+          : "AI learns from corrections",
       detail:
         locale === "ru"
           ? "Исправленные категории уже добавлены в персональные правила распознавания."

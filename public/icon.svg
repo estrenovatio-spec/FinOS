@@ -2,5 +2,5 @@
   <rect width="512" height="512" rx="112" fill="#047857"/>
   <path d="M104 356c58-126 127-189 208-189 53 0 89 26 96 68 8 49-25 92-88 102-33 5-64-1-94-18-18 11-35 23-51 37h-71Z" fill="#ecfdf5" opacity=".96"/>
   <path d="M184 300c35-29 70-44 105-44 30 0 49-10 47-26-2-14-18-23-43-23-45 0-84 31-118 93h9Z" fill="#059669"/>
-  <text x="256" y="382" text-anchor="middle" font-family="Arial, sans-serif" font-size="106" font-weight="800" fill="#ffffff">ПБ</text>
+  <text x="256" y="382" text-anchor="middle" font-family="Arial, sans-serif" font-size="124" font-weight="800" fill="#ffffff">F</text>
 </svg>

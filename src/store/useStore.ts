@@ -37,7 +37,10 @@ import {
   ensureCloudViewerUserId,
   findHouseholdPartnerUserId,
 } from "@/lib/cloud/viewer-identity";
-import { countsInBalance, countsInHouseholdTotal } from "@/lib/transaction-confirmed";
+import {
+  countsInBalance,
+  countsInHouseholdTotal,
+} from "@/lib/transaction-confirmed";
 import {
   buildPartnerTransferPair,
   isPartnerTransferLike,
@@ -92,14 +95,13 @@ import { appendSkippedDate } from "@/lib/planning/recurring-skipped";
 import { recurringToParsedTransaction } from "@/lib/planning/recurring-run";
 import { useCloudStore } from "@/store/useCloudStore";
 import { resolveTransactionAmount } from "@/lib/parse-amount";
+import { confirmPendingPaymentById } from "@/lib/pending-payment";
 import {
   enrichCategoriesWithAiMemory,
   recordAiCorrectionLearning,
   recordAiInputLearning,
 } from "@/lib/ai-memory";
-import {
-  clearCachedMonthlyAnalysis,
-} from "@/lib/storage";
+import { clearCachedMonthlyAnalysis } from "@/lib/storage";
 import type {
   BudgetOwner,
   HouseholdFilter,
@@ -222,10 +224,16 @@ interface StoreState {
       note?: string;
     },
   ) => void;
-  deleteTransaction: (id: string, opts?: { skipBusinessLink?: boolean }) => void;
+  deleteTransaction: (
+    id: string,
+    opts?: { skipBusinessLink?: boolean },
+  ) => void;
   addVehicle: (name?: string) => void;
   removeVehicleById: (vehicleId: string) => void;
-  saveVehicleGarage: (vehicles: Vehicle[], vehiclePrefs?: VehicleGaragePrefs) => void;
+  saveVehicleGarage: (
+    vehicles: Vehicle[],
+    vehiclePrefs?: VehicleGaragePrefs,
+  ) => void;
   updateVehicleInGarage: (vehicleId: string, patch: Partial<Vehicle>) => void;
   setVehicleGarageMode: (mode: VehicleGaragePrefs["mode"]) => void;
   setVehicleMemberPref: (
@@ -258,9 +266,17 @@ interface StoreState {
   cashOffsetPartner: number;
   setActualCash: (owner: BudgetOwner, actualAmount: number) => void;
   /** Перевод между мной и партнёром (в общий баланс не входит) */
-  transferToPartner: (amount: number, direction: "to_partner" | "from_partner") => boolean;
+  transferToPartner: (
+    amount: number,
+    direction: "to_partner" | "from_partner",
+  ) => boolean;
   setBudgetMonthStartDay: (day: number) => void;
-  addCategory: (type: TxType, labelRu: string, labelEn: string, keywords?: string[]) => string | null;
+  addCategory: (
+    type: TxType,
+    labelRu: string,
+    labelEn: string,
+    keywords?: string[],
+  ) => string | null;
   updateCategory: (
     id: string,
     patch: Partial<Pick<CategoryDefinition, "labels" | "keywords">>,
@@ -275,7 +291,11 @@ interface StoreState {
   markReminderShownToday: () => void;
   /** Дата первого входа / начала учёта (для месячного разбора) */
   ensureTrackingStarted: () => void;
-  addGoal: (name: string, targetAmount: number, deadline?: string | null) => string;
+  addGoal: (
+    name: string,
+    targetAmount: number,
+    deadline?: string | null,
+  ) => string;
   updateGoal: (
     id: string,
     patch: { name?: string; targetAmount?: number; deadline?: string | null },
@@ -315,7 +335,9 @@ function withOwner(tx: Transaction): Transaction {
   return { ...tx, owner: tx.owner ?? "me" };
 }
 
-function transactionsForCurrentViewer(transactions: Transaction[]): Transaction[] {
+function transactionsForCurrentViewer(
+  transactions: Transaction[],
+): Transaction[] {
   const cloud = useCloudStore.getState();
   const cloudUserId = ensureCloudViewerUserId();
   const householdMemberUserIds = collectHouseholdMemberUserIds(
@@ -323,10 +345,17 @@ function transactionsForCurrentViewer(transactions: Transaction[]): Transaction[
     transactions,
     cloudUserId,
   );
-  return mapTransactionsForViewer(transactions, cloudUserId, householdMemberUserIds).map(withOwner);
+  return mapTransactionsForViewer(
+    transactions,
+    cloudUserId,
+    householdMemberUserIds,
+  ).map(withOwner);
 }
 
-function filterByHousehold(transactions: Transaction[], filter: HouseholdFilter): Transaction[] {
+function filterByHousehold(
+  transactions: Transaction[],
+  filter: HouseholdFilter,
+): Transaction[] {
   const list = transactionsForCurrentViewer(transactions);
   if (filter === "all") return list;
   return list.filter((tx) => tx.owner === filter);
@@ -350,22 +379,20 @@ function hasManualRecurringPayment(
   const expectedAmount = roundMoneyUp(item.amount);
   const expectedOwner = item.owner ?? "me";
   const recurringName = normalizeRecurringMatchText(item.note);
-  return transactions.some(
-    (tx) => {
-      if (
-        tx.confirmed === false ||
-        tx.recurringId ||
-        tx.date !== runDate ||
-        tx.type !== item.type ||
-        (tx.owner ?? "me") !== expectedOwner ||
-        roundMoneyUp(tx.amount) !== expectedAmount
-      ) {
-        return false;
-      }
-      if (tx.categoryId === item.categoryId) return true;
-      return hasRecurringNameOverlap(tx.note, recurringName);
-    },
-  );
+  return transactions.some((tx) => {
+    if (
+      tx.confirmed === false ||
+      tx.recurringId ||
+      tx.date !== runDate ||
+      tx.type !== item.type ||
+      (tx.owner ?? "me") !== expectedOwner ||
+      roundMoneyUp(tx.amount) !== expectedAmount
+    ) {
+      return false;
+    }
+    if (tx.categoryId === item.categoryId) return true;
+    return hasRecurringNameOverlap(tx.note, recurringName);
+  });
 }
 
 function normalizeRecurringMatchText(value: string | null | undefined): string {
@@ -381,7 +408,9 @@ function hasRecurringNameOverlap(
   recurringName: string,
 ): boolean {
   if (!recurringName) return false;
-  const txWords = new Set(normalizeRecurringMatchText(transactionNote).split(" ").filter(Boolean));
+  const txWords = new Set(
+    normalizeRecurringMatchText(transactionNote).split(" ").filter(Boolean),
+  );
   if (txWords.size === 0) return false;
   return recurringName
     .split(" ")
@@ -396,7 +425,9 @@ function pushGarageFromState(get: () => StoreState) {
 
 function applyVehicleAfterTransaction(
   get: () => StoreState,
-  set: (partial: Partial<StoreState> | ((s: StoreState) => Partial<StoreState>)) => void,
+  set: (
+    partial: Partial<StoreState> | ((s: StoreState) => Partial<StoreState>),
+  ) => void,
   created: Transaction,
 ) {
   const { vehicles, vehiclePrefs, lastFuelVehicleId } = get();
@@ -406,7 +437,13 @@ function applyVehicleAfterTransaction(
   const partnerIds = partnerDefaultVehicleIds(vehiclePrefs, viewerUserId);
   const vehicleId =
     created.vehicleId ??
-    guessDefaultVehicleId(vehicles, vehiclePrefs, viewerUserId, partnerIds, lastFuelVehicleId);
+    guessDefaultVehicleId(
+      vehicles,
+      vehiclePrefs,
+      viewerUserId,
+      partnerIds,
+      lastFuelVehicleId,
+    );
   if (!vehicleId) return;
 
   const kind = isVehicleServiceExpense(created) ? "service" : "fuel";
@@ -433,7 +470,9 @@ function applyVehicleAfterTransaction(
       kind === "service"
         ? applyVehicleService(vehicle, created.odometerKm)
         : applyFuelOdometer(vehicle, created.odometerKm);
-    const nextVehicles = vehicles.map((v) => (v.id === vehicleId ? nextVehicle : v));
+    const nextVehicles = vehicles.map((v) =>
+      v.id === vehicleId ? nextVehicle : v,
+    );
     set({
       vehicles: nextVehicles,
       lastFuelVehicleId: kind === "fuel" ? vehicleId : lastFuelVehicleId,
@@ -492,16 +531,23 @@ export const useStore = create<StoreState>()(
       businessModeEnabled: false,
       passiveIncomeEnabled: false,
       liveRatesEnabled: false,
-      setBusinessModeEnabled: (enabled) => set({ businessModeEnabled: enabled }),
-      setPassiveIncomeEnabled: (enabled) => set({ passiveIncomeEnabled: enabled }),
+      setBusinessModeEnabled: (enabled) =>
+        set({ businessModeEnabled: enabled }),
+      setPassiveIncomeEnabled: (enabled) =>
+        set({ passiveIncomeEnabled: enabled }),
       setLiveRatesEnabled: (enabled) => set({ liveRatesEnabled: enabled }),
       myChipColor: DEFAULT_MY_CHIP_COLOR,
       partnerChipColor: DEFAULT_PARTNER_CHIP_COLOR,
       setMyChipColor: (hex) =>
-        set({ myChipColor: sanitizeOwnerChipColor(hex, DEFAULT_MY_CHIP_COLOR) }),
+        set({
+          myChipColor: sanitizeOwnerChipColor(hex, DEFAULT_MY_CHIP_COLOR),
+        }),
       setPartnerChipColor: (hex) =>
         set({
-          partnerChipColor: sanitizeOwnerChipColor(hex, DEFAULT_PARTNER_CHIP_COLOR),
+          partnerChipColor: sanitizeOwnerChipColor(
+            hex,
+            DEFAULT_PARTNER_CHIP_COLOR,
+          ),
         }),
       entryOwner: "me",
       householdFilter: "all",
@@ -523,7 +569,8 @@ export const useStore = create<StoreState>()(
       pendingOdometerPrompt: null,
       budgetMonthStartDay: 1,
       statsPeriodOverride: null,
-      setStatsPeriodRange: (from, to) => set({ statsPeriodOverride: { from, to } }),
+      setStatsPeriodRange: (from, to) =>
+        set({ statsPeriodOverride: { from, to } }),
       resetStatsPeriod: () => set({ statsPeriodOverride: null }),
       setStatsPreviousBudgetPeriod: () => {
         const day = get().budgetMonthStartDay;
@@ -531,7 +578,8 @@ export const useStore = create<StoreState>()(
         set({ statsPeriodOverride: { from: prev.from, to: prev.to } });
       },
       planningPanelCollapsed: false,
-      setPlanningPanelCollapsed: (collapsed) => set({ planningPanelCollapsed: collapsed }),
+      setPlanningPanelCollapsed: (collapsed) =>
+        set({ planningPanelCollapsed: collapsed }),
       setMoneySetup: (setup) => {
         const pruned = pruneMoneySetupIds(
           normalizeMoneySetup(setup),
@@ -557,7 +605,9 @@ export const useStore = create<StoreState>()(
       addTransaction: (data, transcript, opts) => {
         const newId = makeId();
         set((state) => {
-          const personalizedCategories = enrichCategoriesWithAiMemory(state.categories);
+          const personalizedCategories = enrichCategoriesWithAiMemory(
+            state.categories,
+          );
           let normalized = normalizeIncoming(
             data,
             personalizedCategories,
@@ -581,7 +631,10 @@ export const useStore = create<StoreState>()(
               partnerKeywords: state.partnerKeywords,
               myName: state.userName,
               locale: state.locale,
-              hasPartner: hasPartnerBudget(state.partnerName, state.partnerKeywords),
+              hasPartner: hasPartnerBudget(
+                state.partnerName,
+                state.partnerKeywords,
+              ),
             },
             data.owner ?? state.entryOwner,
           );
@@ -595,7 +648,11 @@ export const useStore = create<StoreState>()(
               state.transactions,
               viewerId,
             );
-            const spender = spenderFromViewerOwner(viewerId, memberIds, viewerOwner);
+            const spender = spenderFromViewerOwner(
+              viewerId,
+              memberIds,
+              viewerOwner,
+            );
             owner = spender.owner;
             createdBy = spender.createdBy ?? undefined;
           } else if (!createdBy) {
@@ -637,19 +694,35 @@ export const useStore = create<StoreState>()(
               ? { odometerKm: Math.max(0, Math.round(data.odometerKm)) }
               : {}),
             ...(data.fuelLiters != null && Number.isFinite(data.fuelLiters)
-              ? { fuelLiters: Math.max(0, Math.round(data.fuelLiters * 100) / 100) }
+              ? {
+                  fuelLiters: Math.max(
+                    0,
+                    Math.round(data.fuelLiters * 100) / 100,
+                  ),
+                }
               : {}),
-            ...(data.transferPairId ? { transferPairId: data.transferPairId } : {}),
+            ...(data.transferPairId
+              ? { transferPairId: data.transferPairId }
+              : {}),
             ...(data.businessTxId ? { businessTxId: data.businessTxId } : {}),
           };
           let savingsGoals = state.savingsGoals;
           if (created.goalId && created.goalAmount) {
-            savingsGoals = applyGoalDelta(savingsGoals, created.goalId, created.goalAmount);
+            savingsGoals = applyGoalDelta(
+              savingsGoals,
+              created.goalId,
+              created.goalAmount,
+            );
           }
-          recordAiInputLearning(transcript, created, transcript ? "voice" : "text");
+          recordAiInputLearning(
+            transcript,
+            created,
+            transcript ? "voice" : "text",
+          );
           clearCachedMonthlyAnalysis();
           return {
-            trackingStartedAt: state.trackingStartedAt ?? new Date().toISOString(),
+            trackingStartedAt:
+              state.trackingStartedAt ?? new Date().toISOString(),
             reminderLastShownDate: new Date().toISOString().slice(0, 10),
             transactions: [created, ...state.transactions],
             savingsGoals,
@@ -657,10 +730,14 @@ export const useStore = create<StoreState>()(
         });
         const created = get().transactions.find((t) => t.id === newId) ?? null;
         if (created && created.confirmed !== false && !opts?.skipCloudPush) {
-          useCloudStore.getState().markTransactionUpdatePending(created.id, created.updatedAt);
+          useCloudStore
+            .getState()
+            .markTransactionUpdatePending(created.id, created.updatedAt);
           void cloudPushTransaction(created);
           if (created.goalId && created.goalAmount) {
-            const goal = get().savingsGoals.find((g) => g.id === created.goalId);
+            const goal = get().savingsGoals.find(
+              (g) => g.id === created.goalId,
+            );
             if (goal) void cloudPushGoal(goal);
           }
           applyVehicleAfterTransaction(get, set, created);
@@ -713,7 +790,9 @@ export const useStore = create<StoreState>()(
           vehiclePrefs: nextPrefs,
           pendingOdometerPrompt: null,
           lastFuelVehicleId:
-            get().lastFuelVehicleId === vehicleId ? null : get().lastFuelVehicleId,
+            get().lastFuelVehicleId === vehicleId
+              ? null
+              : get().lastFuelVehicleId,
         });
         if (nextVehicles.length === 0) void cloudDeleteGarage();
         else void cloudPushGarage(nextVehicles, nextPrefs);
@@ -750,7 +829,12 @@ export const useStore = create<StoreState>()(
         set({ vehiclePrefs });
         pushGarageFromState(get);
       },
-      submitOdometerForTransaction: (transactionId, vehicleId, odometerKm, fuelLiters) => {
+      submitOdometerForTransaction: (
+        transactionId,
+        vehicleId,
+        odometerKm,
+        fuelLiters,
+      ) => {
         const km = Math.max(0, Math.round(odometerKm));
         const liters =
           fuelLiters != null && Number.isFinite(fuelLiters)
@@ -770,11 +854,14 @@ export const useStore = create<StoreState>()(
         const vehicles = get().vehicles;
         const vehicle = vehicles.find((v) => v.id === vehicleId);
         if (vehicle) {
-          const isService = prompt?.kind === "service" || isVehicleServiceExpense(tx);
+          const isService =
+            prompt?.kind === "service" || isVehicleServiceExpense(tx);
           const nextVehicle = isService
             ? applyVehicleService(vehicle, km)
             : applyFuelOdometer(vehicle, km);
-          const nextVehicles = vehicles.map((v) => (v.id === vehicleId ? nextVehicle : v));
+          const nextVehicles = vehicles.map((v) =>
+            v.id === vehicleId ? nextVehicle : v,
+          );
           set({
             vehicles: nextVehicles,
             pendingOdometerPrompt: null,
@@ -800,8 +887,11 @@ export const useStore = create<StoreState>()(
         if (prev?.categoryId === GOAL_JAR_CATEGORY_ID) {
           const nextCat = patch.categoryId ?? prev.categoryId;
           const nextAmt =
-            patch.amount !== undefined && patch.amount > 0 ? patch.amount : prev.amount;
-          const nextGoalId = patch.goalId !== undefined ? patch.goalId : prev.goalId;
+            patch.amount !== undefined && patch.amount > 0
+              ? patch.amount
+              : prev.amount;
+          const nextGoalId =
+            patch.goalId !== undefined ? patch.goalId : prev.goalId;
           const nextGoalAmt =
             patch.goalAmount !== undefined
               ? normalizeGoalAmount(patch.goalAmount)
@@ -835,14 +925,19 @@ export const useStore = create<StoreState>()(
                 : tx.amount;
             const type = patch.type ?? tx.type;
             let categoryId = patch.categoryId ?? tx.categoryId;
-            const valid = categories.some((c) => c.id === categoryId && c.type === type);
+            const valid = categories.some(
+              (c) => c.id === categoryId && c.type === type,
+            );
             if (!valid) {
               categoryId = getFallbackCategoryId(type);
             }
             const owner = patch.owner ?? tx.owner;
-            const goalId = patch.goalId !== undefined ? patch.goalId : tx.goalId ?? null;
+            const goalId =
+              patch.goalId !== undefined ? patch.goalId : (tx.goalId ?? null);
             let goalAmount =
-              patch.goalAmount !== undefined ? patch.goalAmount : tx.goalAmount ?? null;
+              patch.goalAmount !== undefined
+                ? patch.goalAmount
+                : (tx.goalAmount ?? null);
             goalAmount = normalizeGoalAmount(goalAmount);
             if (!goalId || goalAmount <= 0) {
               goalAmount = null;
@@ -855,15 +950,17 @@ export const useStore = create<StoreState>()(
                 ? patch.odometerKm != null
                   ? Math.max(0, Math.round(patch.odometerKm))
                   : null
-                : tx.odometerKm ?? null;
+                : (tx.odometerKm ?? null);
             const fuelLiters =
               patch.fuelLiters !== undefined
                 ? patch.fuelLiters != null
                   ? Math.max(0, Math.round(patch.fuelLiters * 100) / 100)
                   : null
-                : tx.fuelLiters ?? null;
+                : (tx.fuelLiters ?? null);
             const vehicleId =
-              patch.vehicleId !== undefined ? patch.vehicleId : tx.vehicleId ?? null;
+              patch.vehicleId !== undefined
+                ? patch.vehicleId
+                : (tx.vehicleId ?? null);
             const note =
               patch.note !== undefined
                 ? sanitizeTransactionNote(patch.note, amount)
@@ -875,7 +972,9 @@ export const useStore = create<StoreState>()(
               type,
               owner,
               note,
-              ...(patch.createdBy !== undefined ? { createdBy: patch.createdBy } : {}),
+              ...(patch.createdBy !== undefined
+                ? { createdBy: patch.createdBy }
+                : {}),
               goalId: goalId && goalAmount ? goalId : null,
               goalAmount: goalId && goalAmount ? goalAmount : null,
               odometerKm,
@@ -886,7 +985,11 @@ export const useStore = create<StoreState>()(
             return updated;
           });
           if (updated?.goalId && updated.goalAmount) {
-            savingsGoals = applyGoalDelta(savingsGoals, updated.goalId, updated.goalAmount);
+            savingsGoals = applyGoalDelta(
+              savingsGoals,
+              updated.goalId,
+              updated.goalAmount,
+            );
           }
           return { transactions, savingsGoals };
         });
@@ -894,7 +997,9 @@ export const useStore = create<StoreState>()(
         if (after) {
           recordAiCorrectionLearning({ before: prev, after });
           clearCachedMonthlyAnalysis();
-          useCloudStore.getState().markTransactionUpdatePending(id, after.updatedAt);
+          useCloudStore
+            .getState()
+            .markTransactionUpdatePending(id, after.updatedAt);
           const goalIds = new Set<string>();
           if (prev?.goalId) goalIds.add(prev.goalId);
           if (after.goalId) goalIds.add(after.goalId);
@@ -920,18 +1025,24 @@ export const useStore = create<StoreState>()(
       deleteTransaction: (id, opts) => {
         const tx = get().transactions.find((t) => t.id === id);
         if (!opts?.skipBusinessLink && bottomNavEnabled()) {
-          void import("@/store/useBusinessStore").then(({ useBusinessStore }) => {
-            const biz = useBusinessStore.getState();
-            if (tx?.businessTxId) {
-              biz.removeTransaction(tx.businessTxId, { skipFamilyLink: true });
-            }
-            biz.removePassiveReceiptByFamilyTxId(id);
-          });
+          void import("@/store/useBusinessStore").then(
+            ({ useBusinessStore }) => {
+              const biz = useBusinessStore.getState();
+              if (tx?.businessTxId) {
+                biz.removeTransaction(tx.businessTxId, {
+                  skipFamilyLink: true,
+                });
+              }
+              biz.removePassiveReceiptByFamilyTxId(id);
+            },
+          );
         }
         const idsToDelete =
           tx && isPartnerTransferLike(tx)
             ? get()
-                .transactions.filter((t) => isPartnerTransferPairCandidate(tx, t))
+                .transactions.filter((t) =>
+                  isPartnerTransferPairCandidate(tx, t),
+                )
                 .map((t) => t.id)
             : [id];
         let goalAfterDelete: SavingsGoal | null = null;
@@ -944,10 +1055,13 @@ export const useStore = create<StoreState>()(
             primary?.goalAmount,
           );
           if (primary?.goalId) {
-            goalAfterDelete = savingsGoals.find((g) => g.id === primary.goalId) ?? null;
+            goalAfterDelete =
+              savingsGoals.find((g) => g.id === primary.goalId) ?? null;
           }
           return {
-            transactions: state.transactions.filter((t) => !deleteSet.has(t.id)),
+            transactions: state.transactions.filter(
+              (t) => !deleteSet.has(t.id),
+            ),
             savingsGoals,
           };
         });
@@ -977,10 +1091,15 @@ export const useStore = create<StoreState>()(
       },
       setEntryOwner: (entryOwner) => set({ entryOwner }),
       setHouseholdFilter: (householdFilter) => set({ householdFilter }),
-      setBudgetMonthStartDay: (day) => set({ budgetMonthStartDay: clampMonthStartDay(day) }),
+      setBudgetMonthStartDay: (day) =>
+        set({ budgetMonthStartDay: clampMonthStartDay(day) }),
       transferToPartner: (amount, direction) => {
         const amt = roundMoneyUp(amount);
-        if (amt <= 0 || !hasPartnerBudget(get().partnerName, get().partnerKeywords)) return false;
+        if (
+          amt <= 0 ||
+          !hasPartnerBudget(get().partnerName, get().partnerKeywords)
+        )
+          return false;
         const partnerLabel = get().partnerName?.trim() || "Партнёр";
         const pair = buildPartnerTransferPair(amt, direction, partnerLabel);
         const viewerId = ensureCloudViewerUserId();
@@ -993,7 +1112,11 @@ export const useStore = create<StoreState>()(
         const skip = { skipCloudPush: true as const };
         if (viewerId && partnerUserId) {
           if (direction === "to_partner") {
-            get().addTransaction({ ...pair.expense, owner: "me", createdBy: viewerId }, undefined, skip);
+            get().addTransaction(
+              { ...pair.expense, owner: "me", createdBy: viewerId },
+              undefined,
+              skip,
+            );
             get().addTransaction(
               { ...pair.income, owner: "partner", createdBy: partnerUserId },
               undefined,
@@ -1005,7 +1128,11 @@ export const useStore = create<StoreState>()(
               undefined,
               skip,
             );
-            get().addTransaction({ ...pair.income, owner: "me", createdBy: viewerId }, undefined, skip);
+            get().addTransaction(
+              { ...pair.income, owner: "me", createdBy: viewerId },
+              undefined,
+              skip,
+            );
           }
         } else {
           get().addTransaction(pair.expense, undefined, skip);
@@ -1013,17 +1140,22 @@ export const useStore = create<StoreState>()(
         }
         const pairId = pair.expense.transferPairId;
         if (pairId) {
-          const txs = get().transactions.filter((t) => t.transferPairId === pairId);
+          const txs = get().transactions.filter(
+            (t) => t.transferPairId === pairId,
+          );
           const expense = txs.find((t) => t.type === "expense");
           const income = txs.find((t) => t.type === "income");
-          if (expense && income) void cloudPushPartnerTransferPair(expense, income);
+          if (expense && income)
+            void cloudPushPartnerTransferPair(expense, income);
         }
         return true;
       },
       setActualCash: (owner, actualAmount) => {
         if (!Number.isFinite(actualAmount)) return;
         const actual = Math.round(actualAmount);
-        const txs = filterByHousehold(get().transactions, owner).filter(countsInBalance);
+        const txs = filterByHousehold(get().transactions, owner).filter(
+          countsInBalance,
+        );
         const computed = calcBalance(txs);
         const offset = actual - computed;
         if (owner === "me") {
@@ -1059,7 +1191,9 @@ export const useStore = create<StoreState>()(
             if (c.id !== id) return c;
             updated = {
               ...c,
-              labels: patch.labels ? { ...c.labels, ...patch.labels } : c.labels,
+              labels: patch.labels
+                ? { ...c.labels, ...patch.labels }
+                : c.labels,
               keywords: patch.keywords ?? c.keywords,
             };
             return updated;
@@ -1072,7 +1206,9 @@ export const useStore = create<StoreState>()(
         if (!cat) return false;
         const fallback = getFallbackCategoryId(cat.type);
         if (cat.id === fallback) return false;
-        const affectedTransactions = get().transactions.filter((tx) => tx.categoryId === id);
+        const affectedTransactions = get().transactions.filter(
+          (tx) => tx.categoryId === id,
+        );
         const archiveEntry = {
           id: `${id}-${Date.now().toString(36)}`,
           deletedAt: new Date().toISOString(),
@@ -1081,7 +1217,10 @@ export const useStore = create<StoreState>()(
           affectedTransactions,
         };
         set((state) => ({
-          deletedCategoryArchive: [archiveEntry, ...state.deletedCategoryArchive].slice(0, 50),
+          deletedCategoryArchive: [
+            archiveEntry,
+            ...state.deletedCategoryArchive,
+          ].slice(0, 50),
           categories: state.categories.filter((c) => c.id !== id),
           transactions: state.transactions.map((tx) =>
             tx.categoryId === id ? { ...tx, categoryId: fallback } : tx,
@@ -1101,15 +1240,27 @@ export const useStore = create<StoreState>()(
         return true;
       },
       restoreArchivedCategory: (archiveId) => {
-        const archive = get().deletedCategoryArchive.find((item) => item.id === archiveId);
+        const archive = get().deletedCategoryArchive.find(
+          (item) => item.id === archiveId,
+        );
         if (!archive) return false;
-        const existingCategory = get().categories.some((cat) => cat.id === archive.category.id);
-        const affectedIds = new Set(archive.affectedTransactions.map((tx) => tx.id));
+        const existingCategory = get().categories.some(
+          (cat) => cat.id === archive.category.id,
+        );
+        const affectedIds = new Set(
+          archive.affectedTransactions.map((tx) => tx.id),
+        );
         const restoredTxIds: string[] = [];
         set((state) => {
           const categories = existingCategory
             ? state.categories
-            : [...state.categories, { ...archive.category, keywords: [...archive.category.keywords] }];
+            : [
+                ...state.categories,
+                {
+                  ...archive.category,
+                  keywords: [...archive.category.keywords],
+                },
+              ];
           const transactions = state.transactions.map((tx) => {
             if (!affectedIds.has(tx.id)) return tx;
             restoredTxIds.push(tx.id);
@@ -1125,7 +1276,9 @@ export const useStore = create<StoreState>()(
         });
         void cloudPushCategory(archive.category);
         for (const id of restoredTxIds) {
-          void cloudPushTransactionUpdate(id, { categoryId: archive.category.id });
+          void cloudPushTransactionUpdate(id, {
+            categoryId: archive.category.id,
+          });
         }
         return true;
       },
@@ -1141,16 +1294,23 @@ export const useStore = create<StoreState>()(
             deletedAt: now,
             category: { ...cat, keywords: [...cat.keywords] },
             fallbackCategoryId: getFallbackCategoryId(cat.type),
-            affectedTransactions: get().transactions.filter((tx) => tx.categoryId === cat.id),
+            affectedTransactions: get().transactions.filter(
+              (tx) => tx.categoryId === cat.id,
+            ),
           }));
         set((state) => ({
           deletedCategoryArchive: [
             ...archivedCustom,
             ...state.deletedCategoryArchive,
           ].slice(0, 50),
-          categories: defaults.map((c) => ({ ...c, keywords: [...c.keywords] })),
+          categories: defaults.map((c) => ({
+            ...c,
+            keywords: [...c.keywords],
+          })),
           transactions: state.transactions.map((tx) =>
-            defaultIds.has(tx.categoryId) ? tx : { ...tx, categoryId: getFallbackCategoryId(tx.type) },
+            defaultIds.has(tx.categoryId)
+              ? tx
+              : { ...tx, categoryId: getFallbackCategoryId(tx.type) },
           ),
         }));
         for (const cat of defaults) void cloudPushCategory(cat);
@@ -1161,7 +1321,8 @@ export const useStore = create<StoreState>()(
       clearAll: () => set({ transactions: [], trackingStartedAt: null }),
       setReminderEnabled: (reminderEnabled) => set({ reminderEnabled }),
       setReminderTime: (reminderTime) => set({ reminderTime }),
-      setReminderWindowStart: (reminderWindowStart) => set({ reminderWindowStart }),
+      setReminderWindowStart: (reminderWindowStart) =>
+        set({ reminderWindowStart }),
       setReminderWindowEnd: (reminderWindowEnd) => set({ reminderWindowEnd }),
       markReminderShownToday: () =>
         set({ reminderLastShownDate: new Date().toISOString().slice(0, 10) }),
@@ -1175,7 +1336,8 @@ export const useStore = create<StoreState>()(
       },
       addGoal: (name, targetAmount, deadline = null) => {
         const trimmed = name.trim();
-        let id = slugifyCategoryId(trimmed) || `goal-${Date.now().toString(36)}`;
+        let id =
+          slugifyCategoryId(trimmed) || `goal-${Date.now().toString(36)}`;
         const { savingsGoals } = get();
         if (savingsGoals.some((g) => g.id === id)) {
           id = `${id}-${Date.now().toString(36).slice(-4)}`;
@@ -1209,7 +1371,8 @@ export const useStore = create<StoreState>()(
                 patch.targetAmount !== undefined
                   ? roundMoneyUp(Math.max(0, patch.targetAmount))
                   : g.targetAmount,
-              deadline: patch.deadline !== undefined ? patch.deadline : g.deadline,
+              deadline:
+                patch.deadline !== undefined ? patch.deadline : g.deadline,
               updatedAt: new Date().toISOString(),
             });
             return updated;
@@ -1224,7 +1387,9 @@ export const useStore = create<StoreState>()(
         const goal = get().savingsGoals.find((g) => g.id === id);
         if (!goal) return false;
         const before = get().transactions.length;
-        get().addTransaction(buildGoalDepositTransaction(goal, amt, get().entryOwner));
+        get().addTransaction(
+          buildGoalDepositTransaction(goal, amt, get().entryOwner),
+        );
         return get().transactions.length > before;
       },
       withdrawGoal: (id, amount) => {
@@ -1278,13 +1443,25 @@ export const useStore = create<StoreState>()(
         return true;
       },
       enableEmergencyFund: (months) => {
-        const existing = get().savingsGoals.find((g) => g.id === EMERGENCY_GOAL_ID);
+        const existing = get().savingsGoals.find(
+          (g) => g.id === EMERGENCY_GOAL_ID,
+        );
         const goal: SavingsGoal = existing
-          ? { ...existing, emergencyMonths: months, kind: "emergency", updatedAt: new Date().toISOString() }
-          : { ...defaultEmergencyGoal(months), updatedAt: new Date().toISOString() };
+          ? {
+              ...existing,
+              emergencyMonths: months,
+              kind: "emergency",
+              updatedAt: new Date().toISOString(),
+            }
+          : {
+              ...defaultEmergencyGoal(months),
+              updatedAt: new Date().toISOString(),
+            };
         set((state) => ({
           savingsGoals: existing
-            ? state.savingsGoals.map((g) => (g.id === EMERGENCY_GOAL_ID ? goal : g))
+            ? state.savingsGoals.map((g) =>
+                g.id === EMERGENCY_GOAL_ID ? goal : g,
+              )
             : [...state.savingsGoals, goal],
         }));
         void cloudPushGoal(goal);
@@ -1301,16 +1478,22 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
         set((state) => {
-          const rest = state.categoryBudgets.filter((b) => b.categoryId !== categoryId);
+          const rest = state.categoryBudgets.filter(
+            (b) => b.categoryId !== categoryId,
+          );
           return { categoryBudgets: [...rest, budget] };
         });
         void cloudPushCategoryBudget(budget);
       },
       removeCategoryBudget: (categoryId) => {
         set((state) => ({
-          categoryBudgets: state.categoryBudgets.filter((b) => b.categoryId !== categoryId),
+          categoryBudgets: state.categoryBudgets.filter(
+            (b) => b.categoryId !== categoryId,
+          ),
         }));
-        useCloudStore.getState().removeFromLastSyncedRemoteBudgetCategoryIds(categoryId);
+        useCloudStore
+          .getState()
+          .removeFromLastSyncedRemoteBudgetCategoryIds(categoryId);
         void cloudPushCategoryBudgetDelete(categoryId);
       },
       addRecurring: (data) => {
@@ -1341,7 +1524,9 @@ export const useStore = create<StoreState>()(
       },
       removeRecurring: (id) => {
         set((state) => ({
-          recurringTransactions: state.recurringTransactions.filter((r) => r.id !== id),
+          recurringTransactions: state.recurringTransactions.filter(
+            (r) => r.id !== id,
+          ),
           moneySetup: {
             ...pruneMoneySetupIds(
               state.moneySetup,
@@ -1379,14 +1564,21 @@ export const useStore = create<StoreState>()(
         set((state) => ({
           debts: state.debts.map((debt) => {
             if (debt.id !== id) return debt;
-            const next = { ...debt, ...patch, updatedAt: new Date().toISOString() };
+            const next = {
+              ...debt,
+              ...patch,
+              updatedAt: new Date().toISOString(),
+            };
             next.name = next.name.trim().slice(0, 80) || debt.name;
             next.balance = Math.max(0, roundMoneyUp(next.balance));
             next.minPayment = Math.max(0, roundMoneyUp(next.minPayment));
             next.ratePct =
               next.ratePct == null
                 ? null
-                : Math.max(0, Math.min(999, Math.round(next.ratePct * 10) / 10));
+                : Math.max(
+                    0,
+                    Math.min(999, Math.round(next.ratePct * 10) / 10),
+                  );
             next.nextPaymentDate = next.nextPaymentDate?.trim() || null;
             updated = next;
             return next;
@@ -1428,9 +1620,10 @@ export const useStore = create<StoreState>()(
           let runDate = item.nextRunDate;
           while (runDate <= today) {
             const transactions = get().transactions;
-            const exists = transactions.some(
-              (t) => t.recurringId === item.id && t.date === runDate,
-            ) || hasManualRecurringPayment(transactions, item, runDate);
+            const exists =
+              transactions.some(
+                (t) => t.recurringId === item.id && t.date === runDate,
+              ) || hasManualRecurringPayment(transactions, item, runDate);
             if (!exists) {
               const parsed = recurringToParsedTransaction(item, runDate);
               get().addTransaction({
@@ -1452,26 +1645,21 @@ export const useStore = create<StoreState>()(
         }
       },
       confirmPendingTransaction: (id) => {
-        const tx = get().transactions.find((t) => t.id === id);
-        if (!tx || tx.confirmed !== false) return false;
-        let updated: Transaction | null = null;
-        set((state) => ({
-          transactions: state.transactions.map((t) => {
-            if (t.id !== id) return t;
-            updated = { ...t, confirmed: true };
-            return updated;
-          }),
-        }));
-        if (updated) {
-          void cloudPushTransaction(updated);
+        const result = confirmPendingPaymentById(get().transactions, id);
+        if (!result.changed || !result.updatedTransaction) {
+          return false;
         }
-        return Boolean(updated);
+        set({ transactions: result.transactions });
+        void cloudPushTransaction(result.updatedTransaction);
+        return true;
       },
       dismissPendingTransaction: (id) => {
         const tx = get().transactions.find((t) => t.id === id);
         if (!tx || tx.confirmed !== false) return false;
         if (tx.recurringId) {
-          const item = get().recurringTransactions.find((r) => r.id === tx.recurringId);
+          const item = get().recurringTransactions.find(
+            (r) => r.id === tx.recurringId,
+          );
           if (item) {
             get().updateRecurring(item.id, {
               skippedDates: appendSkippedDate(item.skippedDates, tx.date),
@@ -1489,7 +1677,11 @@ export const useStore = create<StoreState>()(
       },
       applyPlanningInput: (action) => {
         if (action.kind === "goal_create") {
-          get().addGoal(action.name, action.targetAmount, action.deadline ?? null);
+          get().addGoal(
+            action.name,
+            action.targetAmount,
+            action.deadline ?? null,
+          );
           return true;
         }
         if (action.kind === "goal_deposit") {
@@ -1554,7 +1746,9 @@ export const useStore = create<StoreState>()(
         const transactions = rawTx.map((item) => {
           const tx = item as Transaction & { category?: string };
           const type = (tx.type ?? "expense") as TxType;
-          let categoryId = tx.categoryId ? migrateCategoryId(tx.categoryId) : undefined;
+          let categoryId = tx.categoryId
+            ? migrateCategoryId(tx.categoryId)
+            : undefined;
           if (!categoryId) {
             const legacy = tx.category ?? "";
             categoryId = legacy
@@ -1581,11 +1775,14 @@ export const useStore = create<StoreState>()(
           userName: typeof raw.userName === "string" ? raw.userName : null,
           userNameCustomized:
             Boolean(raw.userNameCustomized) ||
-            (typeof raw.userName === "string" && raw.userName.trim().length > 0),
-          partnerName: typeof raw.partnerName === "string" ? raw.partnerName : null,
+            (typeof raw.userName === "string" &&
+              raw.userName.trim().length > 0),
+          partnerName:
+            typeof raw.partnerName === "string" ? raw.partnerName : null,
           partnerNameCustomized:
             Boolean(raw.partnerNameCustomized) ||
-            (typeof raw.partnerName === "string" && raw.partnerName.trim().length > 0),
+            (typeof raw.partnerName === "string" &&
+              raw.partnerName.trim().length > 0),
           partnerKeywords: Array.isArray(raw.partnerKeywords)
             ? raw.partnerKeywords
                 .filter((k): k is string => typeof k === "string")
@@ -1600,7 +1797,9 @@ export const useStore = create<StoreState>()(
             DEFAULT_MY_CHIP_COLOR,
           ),
           partnerChipColor: sanitizeOwnerChipColor(
-            typeof raw.partnerChipColor === "string" ? raw.partnerChipColor : null,
+            typeof raw.partnerChipColor === "string"
+              ? raw.partnerChipColor
+              : null,
             DEFAULT_PARTNER_CHIP_COLOR,
           ),
           entryOwner: raw.entryOwner === "partner" ? "partner" : "me",
@@ -1609,10 +1808,13 @@ export const useStore = create<StoreState>()(
               ? raw.householdFilter
               : "all",
           trackingStartedAt:
-            typeof raw.trackingStartedAt === "string" ? raw.trackingStartedAt : null,
+            typeof raw.trackingStartedAt === "string"
+              ? raw.trackingStartedAt
+              : null,
           reminderEnabled: Boolean(raw.reminderEnabled),
           reminderTime:
-            typeof raw.reminderTime === "string" && /^\d{2}:\d{2}$/.test(raw.reminderTime)
+            typeof raw.reminderTime === "string" &&
+            /^\d{2}:\d{2}$/.test(raw.reminderTime)
               ? raw.reminderTime
               : "20:00",
           reminderWindowStart:
@@ -1621,11 +1823,14 @@ export const useStore = create<StoreState>()(
               ? raw.reminderWindowStart
               : "18:00",
           reminderWindowEnd:
-            typeof raw.reminderWindowEnd === "string" && /^\d{2}:\d{2}$/.test(raw.reminderWindowEnd)
+            typeof raw.reminderWindowEnd === "string" &&
+            /^\d{2}:\d{2}$/.test(raw.reminderWindowEnd)
               ? raw.reminderWindowEnd
               : "22:00",
           reminderLastShownDate:
-            typeof raw.reminderLastShownDate === "string" ? raw.reminderLastShownDate : null,
+            typeof raw.reminderLastShownDate === "string"
+              ? raw.reminderLastShownDate
+              : null,
           savingsGoals: Array.isArray(raw.savingsGoals)
             ? (raw.savingsGoals as SavingsGoal[]).map((g) =>
                 applyGoalMonthlyToGoal({
@@ -1638,41 +1843,68 @@ export const useStore = create<StoreState>()(
             ? (raw.categoryBudgets as CategoryBudget[])
             : [],
           recurringTransactions: Array.isArray(raw.recurringTransactions)
-            ? (raw.recurringTransactions as RecurringTransaction[]).map((r) => ({
-                ...r,
-                skippedDates: Array.isArray(r.skippedDates) ? r.skippedDates : [],
-                intervalMonths:
-                  r.frequency === "monthly"
-                    ? Math.max(1, Math.min(60, Math.round(Number(r.intervalMonths) || 1)))
-                    : null,
-              }))
+            ? (raw.recurringTransactions as RecurringTransaction[]).map(
+                (r) => ({
+                  ...r,
+                  skippedDates: Array.isArray(r.skippedDates)
+                    ? r.skippedDates
+                    : [],
+                  intervalMonths:
+                    r.frequency === "monthly"
+                      ? Math.max(
+                          1,
+                          Math.min(
+                            60,
+                            Math.round(Number(r.intervalMonths) || 1),
+                          ),
+                        )
+                      : null,
+                }),
+              )
             : [],
           debts: Array.isArray(raw.debts)
             ? (raw.debts as DebtItem[])
-                .filter((d) => d && typeof d.id === "string" && typeof d.name === "string")
+                .filter(
+                  (d) =>
+                    d && typeof d.id === "string" && typeof d.name === "string",
+                )
                 .map((d) => ({
                   ...d,
                   owner:
-                    d.owner === "me" || d.owner === "partner" || d.owner === "all"
+                    d.owner === "me" ||
+                    d.owner === "partner" ||
+                    d.owner === "all"
                       ? d.owner
                       : "all",
                   balance: Math.max(0, roundMoneyUp(Number(d.balance) || 0)),
-                  minPayment: Math.max(0, roundMoneyUp(Number(d.minPayment) || 0)),
+                  minPayment: Math.max(
+                    0,
+                    roundMoneyUp(Number(d.minPayment) || 0),
+                  ),
                   ratePct:
                     d.ratePct == null || Number.isNaN(Number(d.ratePct))
                       ? null
-                      : Math.max(0, Math.min(999, Math.round(Number(d.ratePct) * 10) / 10)),
+                      : Math.max(
+                          0,
+                          Math.min(
+                            999,
+                            Math.round(Number(d.ratePct) * 10) / 10,
+                          ),
+                        ),
                   nextPaymentDate:
                     typeof d.nextPaymentDate === "string" && d.nextPaymentDate
                       ? d.nextPaymentDate
                       : null,
-                  strategy: d.strategy === "snowball" ? "snowball" : "avalanche",
+                  strategy:
+                    d.strategy === "snowball" ? "snowball" : "avalanche",
                   priority: d.priority === "high" ? "high" : "normal",
                 }))
             : [],
           moneySetup: normalizeMoneySetup(raw.moneySetup),
           deletedCategoryArchive: Array.isArray(raw.deletedCategoryArchive)
-            ? (raw.deletedCategoryArchive as StoreState["deletedCategoryArchive"])
+            ? (
+                raw.deletedCategoryArchive as StoreState["deletedCategoryArchive"]
+              )
                 .filter(
                   (item) =>
                     item &&
@@ -1684,12 +1916,15 @@ export const useStore = create<StoreState>()(
                 .slice(0, 50)
             : [],
           budgetMonthStartDay: clampMonthStartDay(
-            typeof raw.budgetMonthStartDay === "number" ? raw.budgetMonthStartDay : 1,
+            typeof raw.budgetMonthStartDay === "number"
+              ? raw.budgetMonthStartDay
+              : 1,
           ),
           statsPeriodOverride:
             raw.statsPeriodOverride &&
             typeof raw.statsPeriodOverride === "object" &&
-            typeof (raw.statsPeriodOverride as { from?: string }).from === "string" &&
+            typeof (raw.statsPeriodOverride as { from?: string }).from ===
+              "string" &&
             typeof (raw.statsPeriodOverride as { to?: string }).to === "string"
               ? {
                   from: (raw.statsPeriodOverride as { from: string }).from,
@@ -1700,7 +1935,9 @@ export const useStore = create<StoreState>()(
           cashOffsetMe: 0,
           cashOffsetPartner: 0,
           planningPanelCollapsed:
-            typeof raw.planningPanelCollapsed === "boolean" ? raw.planningPanelCollapsed : false,
+            typeof raw.planningPanelCollapsed === "boolean"
+              ? raw.planningPanelCollapsed
+              : false,
           vehicles: Array.isArray(raw.vehicles)
             ? normalizeVehicles(raw.vehicles)
             : raw.vehicle && typeof raw.vehicle === "object"
@@ -1711,18 +1948,24 @@ export const useStore = create<StoreState>()(
               ? normalizeVehicleGaragePrefs(raw.vehiclePrefs)
               : defaultVehicleGaragePrefs(),
           lastFuelVehicleId:
-            typeof raw.lastFuelVehicleId === "string" ? raw.lastFuelVehicleId : null,
+            typeof raw.lastFuelVehicleId === "string"
+              ? raw.lastFuelVehicleId
+              : null,
           pendingOdometerPrompt: null,
         };
       },
       onRehydrateStorage: () => (state, error) => {
         if (error) {
-          console.warn("[voicebudget-store] rehydrate failed, keeping cloud session", error);
+          console.warn(
+            "[voicebudget-store] rehydrate failed, keeping cloud session",
+            error,
+          );
         } else if (state) {
           if (typeof window !== "undefined") {
             try {
               if (
-                localStorage.getItem("voicebudget-planning-panel-hidden") === "1" &&
+                localStorage.getItem("voicebudget-planning-panel-hidden") ===
+                  "1" &&
                 !state.planningPanelCollapsed
               ) {
                 state.planningPanelCollapsed = true;
@@ -1746,9 +1989,11 @@ export const useStore = create<StoreState>()(
             state.categories ?? [],
           );
         }
-        void import("@/lib/cloud/apply-balance-offsets").then(({ applyBalanceOffsetsFromCloud }) => {
-          applyBalanceOffsetsFromCloud();
-        });
+        void import("@/lib/cloud/apply-balance-offsets").then(
+          ({ applyBalanceOffsetsFromCloud }) => {
+            applyBalanceOffsetsFromCloud();
+          },
+        );
       },
     },
   ),
@@ -1764,13 +2009,18 @@ export function useViewerMappedTransactions(forBalance = false): Transaction[] {
   const storedMemberIds = useCloudStore((s) => s.householdMemberUserIds);
 
   return useMemo(() => {
-    const viewerUserId = decodeUserIdFromHouseholdToken(token) ?? cloudUserId ?? null;
+    const viewerUserId =
+      decodeUserIdFromHouseholdToken(token) ?? cloudUserId ?? null;
     const memberIds = collectHouseholdMemberUserIds(
       storedMemberIds,
       transactions,
       viewerUserId,
     );
-    let list = mapTransactionsForViewer(transactions, viewerUserId, memberIds).map(withOwner);
+    let list = mapTransactionsForViewer(
+      transactions,
+      viewerUserId,
+      memberIds,
+    ).map(withOwner);
     if (forBalance) list = list.filter(countsInHouseholdTotal);
     return list;
   }, [transactions, cloudUserId, token, storedMemberIds, forBalance]);
@@ -1787,10 +2037,14 @@ function computedOwnerBalanceFromTxs(
   viewerTxs: Transaction[],
   owner: "me" | "partner",
 ): number {
-  return calcBalance(viewerTxs.filter((tx) => tx.owner === owner && countsInBalance(tx)));
+  return calcBalance(
+    viewerTxs.filter((tx) => tx.owner === owner && countsInBalance(tx)),
+  );
 }
 
-export function useComputedBalance(owner: "me" | "partner" | "all" = "all"): number {
+export function useComputedBalance(
+  owner: "me" | "partner" | "all" = "all",
+): number {
   const viewerTxs = useViewerMappedTransactions(false);
   return useMemo(() => {
     if (owner === "all") {
@@ -1826,7 +2080,8 @@ export function useHouseholdBalances() {
 
   return useMemo(() => {
     const me = computedOwnerBalanceFromTxs(viewerTxs, "me") + cashOffsetMe;
-    const partner = computedOwnerBalanceFromTxs(viewerTxs, "partner") + cashOffsetPartner;
+    const partner =
+      computedOwnerBalanceFromTxs(viewerTxs, "partner") + cashOffsetPartner;
     return { all: me + partner, me, partner };
   }, [viewerTxs, cashOffsetMe, cashOffsetPartner]);
 }
@@ -1834,6 +2089,13 @@ export function useHouseholdBalances() {
 export type OwnerTypeTotals = {
   me: { income: number; expense: number };
   partner: { income: number; expense: number };
+};
+
+export type PeriodCategoryBreakdownRow = {
+  categoryId: string;
+  category: string;
+  value: number;
+  count: number;
 };
 
 export function useOwnerTypeTotals(days = 30): OwnerTypeTotals {
@@ -1897,30 +2159,69 @@ export function usePeriodOwnerTotals(): OwnerTypeTotals {
 export function usePeriodTypeCategoryBreakdown(
   type: TxType,
   ownerFilter: HouseholdFilter = "all",
-): { category: string; value: number }[] {
+): PeriodCategoryBreakdownRow[] {
   const viewerTxs = useViewerTransactionsForOwnerStats();
   const categories = useCategories();
   const locale = useStore((s) => s.locale);
   const period = useStatsPeriod();
 
   return useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, PeriodCategoryBreakdownRow>();
 
     viewerTxs.forEach((tx) => {
       if (tx.type !== type) return;
       if (!isDateInBudgetPeriod(tx.date, period)) return;
       if (ownerFilter !== "all" && tx.owner !== ownerFilter) return;
       const label = getCategoryLabel(tx.categoryId, categories, locale);
-      map.set(label, (map.get(label) ?? 0) + tx.amount);
+      const current = map.get(tx.categoryId);
+      if (current) {
+        current.value += tx.amount;
+        current.count += 1;
+        return;
+      }
+      map.set(tx.categoryId, {
+        categoryId: tx.categoryId,
+        category: label,
+        value: tx.amount,
+        count: 1,
+      });
     });
 
-    return Array.from(map.entries())
-      .map(([category, value]) => ({ category, value }))
-      .sort((a, b) => b.value - a.value);
+    return Array.from(map.values()).sort((a, b) => b.value - a.value);
   }, [viewerTxs, categories, locale, period, type, ownerFilter]);
 }
 
-export function usePeriodCategoryBreakdown(): { category: string; value: number }[] {
+export function usePeriodCategoryTransactions(
+  type: TxType,
+  ownerFilter: HouseholdFilter = "all",
+  categoryId: string | null = null,
+): Transaction[] {
+  const viewerTxs = useViewerTransactionsForOwnerStats();
+  const period = useStatsPeriod();
+
+  return useMemo(() => {
+    if (!categoryId) return [];
+    return viewerTxs
+      .filter((tx) => tx.type === type)
+      .filter((tx) => (ownerFilter === "all" ? true : tx.owner === ownerFilter))
+      .filter((tx) => tx.categoryId === categoryId)
+      .filter((tx) => isDateInBudgetPeriod(tx.date, period))
+      .sort((left, right) => {
+        const byDate = right.date.localeCompare(left.date);
+        if (byDate !== 0) return byDate;
+        const byUpdated = (right.updatedAt ?? "").localeCompare(
+          left.updatedAt ?? "",
+        );
+        if (byUpdated !== 0) return byUpdated;
+        return right.id.localeCompare(left.id);
+      });
+  }, [viewerTxs, period, type, ownerFilter, categoryId]);
+}
+
+export function usePeriodCategoryBreakdown(): {
+  category: string;
+  value: number;
+}[] {
   const viewerTxs = useViewerMappedTransactions(true);
   const categories = useCategories();
   const locale = useStore((s) => s.locale);
@@ -2031,7 +2332,9 @@ export function useOwnerExpenseBreakdown(
   }, [viewerTxs, categories, locale, days, owner]);
 }
 
-export function useCategoryBreakdown(days = 30): { category: string; value: number }[] {
+export function useCategoryBreakdown(
+  days = 30,
+): { category: string; value: number }[] {
   const viewerTxs = useViewerMappedTransactions(true);
   const categories = useCategories();
   const locale = useStore((s) => s.locale);
@@ -2046,7 +2349,9 @@ export function useCategoryBreakdown(days = 30): { category: string; value: numb
         : viewerTxs.filter((tx) => tx.owner === householdFilter);
 
     list
-      .filter((tx) => tx.type === "expense" && new Date(tx.date).getTime() >= cutoff)
+      .filter(
+        (tx) => tx.type === "expense" && new Date(tx.date).getTime() >= cutoff,
+      )
       .forEach((tx) => {
         const label = getCategoryLabel(tx.categoryId, categories, locale);
         map.set(label, (map.get(label) ?? 0) + tx.amount);

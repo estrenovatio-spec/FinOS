@@ -82,7 +82,13 @@ function withVoiceTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export function VoiceRecorder({ compact = false }: { compact?: boolean } = {}) {
+export function VoiceRecorder({
+  compact = false,
+  onSubmitted,
+}: {
+  compact?: boolean;
+  onSubmitted?: () => void;
+} = {}) {
   const locale = useStore((s) => s.locale);
   const categories = useStore((s) => s.categories);
   const savingsGoals = useStore((s) => s.savingsGoals);
@@ -166,6 +172,7 @@ export function VoiceRecorder({ compact = false }: { compact?: boolean } = {}) {
         } else {
           toast(t(locale, "planningInputSuccess"), "success");
         }
+        onSubmitted?.();
         return;
       }
 
@@ -219,6 +226,7 @@ export function VoiceRecorder({ compact = false }: { compact?: boolean } = {}) {
             } else {
               toast(t(locale, "planningInputSuccess"), "success");
             }
+            onSubmitted?.();
             return;
           }
         }
@@ -272,6 +280,7 @@ export function VoiceRecorder({ compact = false }: { compact?: boolean } = {}) {
           "success",
         );
       }
+      onSubmitted?.();
     } finally {
       setBusy(false);
     }
@@ -285,6 +294,7 @@ export function VoiceRecorder({ compact = false }: { compact?: boolean } = {}) {
     partnerKeywords,
     savingsGoals,
     comment,
+    onSubmitted,
     toast,
     userName,
   ]);

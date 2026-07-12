@@ -2,30 +2,30 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { AppBottomNav } from "@/components/app/AppBottomNav";
-import { BusinessTab } from "@/components/app/BusinessTab";
-import { MoreTab } from "@/components/app/MoreTab";
 import {
   readStoredAppTab,
   writeStoredAppTab,
   type AppTabId,
 } from "@/lib/app-bottom-nav";
-import { useStore } from "@/store/useStore";
 
-export function AppTabShell({ familyContent }: { familyContent: ReactNode }) {
-  const [tab, setTab] = useState<AppTabId>("home");
-  const businessModeEnabled = useStore((s) => s.businessModeEnabled);
-  const showBusinessTab = businessModeEnabled;
+export function AppTabShell({
+  todayContent,
+  operationsContent,
+  forecastContent,
+  recurringContent,
+  settingsContent,
+}: {
+  todayContent: ReactNode;
+  operationsContent: ReactNode;
+  forecastContent: ReactNode;
+  recurringContent: ReactNode;
+  settingsContent: ReactNode;
+}) {
+  const [tab, setTab] = useState<AppTabId>("today");
 
   useEffect(() => {
     setTab(readStoredAppTab());
   }, []);
-
-  useEffect(() => {
-    if (showBusinessTab) return;
-    if (tab !== "business") return;
-    setTab("home");
-    writeStoredAppTab("home");
-  }, [showBusinessTab, tab]);
 
   const changeTab = (next: AppTabId) => {
     setTab(next);
@@ -35,11 +35,11 @@ export function AppTabShell({ familyContent }: { familyContent: ReactNode }) {
   return (
     <>
       <div className="min-h-0 flex-1">
-        {tab === "home" ? familyContent : null}
-        {tab === "operations" ? familyContent : null}
-        {tab === "advisor" ? familyContent : null}
-        {tab === "business" && showBusinessTab ? <BusinessTab /> : null}
-        {tab === "more" ? <MoreTab /> : null}
+        {tab === "today" ? todayContent : null}
+        {tab === "operations" ? operationsContent : null}
+        {tab === "forecast" ? forecastContent : null}
+        {tab === "recurring" ? recurringContent : null}
+        {tab === "settings" ? settingsContent : null}
       </div>
       <AppBottomNav active={tab} onChange={changeTab} />
     </>

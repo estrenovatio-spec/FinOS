@@ -1,4 +1,9 @@
-export type AppTabId = "home" | "operations" | "advisor" | "business" | "more";
+export type AppTabId =
+  | "today"
+  | "operations"
+  | "forecast"
+  | "recurring"
+  | "settings";
 
 const TAB_STORAGE_KEY = "vb_app_tab_v1";
 
@@ -8,26 +13,28 @@ export function bottomNavEnabled(): boolean {
 }
 
 export function readStoredAppTab(): AppTabId {
-  if (typeof window === "undefined") return "home";
+  if (typeof window === "undefined") return "today";
   const requested = readRequestedAppTab();
   if (requested) return requested;
   try {
     const raw = sessionStorage.getItem(TAB_STORAGE_KEY);
     if (
-      raw === "home" ||
+      raw === "today" ||
       raw === "operations" ||
-      raw === "advisor" ||
-      raw === "business" ||
-      raw === "more"
+      raw === "forecast" ||
+      raw === "recurring" ||
+      raw === "settings"
     ) {
       return raw;
     }
-    if (raw === "family") return "home";
-    if (raw === "learn") return "advisor";
+    if (raw === "home" || raw === "family") return "today";
+    if (raw === "advisor" || raw === "learn") return "forecast";
+    if (raw === "business") return "recurring";
+    if (raw === "more") return "settings";
   } catch {
     /* ignore */
   }
-  return "home";
+  return "today";
 }
 
 export function readRequestedAppTab(): AppTabId | null {
@@ -35,16 +42,18 @@ export function readRequestedAppTab(): AppTabId | null {
   try {
     const raw = new URLSearchParams(window.location.search).get("tab");
     if (
-      raw === "home" ||
+      raw === "today" ||
       raw === "operations" ||
-      raw === "advisor" ||
-      raw === "business" ||
-      raw === "more"
+      raw === "forecast" ||
+      raw === "recurring" ||
+      raw === "settings"
     ) {
       return raw;
     }
-    if (raw === "family") return "home";
-    if (raw === "learn") return "advisor";
+    if (raw === "home" || raw === "family") return "today";
+    if (raw === "advisor" || raw === "learn") return "forecast";
+    if (raw === "business") return "recurring";
+    if (raw === "more") return "settings";
   } catch {
     /* ignore */
   }

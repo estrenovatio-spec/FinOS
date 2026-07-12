@@ -1,11 +1,10 @@
 "use client";
 
 import {
-  BriefcaseBusiness,
-  Ellipsis,
-  House,
-  Bot,
+  CalendarSync,
   ChartColumn,
+  House,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import type { AppTabId } from "@/lib/app-bottom-nav";
@@ -14,7 +13,7 @@ import { useStore } from "@/store/useStore";
 
 const TABS: {
   id: AppTabId;
-  icon: LucideIcon | null;
+  icon: LucideIcon;
   labelKey:
     | "appTabHome"
     | "appTabSummary"
@@ -22,11 +21,11 @@ const TABS: {
     | "appTabBusiness"
     | "appTabMore";
 }[] = [
-  { id: "home", icon: House, labelKey: "appTabHome" },
+  { id: "today", icon: House, labelKey: "appTabHome" },
   { id: "operations", icon: ChartColumn, labelKey: "appTabSummary" },
-  { id: "advisor", icon: Bot, labelKey: "appTabAdvisor" },
-  { id: "business", icon: BriefcaseBusiness, labelKey: "appTabBusiness" },
-  { id: "more", icon: Ellipsis, labelKey: "appTabMore" },
+  { id: "forecast", icon: ChartColumn, labelKey: "appTabAdvisor" },
+  { id: "recurring", icon: CalendarSync, labelKey: "appTabBusiness" },
+  { id: "settings", icon: Settings, labelKey: "appTabMore" },
 ];
 
 export function AppBottomNav({
@@ -37,9 +36,6 @@ export function AppBottomNav({
   onChange: (tab: AppTabId) => void;
 }) {
   const locale = useStore((s) => s.locale);
-  const businessModeEnabled = useStore((s) => s.businessModeEnabled);
-  const showBusinessTab = businessModeEnabled;
-  const tabs = showBusinessTab ? TABS : TABS.filter((tab) => tab.id !== "business");
 
   return (
     <nav
@@ -47,8 +43,8 @@ export function AppBottomNav({
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
       aria-label={t(locale, "appBottomNavAria")}
     >
-      <div className={`mx-auto grid max-w-lg ${showBusinessTab ? "grid-cols-5" : "grid-cols-4"}`}>
-        {tabs.map(({ id, icon: Icon, labelKey }) => {
+      <div className="mx-auto grid max-w-lg grid-cols-5">
+        {TABS.map(({ id, icon: Icon, labelKey }) => {
           const selected = active === id;
           return (
             <button
@@ -63,7 +59,7 @@ export function AppBottomNav({
               ].join(" ")}
               aria-current={selected ? "page" : undefined}
             >
-              {Icon ? <Icon className="h-5 w-5 shrink-0" aria-hidden /> : null}
+              <Icon className="h-5 w-5 shrink-0" aria-hidden />
               <span className="max-w-full truncate">{t(locale, labelKey)}</span>
             </button>
           );

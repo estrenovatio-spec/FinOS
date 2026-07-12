@@ -1,28 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { AppBottomNav } from "@/components/app/AppBottomNav";
-import { BusinessTab } from "@/components/app/BusinessTab";
-import { MoreTab } from "@/components/app/MoreTab";
 import { useBusinessCloudSync } from "@/hooks/useBusinessCloudSync";
 import { type AppTabId, writeStoredAppTab } from "@/lib/app-bottom-nav";
-import { useStore } from "@/store/useStore";
 
-/** Preview: семья как на проде + переключение вкладок через шапку/нижний nav. */
 export function PreviewAppShell({
-  homeContent,
+  todayContent,
   operationsContent,
-  advisorContent,
+  forecastContent,
+  recurringContent,
+  settingsContent,
   previewNav,
 }: {
-  homeContent: ReactNode;
+  todayContent: ReactNode;
   operationsContent: ReactNode;
-  advisorContent: ReactNode;
+  forecastContent: ReactNode;
+  recurringContent: ReactNode;
+  settingsContent: ReactNode;
   previewNav: { active: AppTabId; onChange: (tab: AppTabId) => void };
-  }) {
+}) {
   const { active, onChange } = previewNav;
-  const businessModeEnabled = useStore((s) => s.businessModeEnabled);
-  const showBusinessTab = businessModeEnabled;
 
   useBusinessCloudSync();
 
@@ -34,21 +32,15 @@ export function PreviewAppShell({
     [onChange],
   );
 
-  useEffect(() => {
-    if (showBusinessTab) return;
-    if (active !== "business") return;
-    changeTab("home");
-  }, [active, changeTab, showBusinessTab]);
-
   return (
     <>
-      {active === "home" ? <div className="space-y-2">{homeContent}</div> : null}
-      {active === "operations" ? <div className="space-y-2">{operationsContent}</div> : null}
-      {active === "advisor" ? <div className="space-y-2">{advisorContent}</div> : null}
-      {active === "business" && showBusinessTab ? (
-        <BusinessTab />
+      {active === "today" ? <div className="space-y-2">{todayContent}</div> : null}
+      {active === "operations" ? (
+        <div className="space-y-2">{operationsContent}</div>
       ) : null}
-      {active === "more" ? <MoreTab /> : null}
+      {active === "forecast" ? <div className="space-y-2">{forecastContent}</div> : null}
+      {active === "recurring" ? <div className="space-y-2">{recurringContent}</div> : null}
+      {active === "settings" ? <div className="space-y-2">{settingsContent}</div> : null}
       <AppBottomNav active={active} onChange={changeTab} />
     </>
   );

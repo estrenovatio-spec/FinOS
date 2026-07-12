@@ -49,7 +49,10 @@ const parsedManySchema = z.object({
 
 type ParsedItem = z.infer<typeof parsedItemSchema>;
 
-function emptyFallback(locale: Locale, categories: CategoryDefinition[]): ParsedTransaction {
+function emptyFallback(
+  locale: Locale,
+  categories: CategoryDefinition[],
+): ParsedTransaction {
   return fallbackParse("", locale, categories);
 }
 
@@ -63,8 +66,12 @@ function itemToParsedTransaction(
   const normalized = {
     ...item,
     currency: APP_CURRENCY,
-    note: sanitizeTransactionNote(item.note?.trim() || clause.slice(0, 120), item.amount),
-    date: item.date && /^\d{4}-\d{2}-\d{2}$/.test(item.date) ? item.date : today,
+    note: sanitizeTransactionNote(
+      item.note?.trim() || clause.slice(0, 120),
+      item.amount,
+    ),
+    date:
+      item.date && /^\d{4}-\d{2}-\d{2}$/.test(item.date) ? item.date : today,
   };
   return normalizeAiParsed(normalized, clause, categories, locale);
 }
@@ -117,8 +124,23 @@ function expandSeparatedAmountItems(
   return amounts.map((amount) => ({
     ...items[0],
     amount,
-    note: sanitizeTransactionNote(items[0].note || fullText.slice(0, 120), amount),
+    note: sanitizeTransactionNote(
+      items[0].note || fullText.slice(0, 120),
+      amount,
+    ),
   }));
+}
+
+function splitSingleParsedItemAcrossClauses(
+  items: ParsedTransaction[],
+  fullText: string,
+  locale: Locale,
+  categories: CategoryDefinition[],
+): ParsedTransaction[] {
+  const clauses = splitTranscriptClauses(fullText);
+  if (items.length !== 1 || clauses.length <= 1) return items;
+  const fallbackItems = fallbackParseMany(fullText, locale, categories);
+  return fallbackItems.length > 1 ? fallbackItems : items;
 }
 
 export async function parseTranscriptServerMany(
@@ -140,22 +162,34 @@ export async function parseTranscriptServerMany(
     applyOwnersToItems(items, text, ownerOpts);
 
   if (!text) {
-    return { items: withOwner([emptyFallback(locale, categories)]), fallback: true };
+    return {
+      items: withOwner([emptyFallback(locale, categories)]),
+      fallback: true,
+    };
   }
 
   const clauses = splitTranscriptClauses(text);
 
   if (clauses.length > BULK_LIST_THRESHOLD) {
-    return { items: withOwner(fallbackParseMany(text, locale, categories)), fallback: true };
+    return {
+      items: withOwner(fallbackParseMany(text, locale, categories)),
+      fallback: true,
+    };
   }
 
   if (!isLlmConfigured()) {
-    return { items: withOwner(fallbackParseMany(text, locale, categories)), fallback: true };
+    return {
+      items: withOwner(fallbackParseMany(text, locale, categories)),
+      fallback: true,
+    };
   }
 
   const openai = getLlmClient();
   if (!openai) {
-    return { items: withOwner(fallbackParseMany(text, locale, categories)), fallback: true };
+    return {
+      items: withOwner(fallbackParseMany(text, locale, categories)),
+      fallback: true,
+    };
   }
 
   try {
@@ -188,16 +222,24 @@ export async function parseTranscriptServerMany(
     const raw: unknown = extractJsonFromLlmContent(content);
     const parsedItems = extractParsedItems(raw);
 
-    const items = expandSeparatedAmountItems(parsedItems
-      .map((item, index) =>
-        itemToParsedTransaction(
-          item,
-          clauses[index] ?? item.note?.trim() ?? text,
-          locale,
-          categories,
-        ),
-      )
-      .filter((item) => item.amount > 0), text);
+    const items = expandSeparatedAmountItems(
+      splitSingleParsedItemAcrossClauses(
+        parsedItems
+          .map((item, index) =>
+            itemToParsedTransaction(
+              item,
+              clauses[index] ?? item.note?.trim() ?? text,
+              locale,
+              categories,
+            ),
+          )
+          .filter((item) => item.amount > 0),
+        text,
+        locale,
+        categories,
+      ),
+      text,
+    );
 
     if (items.length === 0) throw new Error("No valid transactions");
 
@@ -208,7 +250,10 @@ export async function parseTranscriptServerMany(
       baseUrl: getLlmBaseUrl() ?? "(official OpenAI)",
       model: getLlmModel(),
     });
-    return { items: withOwner(fallbackParseMany(text, locale, categories)), fallback: true };
+    return {
+      items: withOwner(fallbackParseMany(text, locale, categories)),
+      fallback: true,
+    };
   }
 }
 

@@ -1,11 +1,10 @@
 "use client";
 
 import {
-  BriefcaseBusiness,
-  Ellipsis,
-  House,
-  Bot,
+  CalendarSync,
   ChartColumn,
+  House,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AppTabId } from "@/lib/app-bottom-nav";
@@ -20,19 +19,17 @@ export function PreviewHeaderNav({
   onChange: (tab: AppTabId) => void;
 }) {
   const locale = useStore((s) => s.locale);
-  const businessModeEnabled = useStore((s) => s.businessModeEnabled);
-  const showBusinessTab = businessModeEnabled;
 
   return (
     <div className="flex items-center gap-1">
-      {active !== "home" ? (
+      {active !== "today" ? (
         <Button
           type="button"
           variant="outline"
           size="icon"
           className="h-8 w-8 shrink-0"
           aria-label={t(locale, "appTabHome")}
-          onClick={() => onChange("home")}
+          onClick={() => onChange("today")}
         >
           <House className="h-4 w-4" aria-hidden />
         </Button>
@@ -51,38 +48,36 @@ export function PreviewHeaderNav({
       </Button>
       <Button
         type="button"
-        variant={active === "advisor" ? "default" : "outline"}
+        variant={active === "forecast" ? "default" : "outline"}
         size="icon"
         className="h-8 w-8 shrink-0"
         aria-label={t(locale, "appTabAdvisor")}
-        aria-current={active === "advisor" ? "page" : undefined}
-        onClick={() => onChange("advisor")}
+        aria-current={active === "forecast" ? "page" : undefined}
+        onClick={() => onChange("forecast")}
       >
-        <Bot className="h-4 w-4" aria-hidden />
+        <ChartColumn className="h-4 w-4" aria-hidden />
       </Button>
-      {showBusinessTab ? (
-        <Button
-          type="button"
-          variant={active === "business" ? "default" : "outline"}
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          aria-label={t(locale, "appTabBusiness")}
-          aria-current={active === "business" ? "page" : undefined}
-          onClick={() => onChange("business")}
-        >
-          <BriefcaseBusiness className="h-4 w-4" aria-hidden />
-        </Button>
-      ) : null}
       <Button
         type="button"
-        variant={active === "more" ? "default" : "outline"}
+        variant={active === "recurring" ? "default" : "outline"}
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        aria-label={t(locale, "appTabBusiness")}
+        aria-current={active === "recurring" ? "page" : undefined}
+        onClick={() => onChange("recurring")}
+      >
+        <CalendarSync className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant={active === "settings" ? "default" : "outline"}
         size="icon"
         className="h-8 w-8 shrink-0"
         aria-label={t(locale, "appTabMore")}
-        aria-current={active === "more" ? "page" : undefined}
-        onClick={() => onChange("more")}
+        aria-current={active === "settings" ? "page" : undefined}
+        onClick={() => onChange("settings")}
       >
-        <Ellipsis className="h-4 w-4" aria-hidden />
+        <Settings className="h-4 w-4" aria-hidden />
       </Button>
     </div>
   );

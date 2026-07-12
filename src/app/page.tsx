@@ -9,6 +9,10 @@ import { SubscriptionExpiredReminder } from "@/components/SubscriptionExpiredRem
 import { SubscriptionAccessBanner } from "@/components/SubscriptionAccessBanner";
 import { TrialBanner } from "@/components/TrialBanner";
 import { TodayScreen } from "@/components/TodayScreen";
+import { ForecastTab } from "@/components/app/ForecastTab";
+import { OperationsTab } from "@/components/app/OperationsTab";
+import { RecurringTab } from "@/components/app/RecurringTab";
+import { SettingsTab } from "@/components/app/SettingsTab";
 import {
   bottomNavEnabled,
   readStoredAppTab,
@@ -17,36 +21,49 @@ import {
 } from "@/lib/app-bottom-nav";
 import { FamilyOnboarding } from "@/components/FamilyOnboarding";
 import { detectLocale } from "@/lib/i18n";
+import type { ForecastFocus } from "@/lib/forecast-focus";
 import { clearDismissibleHintKeys } from "@/lib/storage-reset";
 import { useStore } from "@/store/useStore";
 import { useCallback, useEffect, useState } from "react";
 import { useTelegramBackHandler } from "@/hooks/useTelegramBackHandler";
-import { TipsPanel } from "@/components/TipsPanel";
-import { PlanningPanel } from "@/components/PlanningPanel";
 
-function HomeTabContent() {
-  return <TodayScreen />;
+function TodayTabContent({
+  onNavigateToTab,
+}: {
+  onNavigateToTab: (
+    tab: AppTabId,
+    options?: { forecastFocus?: ForecastFocus | null },
+  ) => void;
+}) {
+  return <TodayScreen onNavigateToTab={onNavigateToTab} />;
 }
 
 function OperationsTabContent() {
-  return (
-    <div className="space-y-2">
-      <PlanningPanel collapsible={false} />
-    </div>
-  );
+  return <OperationsTab />;
 }
 
-function AdvisorTabContent() {
-  return <TipsPanel collapsible={false} />;
+function ForecastTabContent({
+  focus,
+}: {
+  focus: ForecastFocus | null;
+}) {
+  return <ForecastTab focus={focus} />;
+}
+
+function RecurringTabContent() {
+  return <RecurringTab />;
+}
+
+function SettingsTabContent() {
+  return <SettingsTab />;
 }
 
 export default function HomePage() {
   const setLocale = useStore((s) => s.setLocale);
   const locale = useStore((s) => s.locale);
-  const businessModeEnabled = useStore((s) => s.businessModeEnabled);
-  const showBusinessTab = businessModeEnabled;
   const previewMode = bottomNavEnabled();
-  const [appView, setAppView] = useState<AppTabId>("home");
+  const [appView, setAppView] = useState<AppTabId>("today");
+  const [forecastFocus, setForecastFocus] = useState<ForecastFocus | null>(null);
 
   useEffect(() => {
     clearDismissibleHintKeys();
@@ -56,16 +73,20 @@ export default function HomePage() {
     if (previewMode) setAppView(readStoredAppTab());
   }, [previewMode]);
 
-  const onAppViewChange = useCallback((tab: AppTabId) => {
+  const onAppViewChange = useCallback((
+    tab: AppTabId,
+    options?: { forecastFocus?: ForecastFocus | null },
+  ) => {
+    setForecastFocus((current) => {
+      if (tab !== "forecast") return null;
+      if (options && "forecastFocus" in options) {
+        return options.forecastFocus ?? null;
+      }
+      return current;
+    });
     setAppView(tab);
     writeStoredAppTab(tab);
   }, []);
-
-  useEffect(() => {
-    if (showBusinessTab) return;
-    if (appView !== "business") return;
-    onAppViewChange("home");
-  }, [appView, onAppViewChange, showBusinessTab]);
 
   useEffect(() => {
     if (window.Telegram?.WebApp) return;
@@ -75,16 +96,18 @@ export default function HomePage() {
   useRecurringProcessor();
 
   const handlePreviewTelegramBack = useCallback(() => {
-    if (!previewMode || appView === "home") return false;
-    onAppViewChange("home");
+    if (!previewMode || appView === "today") return false;
+    onAppViewChange("today");
     return true;
   }, [previewMode, appView, onAppViewChange]);
 
-  useTelegramBackHandler(handlePreviewTelegramBack, previewMode && appView !== "home");
+  useTelegramBackHandler(handlePreviewTelegramBack, previewMode && appView !== "today");
 
-  const home = <HomeTabContent />;
+  const today = <TodayTabContent onNavigateToTab={onAppViewChange} />;
   const operations = <OperationsTabContent />;
-  const advisor = <AdvisorTabContent />;
+  const forecast = <ForecastTabContent focus={forecastFocus} />;
+  const recurring = <RecurringTabContent />;
+  const settings = <SettingsTabContent />;
 
   return (
     <main
@@ -103,13 +126,15 @@ export default function HomePage() {
       <SubscriptionExpiredReminder />
       {previewMode ? (
         <PreviewAppShell
-          homeContent={home}
+          todayContent={today}
           operationsContent={operations}
-          advisorContent={advisor}
+          forecastContent={forecast}
+          recurringContent={recurring}
+          settingsContent={settings}
           previewNav={{ active: appView, onChange: onAppViewChange }}
         />
       ) : (
-        home
+        today
       )}
     </main>
   );

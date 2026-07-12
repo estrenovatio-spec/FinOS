@@ -200,7 +200,9 @@ function TransactionRow({
 }: TransactionRowProps) {
   const note = displayTransactionNote(tx.note, tx.amount);
   const savingsGoals = useStore((s) => s.savingsGoals);
-  const goalName = tx.goalId ? savingsGoals.find((g) => g.id === tx.goalId)?.name : null;
+  const goalName = tx.goalId
+    ? savingsGoals.find((g) => g.id === tx.goalId)?.name
+    : null;
   const goalPart =
     tx.goalAmount && tx.goalAmount > 0 && goalName
       ? t(locale, "txGoalLinked", {
@@ -239,23 +241,25 @@ function TransactionRow({
   const amountTextClass = todayCompact
     ? "whitespace-nowrap text-xs font-semibold tabular-nums leading-none"
     : "whitespace-nowrap text-sm font-semibold tabular-nums leading-none";
-  const editButtonClass = todayCompact ? "h-6 w-6 shrink-0" : "h-7 w-7 shrink-0";
+  const editButtonClass = todayCompact
+    ? "h-6 w-6 shrink-0"
+    : "h-7 w-7 shrink-0";
   const editIconClass = todayCompact ? "h-3 w-3" : "h-3 w-3";
 
   if (compactAllTab) {
     return (
       <li className={cn(rowClass)}>
-        <button type="button" className="min-w-0 text-left" onClick={() => onEdit(tx)}>
+        <button
+          type="button"
+          className="min-w-0 text-left"
+          onClick={() => onEdit(tx)}
+        >
           <p className="truncate font-medium leading-tight">
             {getCategoryLabel(tx.categoryId, categories, locale)}
           </p>
-          {metaLabel ? (
-            <p className={metaClass}>{metaLabel}</p>
-          ) : null}
+          {metaLabel ? <p className={metaClass}>{metaLabel}</p> : null}
           {leftExtra.length > 0 ? (
-            <p className={extraClass}>
-              {leftExtra.join(" · ")}
-            </p>
+            <p className={extraClass}>{leftExtra.join(" · ")}</p>
           ) : null}
         </button>
         <div className="flex shrink-0 items-center gap-1 self-center">
@@ -265,12 +269,7 @@ function TransactionRow({
               color={owner === "partner" ? partnerChipColor : myChipColor}
             />
           ) : null}
-          <span
-            className={cn(
-              amountTextClass,
-              amountClass,
-            )}
-          >
+          <span className={cn(amountTextClass, amountClass)}>
             {tx.type === "income" ? "+" : "−"}
             {formatMoney(tx.amount, locale)}
           </span>
@@ -291,30 +290,29 @@ function TransactionRow({
 
   return (
     <li className={cn(rowClass)}>
-      <button type="button" className="min-w-0 text-left" onClick={() => onEdit(tx)}>
+      <button
+        type="button"
+        className="min-w-0 text-left"
+        onClick={() => onEdit(tx)}
+      >
         <p className="truncate font-medium leading-tight">
           {getCategoryLabel(tx.categoryId, categories, locale)}
         </p>
-        {metaLabel ? (
-          <p className={metaClass}>{metaLabel}</p>
-        ) : null}
+        {metaLabel ? <p className={metaClass}>{metaLabel}</p> : null}
         {leftExtra.length > 0 ? (
           <p
-            className={todayCompact
-              ? "mt-0.5 line-clamp-1 break-words text-[11px] leading-snug text-foreground/85"
-              : "mt-0.5 line-clamp-2 break-words text-xs leading-snug text-foreground/90"}
+            className={
+              todayCompact
+                ? "mt-0.5 line-clamp-1 break-words text-[11px] leading-snug text-foreground/85"
+                : "mt-0.5 line-clamp-2 break-words text-xs leading-snug text-foreground/90"
+            }
           >
             {leftExtra.join(" · ")}
           </p>
         ) : null}
       </button>
       <div className="flex shrink-0 items-center gap-1 self-center">
-        <span
-          className={cn(
-            amountTextClass,
-            amountClass,
-          )}
-        >
+        <span className={cn(amountTextClass, amountClass)}>
           {tx.type === "income" ? "+" : "−"}
           {formatMoney(tx.amount, locale)}
         </span>
@@ -355,6 +353,7 @@ export function TransactionList({
   const transactions = useFilteredTransactions(filter);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [hidden, setHidden] = useState(false);
+  const [expandedToday, setExpandedToday] = useState(false);
   const todayVariant = variant === "today";
 
   const compactAllTab = householdFilter === "all";
@@ -362,8 +361,14 @@ export function TransactionList({
   const searchedTransactions = useMemo(() => {
     if (!normalizedQuery) return transactions;
     return transactions.filter((tx) => {
-      const category = getCategoryLabel(tx.categoryId, categories, locale).toLowerCase();
-      const note = (displayTransactionNote(tx.note, tx.amount) ?? "").toLowerCase();
+      const category = getCategoryLabel(
+        tx.categoryId,
+        categories,
+        locale,
+      ).toLowerCase();
+      const note = (
+        displayTransactionNote(tx.note, tx.amount) ?? ""
+      ).toLowerCase();
       const amount = String(tx.amount);
       const date = tx.date?.slice(0, 10) ?? "";
       return (
@@ -378,15 +383,22 @@ export function TransactionList({
     () => groupTransactionsByDay(searchedTransactions, locale),
     [locale, searchedTransactions],
   );
+  const hasMoreTodayItems = Boolean(
+    limit && searchedTransactions.length > limit,
+  );
   const todayItems = useMemo(
-    () => (limit ? searchedTransactions.slice(0, limit) : searchedTransactions),
-    [limit, searchedTransactions],
+    () =>
+      todayVariant && limit && !expandedToday
+        ? searchedTransactions.slice(0, limit)
+        : searchedTransactions,
+    [expandedToday, limit, searchedTransactions, todayVariant],
   );
 
   useEffect(() => {
     if (todayVariant) {
       setHidden(false);
       setFilter("all");
+      setExpandedToday(false);
       return;
     }
     setHidden(collapsible ? readHidden() : false);
@@ -447,16 +459,35 @@ export function TransactionList({
                 {locale === "ru" ? "Пока нет операций" : "No entries yet"}
               </p>
             ) : (
-              <ul className="space-y-0.5">
-                {todayItems.map((tx) => (
-                  <TransactionRow
-                    key={tx.id}
-                    tx={tx}
-                    {...rowProps}
-                    showMeta
-                  />
-                ))}
-              </ul>
+              <>
+                <ul className="space-y-0.5">
+                  {todayItems.map((tx) => (
+                    <TransactionRow
+                      key={tx.id}
+                      tx={tx}
+                      {...rowProps}
+                      showMeta
+                    />
+                  ))}
+                </ul>
+                {hasMoreTodayItems ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 w-full text-xs"
+                    onClick={() => setExpandedToday((value) => !value)}
+                  >
+                    {expandedToday
+                      ? locale === "ru"
+                        ? "Свернуть"
+                        : "Show less"
+                      : locale === "ru"
+                        ? "Показать ещё"
+                        : "Show more"}
+                  </Button>
+                ) : null}
+              </>
             )}
           </CardContent>
         </Card>
@@ -574,13 +605,19 @@ export function TransactionList({
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={locale === "ru" ? "Поиск по операциям" : "Search transactions"}
+                  placeholder={
+                    locale === "ru"
+                      ? "Поиск по операциям"
+                      : "Search transactions"
+                  }
                   className="h-10 pl-9 pr-9"
                 />
                 {query ? (
                   <button
                     type="button"
-                    aria-label={locale === "ru" ? "Очистить поиск" : "Clear search"}
+                    aria-label={
+                      locale === "ru" ? "Очистить поиск" : "Clear search"
+                    }
                     className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
                     onClick={() => setQuery("")}
                   >

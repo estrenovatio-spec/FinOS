@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCategoryLabel, sortCategoriesByLabel } from "@/lib/categories";
@@ -17,6 +22,7 @@ type MoneySetupDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   showHouseholdToggle: boolean;
+  initialSection?: "income" | "required_expenses" | "essential_budgets" | null;
 };
 
 const ESSENTIAL_PRIORITY_IDS = [
@@ -57,24 +63,35 @@ function parseAmount(value: string): number | null {
   return amount;
 }
 
-function isServiceEssentialCategory(categoryId: string, label: string): boolean {
+function isServiceEssentialCategory(
+  categoryId: string,
+  label: string,
+): boolean {
   const haystack = `${categoryId} ${label}`.toLocaleLowerCase("ru-RU");
-  return ESSENTIAL_EXCLUDED_KEYWORDS.some((keyword) => haystack.includes(keyword));
+  return ESSENTIAL_EXCLUDED_KEYWORDS.some((keyword) =>
+    haystack.includes(keyword),
+  );
 }
 
 function makeIncomeSourceId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return `income-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function toIncomeSourceDraft(source: MoneySetupIncomeSource): IncomeSourceDraft {
+function toIncomeSourceDraft(
+  source: MoneySetupIncomeSource,
+): IncomeSourceDraft {
   return {
     id: source.id,
     label: source.label,
     expectedDate: source.expectedDate ?? "",
-    expectedAmount: source.expectedAmount != null ? String(source.expectedAmount) : "",
+    expectedAmount:
+      source.expectedAmount != null ? String(source.expectedAmount) : "",
     kind: source.kind,
     isPrimary: Boolean(source.isPrimary),
   };
@@ -95,6 +112,7 @@ export function MoneySetupDialog({
   open,
   onOpenChange,
   showHouseholdToggle,
+  initialSection = null,
 }: MoneySetupDialogProps) {
   const locale = useStore((s) => s.locale);
   const moneySetup = useStore((s) => s.moneySetup);
@@ -107,7 +125,9 @@ export function MoneySetupDialog({
     () =>
       recurringTransactions
         .filter((item) => item.type === "expense" && item.enabled)
-        .sort((a, b) => a.note.localeCompare(b.note, locale === "ru" ? "ru" : "en")),
+        .sort((a, b) =>
+          a.note.localeCompare(b.note, locale === "ru" ? "ru" : "en"),
+        ),
     [locale, recurringTransactions],
   );
 
@@ -121,7 +141,9 @@ export function MoneySetupDialog({
       categories,
       locale,
     );
-    const priority = new Map(ESSENTIAL_PRIORITY_IDS.map((id, index) => [id, index]));
+    const priority = new Map(
+      ESSENTIAL_PRIORITY_IDS.map((id, index) => [id, index]),
+    );
     return [...expenseCategories].sort((a, b) => {
       const aPriority = priority.get(a.id);
       const bPriority = priority.get(b.id);
@@ -139,11 +161,21 @@ export function MoneySetupDialog({
   const [expectedIncomeAmount, setExpectedIncomeAmount] = useState("");
   const [showIncomeSources, setShowIncomeSources] = useState(false);
   const [incomeSources, setIncomeSources] = useState<IncomeSourceDraft[]>([]);
-  const [confirmResetIncomeSources, setConfirmResetIncomeSources] = useState(false);
-  const [requiredRecurringIds, setRequiredRecurringIds] = useState<string[]>([]);
-  const [hasNoRequiredFixedExpenses, setHasNoRequiredFixedExpenses] = useState(false);
-  const [essentialCategoryIds, setEssentialCategoryIds] = useState<string[]>([]);
+  const [confirmResetIncomeSources, setConfirmResetIncomeSources] =
+    useState(false);
+  const [requiredRecurringIds, setRequiredRecurringIds] = useState<string[]>(
+    [],
+  );
+  const [hasNoRequiredFixedExpenses, setHasNoRequiredFixedExpenses] =
+    useState(false);
+  const [essentialCategoryIds, setEssentialCategoryIds] = useState<string[]>(
+    [],
+  );
   const [useHouseholdBalance, setUseHouseholdBalance] = useState(false);
+  const incomeSectionRef = useRef<HTMLDivElement | null>(null);
+  const requiredExpensesSectionRef = useRef<HTMLDivElement | null>(null);
+  const essentialCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
+  const incomeDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const incomeKindOptions = useMemo(
     () =>
@@ -185,7 +217,9 @@ export function MoneySetupDialog({
     if (!open) return;
     setNextIncomeDate(moneySetup.nextIncomeDate ?? "");
     setExpectedIncomeAmount(
-      moneySetup.expectedIncomeAmount != null ? String(moneySetup.expectedIncomeAmount) : "",
+      moneySetup.expectedIncomeAmount != null
+        ? String(moneySetup.expectedIncomeAmount)
+        : "",
     );
     setShowIncomeSources(moneySetup.incomeSources.length > 0);
     setIncomeSources(moneySetup.incomeSources.map(toIncomeSourceDraft));
@@ -196,9 +230,32 @@ export function MoneySetupDialog({
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
   }, [moneySetup, open]);
 
+  useEffect(() => {
+    if (!open || !initialSection) return;
+
+    const target =
+      initialSection === "income"
+        ? incomeSectionRef.current
+        : initialSection === "required_expenses"
+          ? requiredExpensesSectionRef.current
+          : essentialCategoriesSectionRef.current;
+
+    const frame = window.requestAnimationFrame(() => {
+      target?.scrollIntoView({ block: "start", behavior: "smooth" });
+      if (initialSection === "income") {
+        incomeDateInputRef.current?.focus();
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialSection, open]);
+
   const addIncomeSource = () => {
     setShowIncomeSources(true);
-    setIncomeSources((prev) => [...prev, emptyIncomeSourceDraft(prev.length === 0)]);
+    setIncomeSources((prev) => [
+      ...prev,
+      emptyIncomeSourceDraft(prev.length === 0),
+    ]);
   };
 
   const updateIncomeSource = (
@@ -241,25 +298,32 @@ export function MoneySetupDialog({
   };
 
   const handleSave = () => {
-    const normalizedIncomeSources: MoneySetupIncomeSource[] = incomeSources.map((item) => ({
-      id: item.id,
-      label: item.label.trim(),
-      expectedDate: item.expectedDate || null,
-      expectedAmount: parseAmount(item.expectedAmount),
-      kind: item.kind,
-      ...(item.isPrimary ? { isPrimary: true } : {}),
-    }));
+    const normalizedIncomeSources: MoneySetupIncomeSource[] = incomeSources.map(
+      (item) => ({
+        id: item.id,
+        label: item.label.trim(),
+        expectedDate: item.expectedDate || null,
+        expectedAmount: parseAmount(item.expectedAmount),
+        kind: item.kind,
+        ...(item.isPrimary ? { isPrimary: true } : {}),
+      }),
+    );
 
     updateMoneySetup({
       nextIncomeDate: nextIncomeDate || null,
       expectedIncomeAmount: parseAmount(expectedIncomeAmount),
       incomeSources: normalizedIncomeSources,
-      requiredRecurringIds: hasNoRequiredFixedExpenses ? [] : requiredRecurringIds,
+      requiredRecurringIds: hasNoRequiredFixedExpenses
+        ? []
+        : requiredRecurringIds,
       hasNoRequiredFixedExpenses,
       essentialCategoryIds,
       useHouseholdBalance: showHouseholdToggle ? useHouseholdBalance : false,
     });
-    toast(locale === "ru" ? "Финансовая база сохранена" : "Financial base saved", "success");
+    toast(
+      locale === "ru" ? "Финансовая база сохранена" : "Financial base saved",
+      "success",
+    );
     onOpenChange(false);
   };
 
@@ -280,11 +344,12 @@ export function MoneySetupDialog({
         <div className="space-y-4 overflow-y-auto px-4 py-4">
           {!showIncomeSources ? (
             <>
-              <div className="space-y-2">
+              <div ref={incomeSectionRef} className="space-y-2">
                 <label className="block text-sm font-medium text-foreground">
                   {locale === "ru" ? "Следующий доход" : "Next income"}
                 </label>
                 <Input
+                  ref={incomeDateInputRef}
                   type="date"
                   value={nextIncomeDate}
                   onChange={(event) => setNextIncomeDate(event.target.value)}
@@ -293,15 +358,21 @@ export function MoneySetupDialog({
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-foreground">
-                  {locale === "ru" ? "Примерная сумма дохода" : "Estimated income amount"}
+                  {locale === "ru"
+                    ? "Примерная сумма дохода"
+                    : "Estimated income amount"}
                 </label>
                 <Input
                   type="number"
                   inputMode="decimal"
                   min="0"
-                  placeholder={locale === "ru" ? "Например, 120000" : "For example, 120000"}
+                  placeholder={
+                    locale === "ru" ? "Например, 120000" : "For example, 120000"
+                  }
                   value={expectedIncomeAmount}
-                  onChange={(event) => setExpectedIncomeAmount(event.target.value)}
+                  onChange={(event) =>
+                    setExpectedIncomeAmount(event.target.value)
+                  }
                 />
               </div>
             </>
@@ -311,11 +382,13 @@ export function MoneySetupDialog({
             {!showIncomeSources ? (
               <Button
                 type="button"
-                variant="ghost"
-                className="h-auto px-0 text-sm font-medium text-muted-foreground hover:text-foreground"
+                variant="secondary"
+                className="h-9 w-full justify-center text-sm font-medium"
                 onClick={() => setShowIncomeSources(true)}
               >
-                {locale === "ru" ? "У меня несколько выплат" : "I have multiple payouts"}
+                {locale === "ru"
+                  ? "+ У меня несколько выплат"
+                  : "+ I have multiple payouts"}
               </Button>
             ) : null}
 
@@ -338,7 +411,9 @@ export function MoneySetupDialog({
                   className="h-auto justify-start px-0 text-sm font-medium text-muted-foreground hover:text-foreground"
                   onClick={requestSingleIncomeMode}
                 >
-                  {locale === "ru" ? "Вернуться к одному доходу" : "Back to single income"}
+                  {locale === "ru"
+                    ? "Вернуться к одному доходу"
+                    : "Back to single income"}
                 </Button>
 
                 {confirmResetIncomeSources ? (
@@ -393,7 +468,9 @@ export function MoneySetupDialog({
                               onChange={() => setPrimaryIncomeSource(item.id)}
                             />
                             <span>
-                              {locale === "ru" ? "Основной источник" : "Primary source"}
+                              {locale === "ru"
+                                ? "Основной источник"
+                                : "Primary source"}
                             </span>
                           </label>
                           <Button
@@ -420,7 +497,9 @@ export function MoneySetupDialog({
                             }
                             value={item.label}
                             onChange={(event) =>
-                              updateIncomeSource(item.id, { label: event.target.value })
+                              updateIncomeSource(item.id, {
+                                label: event.target.value,
+                              })
                             }
                           />
 
@@ -433,7 +512,8 @@ export function MoneySetupDialog({
                               value={item.kind}
                               onChange={(event) =>
                                 updateIncomeSource(item.id, {
-                                  kind: event.target.value as MoneySetupIncomeSourceKind,
+                                  kind: event.target
+                                    .value as MoneySetupIncomeSourceKind,
                                 })
                               }
                             >
@@ -480,14 +560,21 @@ export function MoneySetupDialog({
                   </p>
                 )}
 
-                <Button type="button" variant="outline" size="sm" onClick={addIncomeSource}>
-                  {locale === "ru" ? "Добавить источник дохода" : "Add income source"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addIncomeSource}
+                >
+                  {locale === "ru"
+                    ? "Добавить источник дохода"
+                    : "Add income source"}
                 </Button>
               </div>
             ) : null}
           </div>
 
-          <div className="space-y-2.5">
+          <div ref={requiredExpensesSectionRef} className="space-y-2.5">
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">
                 {locale === "ru"
@@ -529,7 +616,9 @@ export function MoneySetupDialog({
             </label>
 
             {recurringOptions.length > 0 ? (
-              <div className={`space-y-2 ${hasNoRequiredFixedExpenses ? "opacity-60" : ""}`}>
+              <div
+                className={`space-y-2 ${hasNoRequiredFixedExpenses ? "opacity-60" : ""}`}
+              >
                 {recurringOptions.map((item) => (
                   <label
                     key={item.id}
@@ -542,11 +631,15 @@ export function MoneySetupDialog({
                       checked={requiredRecurringIds.includes(item.id)}
                       onChange={() => {
                         setHasNoRequiredFixedExpenses(false);
-                        setRequiredRecurringIds((prev) => toggleId(prev, item.id));
+                        setRequiredRecurringIds((prev) =>
+                          toggleId(prev, item.id),
+                        );
                       }}
                     />
                     <span className="min-w-0">
-                      <span className="block font-medium text-foreground">{item.note}</span>
+                      <span className="block font-medium text-foreground">
+                        {item.note}
+                      </span>
                       <span className="block text-xs text-muted-foreground">
                         {getCategoryLabel(item.categoryId, categories, locale)}
                       </span>
@@ -563,7 +656,7 @@ export function MoneySetupDialog({
             )}
           </div>
 
-          <div className="space-y-2.5">
+          <div ref={essentialCategoriesSectionRef} className="space-y-2.5">
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">
                 {locale === "ru"
@@ -593,7 +686,9 @@ export function MoneySetupDialog({
                     className="mt-0.5"
                     checked={essentialCategoryIds.includes(category.id)}
                     onChange={() =>
-                      setEssentialCategoryIds((prev) => toggleId(prev, category.id))
+                      setEssentialCategoryIds((prev) =>
+                        toggleId(prev, category.id),
+                      )
                     }
                   />
                   <span className="text-foreground">
@@ -610,7 +705,9 @@ export function MoneySetupDialog({
                 type="checkbox"
                 className="mt-1"
                 checked={useHouseholdBalance}
-                onChange={(event) => setUseHouseholdBalance(event.target.checked)}
+                onChange={(event) =>
+                  setUseHouseholdBalance(event.target.checked)
+                }
               />
               <span>
                 <span className="block font-medium text-foreground">
@@ -632,7 +729,12 @@ export function MoneySetupDialog({
           <Button type="button" className="flex-1" onClick={handleSave}>
             {locale === "ru" ? "Сохранить" : "Save"}
           </Button>
-          <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => onOpenChange(false)}
+          >
             {locale === "ru" ? "Позже" : "Later"}
           </Button>
         </div>
