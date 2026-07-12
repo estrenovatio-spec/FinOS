@@ -22,6 +22,7 @@ function makeDecision(
       note: undefined,
     },
     safeUntil: {
+      status: "constraint_found",
       title: "До 25 июля",
       note: "Расчёт по прогнозной линии.",
       isReady: true,
@@ -29,6 +30,10 @@ function makeDecision(
       rawStatus: "ready",
       safeToday: 3500,
       nextIncomeDate: "2026-07-25",
+      nextIncomeTitle: "Зарплата",
+      nextIncomeAmount: 90000,
+      horizonEndDate: "2026-08-10",
+      horizonMonths: 3,
       confidence: "confirmed",
     },
     todayPayments: [],
@@ -72,6 +77,7 @@ function makeForecast(partial?: Partial<BalanceForecast>): BalanceForecast {
     firstDeficitDate: "2026-07-27",
     nextIncomeDate: "2026-07-30",
     horizonEndDate: "2026-08-10",
+    horizonMonths: 3,
     events: [
       {
         id: "rent-2026-07-27",
@@ -197,6 +203,7 @@ test("hero and safe-until overview use the same canonical date", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       safeUntil: {
+        status: "constraint_found",
         title: "До 3 августа",
         note: "Расчёт по прогнозной линии.",
         isReady: true,
@@ -204,6 +211,10 @@ test("hero and safe-until overview use the same canonical date", () => {
         rawStatus: "ready",
         safeToday: 3500,
         nextIncomeDate: "2026-08-10",
+        nextIncomeTitle: "Зарплата",
+        nextIncomeAmount: 90000,
+        horizonEndDate: "2026-08-10",
+        horizonMonths: 3,
         confidence: "confirmed",
       },
       mainAction: {
@@ -233,6 +244,70 @@ test("hero and safe-until overview use the same canonical date", () => {
   assert.equal(safeUntil?.value, "До 3 августа");
   assert.equal(view.hero.due, "Денег хватает до 3 августа");
   assert.doesNotMatch(view.hero.due ?? "", /25 июля/);
+});
+
+test("no-risk horizon shows the calm period while the next income is displayed separately", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      safeUntil: {
+        status: "no_risk_in_horizon",
+        title: "На ближайшие 3 месяца всё спокойно",
+        note: "До 13 октября дефицита не ожидается. С учётом ожидаемого дохода 14.07.2026.",
+        isReady: true,
+        needsSetup: false,
+        rawStatus: "ready",
+        safeToday: 18000,
+        nextIncomeDate: "2026-07-14",
+        nextIncomeTitle: "Пассив",
+        nextIncomeAmount: 24000,
+        horizonEndDate: "2026-10-13",
+        horizonMonths: 3,
+        confidence: "planned",
+        confidenceNote: "С учётом ожидаемого дохода 14.07.2026.",
+      },
+      mainAction: {
+        type: "hold",
+        title: "Срочных действий нет",
+        text: "Сегодня обязательных действий нет.",
+        description: "Прогноз остаётся устойчивым на известном горизонте.",
+        reason: "Система не нашла обязательного шага сильнее, чем сохранение резерва.",
+        amount: null,
+        dueDate: "2026-10-13",
+        relatedEntityId: null,
+        priority: "low",
+        command: { type: "none" },
+      },
+      nextRisk: null,
+      allowed: {
+        text: "Можно потратить сегодня до 18 000 ₽ без риска для прогноза.",
+        hasRestPermission: true,
+        status: "available",
+        amount: 18000,
+        horizonDate: "2026-10-13",
+        reason: "Это сумма сверх обязательств.",
+        confidence: "planned",
+        confidenceNote: "С учётом ожидаемого дохода 14.07.2026.",
+      },
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-14",
+      expectedIncomeAmount: 24000,
+    },
+    balances: { all: 83651, me: 83651, partner: 0 },
+  });
+
+  assert.equal(view.hero.due, "На ближайшие 3 месяца всё спокойно");
+  const horizon = view.overviewItems.find((item) => item.id === "safe-until");
+  assert.equal(horizon?.label, "Горизонт прогноза");
+  assert.equal(horizon?.value, "До 13 октября");
+  const nextIncome = view.overviewItems.find((item) => item.id === "next-income");
+  assert.equal(nextIncome?.label, "Ближайшее поступление");
+  assert.match(nextIncome?.value ?? "", /24[\s\u00A0]000 ₽/);
+  assert.match(nextIncome?.caption ?? "", /14 июля/);
+  assert.doesNotMatch(horizon?.value ?? "", /14 июля/);
 });
 
 test("current balance is always visible when known", () => {
@@ -725,6 +800,7 @@ test("Today safe-until card uses the same constraint explanation source", () => 
   const view = buildTodayScreenView({
     decision: makeDecision({
       safeUntil: {
+        status: "constraint_found",
         title: "До 3 августа",
         note: "Расчёт по прогнозной линии.",
         isReady: true,
@@ -732,6 +808,10 @@ test("Today safe-until card uses the same constraint explanation source", () => 
         rawStatus: "ready",
         safeToday: 0,
         nextIncomeDate: "2026-08-10",
+        nextIncomeTitle: "Зарплата",
+        nextIncomeAmount: 90000,
+        horizonEndDate: "2026-08-10",
+        horizonMonths: 3,
         confidence: "confirmed",
       },
       constraintExplanation: explanation,

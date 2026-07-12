@@ -150,6 +150,8 @@ interface StoreState {
   categories: CategoryDefinition[];
   isRecording: boolean;
   locale: Locale;
+  forecastHorizonMonths: 1 | 3 | 6;
+  setForecastHorizonMonths: (months: 1 | 3 | 6) => void;
   userName: string | null;
   /** Пользователь вручную задал «моё имя» — не перезаписывать из Telegram */
   userNameCustomized: boolean;
@@ -530,6 +532,9 @@ export const useStore = create<StoreState>()(
       categories: getDefaultCategories(),
       isRecording: false,
       locale: "ru",
+      forecastHorizonMonths: 3,
+      setForecastHorizonMonths: (forecastHorizonMonths) =>
+        set({ forecastHorizonMonths }),
       userName: null,
       userNameCustomized: false,
       partnerName: null,
@@ -1765,7 +1770,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: "voicebudget-store",
-      version: 23,
+      version: 24,
       migrate: (persisted, version) => {
         const raw = (persisted ?? {}) as Record<string, unknown>;
         const categories = sanitizeCategories(raw.categories);
@@ -1800,6 +1805,12 @@ export const useStore = create<StoreState>()(
           categories,
           isRecording: false,
           locale: (raw.locale === "en" ? "en" : "ru") as Locale,
+          forecastHorizonMonths:
+            raw.forecastHorizonMonths === 1 ||
+            raw.forecastHorizonMonths === 3 ||
+            raw.forecastHorizonMonths === 6
+              ? raw.forecastHorizonMonths
+              : 3,
           userName: typeof raw.userName === "string" ? raw.userName : null,
           userNameCustomized:
             Boolean(raw.userNameCustomized) ||

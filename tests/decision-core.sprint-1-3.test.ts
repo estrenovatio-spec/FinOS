@@ -92,6 +92,7 @@ function debt(
 
 function buildState(input?: {
   today?: string;
+  forecastHorizonMonths?: 1 | 3 | 6;
   transactions?: Transaction[];
   recurringTransactions?: RecurringTransaction[];
   debts?: DebtItem[];
@@ -102,6 +103,7 @@ function buildState(input?: {
   return {
     locale: "ru",
     today: input?.today ?? "2026-07-10",
+    forecastHorizonMonths: input?.forecastHorizonMonths ?? 3,
     categories: getDefaultCategories(),
     transactions: input?.transactions ?? [],
     householdFilter: "all",
@@ -126,6 +128,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
   const ctx: DecisionCoreContext = {
     locale: state.locale,
     today: state.today,
+    forecastHorizonMonths: state.forecastHorizonMonths,
     categories: state.categories,
     transactions,
     confirmedTransactions,
@@ -155,6 +158,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
       firstDeficitDate: null,
       nextIncomeDate: null,
       horizonEndDate: state.today,
+      horizonMonths: state.forecastHorizonMonths,
       events: [],
     },
   };
@@ -396,7 +400,7 @@ test("Allowed stays unknown without next income horizon", () => {
   assert.equal(scenario.result.safeUntil.isReady, false);
 });
 
-test("Allowed uses the next income as its horizon when confidence is available", () => {
+test("Allowed uses the forecast horizon end when there is no constraint point", () => {
   const scenario = evaluate(
     buildState({
       balances: { all: 40000, me: 40000, partner: 0 },
@@ -421,7 +425,11 @@ test("Allowed uses the next income as its horizon when confidence is available",
   );
 
   assert.equal(scenario.result.allowed.status, "available");
-  assert.equal(scenario.result.allowed.horizonDate, "2026-07-20");
+  assert.equal(scenario.ctx.forecast.horizonEndDate, "2026-10-10");
+  assert.equal(scenario.result.allowed.horizonDate, "2026-10-10");
+  assert.equal(scenario.result.safeUntil.status, "no_risk_in_horizon");
+  assert.match(scenario.result.safeUntil.title, /3 месяца/);
+  assert.match(scenario.result.safeUntil.note ?? "", /10 октября/);
   assert.ok((scenario.result.allowed.amount ?? 0) > 0);
 });
 
@@ -793,6 +801,7 @@ test("Reserve-required focuses the first limiting date instead of the nearest pa
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
+      forecastHorizonMonths: 1,
       balances: { all: 69691, me: 69691, partner: 0 },
       recurringTransactions: [
         recurring({
@@ -900,6 +909,7 @@ test("safeUntil and allowed use the same later constraint point instead of the e
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
+      forecastHorizonMonths: 1,
       balances: { all: 69691, me: 69691, partner: 0 },
       recurringTransactions: [
         recurring({
@@ -1088,6 +1098,7 @@ test("Nearest payment with healthy balance does not become the next risk", () =>
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
+      forecastHorizonMonths: 1,
       balances: { all: 69691, me: 69691, partner: 0 },
       recurringTransactions: [
         recurring({
@@ -1390,7 +1401,7 @@ test("No regular expenses and no risks do not create a fake problem", () => {
   assert.equal(result.status.key, "calm");
 });
 
-test("Future recurring income keeps the day calm even when discretionary limit stays cautious", () => {
+test("Future recurring income can define a calm forecast horizon on its own", () => {
   const result = decisionCore(
     buildState({
       balances: { all: 8000, me: 8000, partner: 0 },
@@ -1423,6 +1434,7 @@ test("Future recurring income keeps the day calm even when discretionary limit s
 
   assert.equal(result.status.key, "calm");
   assert.equal(result.allowed.status, "unknown");
+  assert.equal(result.safeUntil.status, "no_risk_in_horizon");
 });
 
 test("Dates around midnight are normalized by local day slices", () => {
@@ -1815,4 +1827,165 @@ test("a truly negative end-of-day balance still creates a same-day deficit", () 
   );
   assert.equal(scenario.ctx.forecast.firstDeficitDate, "2026-07-25");
   assert.equal(scenario.result.nextRisk?.date, "2026-07-25");
+});
+
+test("forecast horizon can be configured to 1, 3, or 6 months", () => {
+  const oneMonth = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 1,
+      balances: { all: 83651, me: 83651, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "income-14-july",
+            label: "Пассив",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "passive",
+            isPrimary: true,
+          },
+        ],
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+  const threeMonths = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 83651, me: 83651, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "income-14-july",
+            label: "Пассив",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "passive",
+            isPrimary: true,
+          },
+        ],
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+  const sixMonths = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 6,
+      balances: { all: 83651, me: 83651, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "income-14-july",
+            label: "Пассив",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "passive",
+            isPrimary: true,
+          },
+        ],
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(oneMonth.ctx.forecast.horizonEndDate, "2026-08-13");
+  assert.equal(threeMonths.ctx.forecast.horizonEndDate, "2026-10-13");
+  assert.equal(sixMonths.ctx.forecast.horizonEndDate, "2027-01-13");
+});
+
+test("next income does not become safe-until when there is no risk in the selected horizon", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 83651, me: 83651, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        incomeSources: [
+          {
+            id: "income-14-july",
+            label: "Пассив",
+            expectedDate: "2026-07-14",
+            expectedAmount: 24000,
+            kind: "passive",
+            isPrimary: true,
+          },
+        ],
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(scenario.result.nextRisk, null);
+  assert.equal(scenario.result.safeUntil.status, "no_risk_in_horizon");
+  assert.equal(scenario.result.safeUntil.horizonEndDate, "2026-10-13");
+  assert.equal(scenario.result.safeUntil.nextIncomeDate, "2026-07-14");
+  assert.match(scenario.result.safeUntil.title, /3 месяца/);
+  assert.match(scenario.result.safeUntil.note ?? "", /13 октября/);
+  assert.doesNotMatch(scenario.result.safeUntil.title, /14 июля/);
+  assert.equal(scenario.result.allowed.horizonDate, "2026-10-13");
+});
+
+test("a risk outside the 1 month horizon appears when the horizon is expanded to 3 months", () => {
+  const oneMonth = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 1,
+      balances: { all: 50000, me: 50000, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "autumn-risk",
+          amount: 70000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Крупный платёж",
+          nextRunDate: "2026-09-01",
+          frequency: "monthly",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-08-20",
+        expectedIncomeAmount: 100000,
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+  const threeMonths = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 50000, me: 50000, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "autumn-risk",
+          amount: 70000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Крупный платёж",
+          nextRunDate: "2026-09-01",
+          frequency: "monthly",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-10-20",
+        expectedIncomeAmount: 100000,
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(oneMonth.ctx.forecast.horizonEndDate, "2026-08-13");
+  assert.equal(oneMonth.result.nextRisk, null);
+  assert.equal(oneMonth.result.safeUntil.status, "no_risk_in_horizon");
+  assert.equal(threeMonths.ctx.forecast.horizonEndDate, "2026-10-13");
+  assert.equal(threeMonths.result.nextRisk?.date, "2026-09-01");
+  assert.equal(threeMonths.result.safeUntil.status, "constraint_found");
 });

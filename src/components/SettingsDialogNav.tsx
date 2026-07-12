@@ -9,6 +9,7 @@ import { HelpFeedbackCard } from "@/components/HelpFeedbackCard";
 import { HelpFaqDialog } from "@/components/HelpFaqDialog";
 import { HouseholdCloudPanel } from "@/components/HouseholdCloudPanel";
 import { SettingsMenuRow } from "@/components/SettingsMenuRow";
+import { SettingsSection } from "@/components/SettingsSection";
 import { UpdateAppButton } from "@/components/UpdateAppButton";
 import { OwnerChipColorPicker } from "@/components/OwnerChipColorPicker";
 import { VehicleSettingsPanel } from "@/components/VehicleSettingsPanel";
@@ -67,6 +68,8 @@ export function SettingsDialogNav({
   onOpenChange: (open: boolean) => void;
 }) {
   const locale = useStore((s) => s.locale);
+  const forecastHorizonMonths = useStore((s) => s.forecastHorizonMonths);
+  const setForecastHorizonMonths = useStore((s) => s.setForecastHorizonMonths);
   const setLocale = useStore((s) => s.setLocale);
   const userName = useStore((s) => s.userName);
   const partnerName = useStore((s) => s.partnerName);
@@ -374,6 +377,41 @@ export function SettingsDialogNav({
               }}
             />
           </div>
+          <SettingsSection
+            title={locale === "ru" ? "Прогноз" : "Forecast"}
+            description={
+              locale === "ru"
+                ? "Чем дальше горизонт, тем больше расчёт зависит от плановых данных."
+                : "The longer the horizon, the more the forecast relies on planned data."
+            }
+          >
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">
+                {locale === "ru" ? "Горизонт прогноза" : "Forecast horizon"}
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 3, 6].map((months) => (
+                  <Button
+                    key={months}
+                    type="button"
+                    variant={forecastHorizonMonths === months ? "default" : "outline"}
+                    className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs leading-tight"
+                    onClick={() => setForecastHorizonMonths(months as 1 | 3 | 6)}
+                  >
+                    {locale === "ru"
+                      ? months === 1
+                        ? "1 месяц"
+                        : months === 3
+                          ? "3 месяца"
+                          : "6 месяцев"
+                      : months === 1
+                        ? "1 month"
+                        : `${months} months`}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </SettingsSection>
           {MENU_ITEMS.map((item) => (
             <SettingsMenuRow
               key={item.id}

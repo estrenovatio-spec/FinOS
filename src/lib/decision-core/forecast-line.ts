@@ -1,6 +1,5 @@
 import { getCategoryLabel } from "@/lib/categories";
 import { buildForecastDays } from "@/lib/decision-core/forecast-days";
-import { daysInclusiveUntilDate } from "@/lib/format-date";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
 import { extractIncomeSourceIdFromTransactionNote } from "@/lib/transaction-note";
@@ -12,8 +11,6 @@ import type {
 } from "@/lib/decision-core/types";
 import type { RecurringTransaction, DebtItem } from "@/types/planning";
 import type { Transaction } from "@/types";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function isoDay(value: string | null | undefined): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -27,10 +24,15 @@ function isoToDate(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function addDays(iso: string, days: number): string {
+function addMonths(iso: string, months: 1 | 3 | 6): string {
   const date = isoToDate(iso);
   if (!date) return iso;
-  const next = new Date(date.getTime() + days * DAY_MS);
+  const startDay = date.getDate();
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  if (next.getDate() !== startDay) {
+    next.setDate(0);
+  }
   const y = next.getFullYear();
   const mo = String(next.getMonth() + 1).padStart(2, "0");
   const d = String(next.getDate()).padStart(2, "0");
@@ -233,10 +235,7 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
 export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
   const incomeEvents = buildIncomeEvents(ctx);
   const configuredNextIncomeDate = incomeEvents[0]?.date ?? null;
-  const daysToIncome = configuredNextIncomeDate
-    ? (daysInclusiveUntilDate(configuredNextIncomeDate, ctx.today) ?? 1)
-    : 30;
-  const horizonEndDate = addDays(ctx.today, Math.max(21, daysToIncome + 21));
+  const horizonEndDate = addMonths(ctx.today, ctx.forecastHorizonMonths);
 
   const events = [
     ...incomeEvents,
@@ -245,7 +244,7 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
     ...buildRecurringForecastEvents(ctx, horizonEndDate),
     ...buildDebtEvents(ctx, horizonEndDate),
   ]
-    .filter((event) => event.date >= ctx.today)
+    .filter((event) => event.date >= ctx.today && event.date <= horizonEndDate)
     .sort(sortEvents);
 
   let balance = ctx.availableNow;
@@ -285,6 +284,7 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
     firstDeficitDate,
     nextIncomeDate,
     horizonEndDate,
+    horizonMonths: ctx.forecastHorizonMonths,
     events: eventsWithBalance,
     days,
   };

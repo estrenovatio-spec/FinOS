@@ -15,7 +15,7 @@ export function buildAllowed(
   decision: PrimaryDecision,
   ctx: DecisionCoreContext,
 ): DecisionAllowed {
-  const horizonDate = getConstraintDate(ctx) ?? ctx.forecast.nextIncomeDate;
+  const horizonDate = getConstraintDate(ctx) ?? ctx.forecast.horizonEndDate;
   const confidence = getForecastConfidence(ctx, horizonDate);
   const hasKnownIncomeHorizon = Boolean(horizonDate);
   const essentialReserve = ctx.essentialBudgetReserve.totalRemaining;
@@ -138,11 +138,11 @@ export function buildAllowed(
         reason:
           ctx.locale === "ru"
             ? essentialReserve > 0
-              ? "Это сумма сверх обязательных платежей и оставшихся обязательных лимитов до ближайшего дохода."
-              : "Это сумма необязательных расходов сверх обязательств и минимального резерва до ближайшего дохода."
+              ? "Это сумма сверх обязательных платежей и оставшихся обязательных лимитов до конца текущего горизонта прогноза."
+              : "Это сумма необязательных расходов сверх обязательств и минимального резерва до конца текущего горизонта прогноза."
             : essentialReserve > 0
-              ? "This is the amount above required payments and the remaining essential category limits until the next income."
-              : "This is discretionary spending above obligations and the minimum reserve until the next income.",
+              ? "This is the amount above required payments and the remaining essential category limits until the end of the current forecast horizon."
+              : "This is discretionary spending above obligations and the minimum reserve until the end of the current forecast horizon.",
       };
   }
 }

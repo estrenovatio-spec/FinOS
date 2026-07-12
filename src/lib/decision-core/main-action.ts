@@ -404,7 +404,7 @@ export function buildMainAction(
     }
     case "no_urgent_action": {
       const freeToday = Math.max(0, Math.round(forecast.minBalance));
-      const dueDate = nextRisk?.date ?? forecast.nextIncomeDate ?? null;
+      const dueDate = nextRisk?.date ?? forecast.horizonEndDate ?? null;
       return {
         type: "hold",
         title:

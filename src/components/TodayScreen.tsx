@@ -35,6 +35,7 @@ export function TodayScreen({
   ) => void;
 }) {
   const locale = useStore((s) => s.locale);
+  const forecastHorizonMonths = useStore((s) => s.forecastHorizonMonths);
   const categories = useStore((s) => s.categories);
   const moneySetup = useStore((s) => s.moneySetup);
   const recurringTransactions = useStore((s) => s.recurringTransactions);
@@ -67,6 +68,7 @@ export function TodayScreen({
       decisionCore({
         locale,
         today,
+        forecastHorizonMonths,
         categories,
         transactions,
         householdFilter,
@@ -85,6 +87,7 @@ export function TodayScreen({
       debts,
       householdFilter,
       locale,
+      forecastHorizonMonths,
       moneySetup,
       recurringTransactions,
       today,

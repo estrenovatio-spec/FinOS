@@ -24,6 +24,7 @@ function buildState(overrides?: Partial<DecisionCoreState>): DecisionCoreState {
     budgetMonthStartDay: 1,
     balances: { all: 50000, me: 50000, partner: 0 },
     ...overrides,
+    forecastHorizonMonths: overrides?.forecastHorizonMonths ?? 3,
   };
 }
 

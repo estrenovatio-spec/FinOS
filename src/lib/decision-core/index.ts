@@ -33,6 +33,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
   return {
     locale: state.locale,
     today: state.today,
+    forecastHorizonMonths: state.forecastHorizonMonths,
     categories: state.categories,
     transactions,
     confirmedTransactions,
@@ -62,6 +63,7 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
       firstDeficitDate: null,
       nextIncomeDate: null,
       horizonEndDate: state.today,
+      horizonMonths: state.forecastHorizonMonths,
       events: [],
     },
   };

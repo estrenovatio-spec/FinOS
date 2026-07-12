@@ -45,6 +45,7 @@ function buildState(input?: {
   return {
     locale: "ru",
     today: "2026-07-10",
+    forecastHorizonMonths: 3,
     categories: getDefaultCategories(),
     transactions: input?.transactions ?? [],
     householdFilter: "all",

@@ -43,6 +43,19 @@ function formatDayMonth(iso: string, locale: DecisionCoreState["locale"]): strin
   return `${day} ${MONTHS_RU[monthIndex]}`;
 }
 
+function formatHorizonLabel(
+  months: 1 | 3 | 6,
+  locale: DecisionCoreState["locale"],
+): string {
+  if (locale === "en") {
+    return months === 1 ? "1 month" : `${months} months`;
+  }
+
+  if (months === 1) return "1 месяц";
+  if (months >= 2 && months <= 4) return `${months} месяца`;
+  return `${months} месяцев`;
+}
+
 export function calculateDecisionSafeSpending(state: DecisionCoreState) {
   return calculateSafeSpending({
     availableNow: state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
@@ -60,11 +73,18 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
   const constraintPoint = getConstraintPoint(ctx);
   const confidence = getForecastConfidence(
     ctx,
-    constraintPoint?.date ?? forecast.nextIncomeDate ?? safeSpending.nextIncomeDate,
+    constraintPoint?.date ?? forecast.horizonEndDate,
   );
+  const nextIncomeEvent =
+    forecast.events.find((event) => event.amount > 0) ?? null;
+  const nextIncomeDate = nextIncomeEvent?.date ?? forecast.nextIncomeDate;
+  const nextIncomeTitle = nextIncomeEvent?.title ?? null;
+  const nextIncomeAmount = nextIncomeEvent?.amount ?? null;
+  const horizonMonths = forecast.horizonMonths ?? ctx.forecastHorizonMonths;
 
   if (!Number.isFinite(ctx.availableNow) || ctx.availableNow <= 0) {
     return {
+      status: "constraint_found",
       title: locale === "ru" ? "Дефицит уже начался" : "Deficit already started",
       note:
         locale === "ru"
@@ -74,7 +94,11 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       needsSetup: false,
       rawStatus: "missing_balance",
       safeToday: 0,
-      nextIncomeDate: forecast.nextIncomeDate,
+      nextIncomeDate,
+      nextIncomeTitle,
+      nextIncomeAmount,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: "uncertain",
       confidenceNote: null,
     };
@@ -82,6 +106,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
 
   if (!forecast.nextIncomeDate && safeSpending.status === "missing_income") {
     return {
+      status: "unknown",
       title: locale === "ru" ? "Доход не указан" : "Income is missing",
       note:
         locale === "ru"
@@ -92,6 +117,10 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: "missing_income",
       safeToday: null,
       nextIncomeDate: null,
+      nextIncomeTitle: null,
+      nextIncomeAmount: null,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: "uncertain",
       confidenceNote: null,
     };
@@ -99,6 +128,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
 
   if (!forecast.nextIncomeDate && safeSpending.status === "unconfirmed_income") {
     return {
+      status: "unknown",
       title: locale === "ru" ? "Доход не подтверждён" : "Income is not confirmed",
       note:
         locale === "ru"
@@ -109,6 +139,10 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: "unconfirmed_income",
       safeToday: null,
       nextIncomeDate: null,
+      nextIncomeTitle: null,
+      nextIncomeAmount: null,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: "uncertain",
       confidenceNote: null,
     };
@@ -121,6 +155,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
     );
 
     return {
+      status: "constraint_found",
       title:
         locale === "ru"
           ? `Дефицит через ${deficitDays} ${deficitDays === 1 ? "день" : deficitDays >= 2 && deficitDays <= 4 ? "дня" : "дней"}`
@@ -133,7 +168,11 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       needsSetup: false,
       rawStatus: "ready",
       safeToday: 0,
-      nextIncomeDate: forecast.nextIncomeDate,
+      nextIncomeDate,
+      nextIncomeTitle,
+      nextIncomeAmount,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: confidence.confidence,
       confidenceNote: confidence.note,
     };
@@ -141,6 +180,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
 
   if (constraintPoint?.kind === "reserve") {
     return {
+      status: "constraint_found",
       title:
         locale === "ru"
           ? `До ${formatDayMonth(constraintPoint.event.date, locale)}`
@@ -155,27 +195,36 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       needsSetup: false,
       rawStatus: "ready",
       safeToday: Math.max(0, forecast.minBalance - constraintPoint.requiredFloor),
-      nextIncomeDate: forecast.nextIncomeDate,
+      nextIncomeDate,
+      nextIncomeTitle,
+      nextIncomeAmount,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: confidence.confidence,
       confidenceNote: confidence.note,
     };
   }
 
-  if (forecast.nextIncomeDate) {
+  if (forecast.horizonEndDate) {
     return {
+      status: "no_risk_in_horizon",
       title:
         locale === "ru"
-          ? `До ${formatDayMonth(forecast.nextIncomeDate, locale)}`
-          : `Until ${formatDayMonth(forecast.nextIncomeDate, locale)}`,
+          ? `На ближайшие ${formatHorizonLabel(horizonMonths, locale)} всё спокойно`
+          : `All calm for the next ${formatHorizonLabel(horizonMonths, locale)}`,
       note:
         locale === "ru"
-          ? confidence.note ?? "Расчёт теперь опирается на прогнозную линию баланса до ближайшего дохода."
-          : "This now uses the forecast balance line until the next income.",
+          ? `До ${formatDayMonth(forecast.horizonEndDate, locale)} дефицита не ожидается.${confidence.note ? ` ${confidence.note}` : ""}`
+          : `No deficit is expected until ${formatDayMonth(forecast.horizonEndDate, locale)}.${confidence.note ? ` ${confidence.note}` : ""}`,
       isReady: true,
       needsSetup: false,
       rawStatus: "ready",
       safeToday: Math.max(0, forecast.minBalance),
-      nextIncomeDate: forecast.nextIncomeDate,
+      nextIncomeDate,
+      nextIncomeTitle,
+      nextIncomeAmount,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: confidence.confidence,
       confidenceNote: confidence.note,
     };
@@ -184,6 +233,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
   if (safeSpending.status === "ready" && safeSpending.availableForDailySpending != null) {
     if (safeSpending.availableForDailySpending <= 0) {
       return {
+        status: "constraint_found",
         title: locale === "ru" ? "Дефицит уже начался" : "Deficit already started",
         note:
           locale === "ru"
@@ -194,26 +244,10 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
         rawStatus: safeSpending.status,
         safeToday: safeSpending.safeToday,
         nextIncomeDate: safeSpending.nextIncomeDate,
-        confidence: confidence.confidence,
-        confidenceNote: confidence.note,
-      };
-    }
-
-    if (safeSpending.nextIncomeDate) {
-      return {
-        title:
-          locale === "ru"
-            ? `До ${formatDayMonth(safeSpending.nextIncomeDate, locale)}`
-            : `Until ${formatDayMonth(safeSpending.nextIncomeDate, locale)}`,
-        note:
-          locale === "ru"
-            ? "Расчёт опирается на ближайший доход."
-            : "This is based on the next expected income.",
-        isReady: true,
-        needsSetup: false,
-        rawStatus: safeSpending.status,
-        safeToday: safeSpending.safeToday,
-        nextIncomeDate: safeSpending.nextIncomeDate,
+        nextIncomeTitle,
+        nextIncomeAmount,
+        horizonEndDate: forecast.horizonEndDate,
+        horizonMonths,
         confidence: confidence.confidence,
         confidenceNote: confidence.note,
       };
@@ -222,6 +256,7 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
 
   if (safeSpending.nextIncomeDate || moneySetup.nextIncomeDate) {
     return {
+      status: "unknown",
       title: locale === "ru" ? "До следующего дохода" : "Until the next income",
       note:
         locale === "ru"
@@ -232,12 +267,17 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
       rawStatus: safeSpending.status,
       safeToday: safeSpending.safeToday,
       nextIncomeDate: safeSpending.nextIncomeDate,
+      nextIncomeTitle,
+      nextIncomeAmount,
+      horizonEndDate: forecast.horizonEndDate,
+      horizonMonths,
       confidence: confidence.confidence,
       confidenceNote: confidence.note,
     };
   }
 
   return {
+    status: "unknown",
     title:
       locale === "ru"
         ? "Нужно уточнить финансовую базу"
@@ -251,6 +291,10 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
     rawStatus: safeSpending.status,
     safeToday: safeSpending.safeToday,
     nextIncomeDate: safeSpending.nextIncomeDate,
+    nextIncomeTitle,
+    nextIncomeAmount,
+    horizonEndDate: forecast.horizonEndDate,
+    horizonMonths,
     confidence: "uncertain",
     confidenceNote: null,
   };

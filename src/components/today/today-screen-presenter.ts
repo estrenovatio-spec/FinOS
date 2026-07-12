@@ -213,6 +213,13 @@ function buildHeroSafeUntilDue(decision: DecisionCoreResult, locale: Locale): st
   const title = decision.safeUntil.title?.trim();
   if (!title) return null;
 
+  if (decision.safeUntil.status === "no_risk_in_horizon") {
+    if (locale === "ru") {
+      return title;
+    }
+    return title;
+  }
+
   if (locale === "ru") {
     if (title.startsWith("До ")) {
       return decision.safeUntil.confidence === "confirmed"
@@ -329,6 +336,9 @@ function buildHeroReason(
           ? "Сначала укажите текущий остаток."
           : "Start with your current balance.";
     case "hold":
+      if (decision.safeUntil.status === "no_risk_in_horizon") {
+        return decision.safeUntil.note;
+      }
       return locale === "ru"
         ? "Можно спокойно заниматься обычными делами."
         : "You can go about your day calmly.";
@@ -457,6 +467,27 @@ function buildAllowedItem(allowed: DecisionAllowed, locale: Locale): TodayOvervi
   };
 }
 
+function buildNextIncomeItem(decision: DecisionCoreResult, locale: Locale): TodayOverviewItem | null {
+  if (decision.mainAction.type !== "hold") return null;
+  if (!decision.safeUntil.nextIncomeDate) return null;
+  const amount = moneyValue(decision.safeUntil.nextIncomeAmount, locale);
+  const captionParts = [
+    formatDayMonth(decision.safeUntil.nextIncomeDate, locale),
+    decision.safeUntil.nextIncomeTitle ?? null,
+  ].filter(Boolean);
+
+  return {
+    id: "next-income",
+    label: locale === "ru" ? "Ближайшее поступление" : "Next income",
+    value:
+      amount ??
+      (locale === "ru"
+        ? "Ожидается"
+        : "Expected"),
+    caption: captionParts.length > 0 ? captionParts.join(" · ") : null,
+  };
+}
+
 function isAvoidDuplicate(mainAction: DecisionMainAction, text: string | null): boolean {
   if (!text) return true;
   if (mainAction.type === "pay_overdue" || mainAction.type === "pay_today") {
@@ -526,8 +557,21 @@ function buildTimingItem(input: TodayPresentationInput): TodayOverviewItem | nul
         : null;
     return {
       id: "safe-until",
-      label: locale === "ru" ? "Денег хватит до" : "Money lasts until",
-      value: decision.safeUntil.title,
+      label:
+        decision.safeUntil.status === "no_risk_in_horizon"
+          ? locale === "ru"
+            ? "Горизонт прогноза"
+            : "Forecast horizon"
+          : locale === "ru"
+            ? "Денег хватит до"
+            : "Money lasts until",
+      value:
+        decision.safeUntil.status === "no_risk_in_horizon" &&
+        decision.safeUntil.horizonEndDate
+          ? locale === "ru"
+            ? `До ${formatDayMonth(decision.safeUntil.horizonEndDate, locale)}`
+            : `Until ${formatDayMonth(decision.safeUntil.horizonEndDate, locale)}`
+          : decision.safeUntil.title,
       caption:
         explanationCaption ||
         confidenceCaption ||
@@ -572,6 +616,11 @@ function buildOverview(input: TodayPresentationInput): {
   }
 
   items.push(buildAllowedItem(decision.allowed, locale));
+
+  const nextIncomeItem = buildNextIncomeItem(decision, locale);
+  if (nextIncomeItem) {
+    items.push(nextIncomeItem);
+  }
 
   const timingItem = buildTimingItem(input);
   if (timingItem) {

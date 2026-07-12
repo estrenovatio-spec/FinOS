@@ -25,6 +25,7 @@ export type DecisionStatus = {
 export type ForecastConfidence = "confirmed" | "planned" | "uncertain";
 
 export type DecisionSafeUntil = {
+  status: "constraint_found" | "no_risk_in_horizon" | "unknown";
   title: string;
   note: string | null;
   isReady: boolean;
@@ -32,6 +33,10 @@ export type DecisionSafeUntil = {
   rawStatus: SafeSpendingStatus;
   safeToday: number | null;
   nextIncomeDate: string | null;
+  nextIncomeTitle?: string | null;
+  nextIncomeAmount?: number | null;
+  horizonEndDate: string | null;
+  horizonMonths: 1 | 3 | 6 | null;
   confidence: ForecastConfidence;
   confidenceNote?: string | null;
 };
@@ -180,6 +185,7 @@ export type DecisionCoreSnapshot = DecisionCoreResult & {
 export type DecisionCoreState = {
   locale: Locale;
   today: string;
+  forecastHorizonMonths: 1 | 3 | 6;
   categories: CategoryDefinition[];
   transactions: Transaction[];
   householdFilter: HouseholdFilter;
@@ -198,6 +204,7 @@ export type DecisionCoreState = {
 export type DecisionCoreContext = {
   locale: Locale;
   today: string;
+  forecastHorizonMonths: 1 | 3 | 6;
   categories: CategoryDefinition[];
   transactions: Transaction[];
   confirmedTransactions: Transaction[];
@@ -302,6 +309,7 @@ export type BalanceForecast = {
   firstDeficitDate: string | null;
   nextIncomeDate: string | null;
   horizonEndDate: string;
+  horizonMonths?: 1 | 3 | 6;
   events: ForecastEvent[];
   days?: ForecastDay[];
 };
