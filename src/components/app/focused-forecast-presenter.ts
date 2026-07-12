@@ -43,39 +43,21 @@ export function buildFocusedForecastView(
 ): FocusedForecastView {
   const groups = groupForecastEventsByDate(forecast);
   const resolution = resolveForecastFocus(forecast, focus);
-  const selectedDate = resolution.selectedDate;
+  const hasVisibleFocusContext =
+    Boolean(focus) && resolution.exactMatch && !resolution.outOfHorizon;
+  const selectedDate = hasVisibleFocusContext ? resolution.selectedDate : null;
   const selectedGroup =
     groups.find((group) => group.date === selectedDate) ?? null;
 
   const message = (() => {
-    if (!focus) return null;
-    if (resolution.outOfHorizon) {
-      return locale === "ru"
-        ? "Дата риска находится за пределами текущего прогноза."
-        : "The risk date is outside the current forecast horizon.";
-    }
-    if (!resolution.selectedDate) {
-      return locale === "ru"
-        ? "Прогноз пока не содержит событий на нужную дату."
-        : "The forecast does not have events for that date yet.";
-    }
-    if (!resolution.exactMatch) {
-      return locale === "ru"
-        ? `Точной точки на ${formatTransactionDate(focus.date, locale)} нет, поэтому показана ближайшая доступная дата.`
-        : `There is no exact point for ${formatTransactionDate(focus.date, locale)}, so the nearest available date is shown.`;
-    }
-    if (focus.eventId && resolution.selectedEventId == null) {
-      return locale === "ru"
-        ? "Конкретное событие изменилось, поэтому сохранён фокус на самой дате."
-        : "The specific event changed, so the focus stays on the date.";
-    }
+    if (!focus || !hasVisibleFocusContext) return null;
     return focusReasonText(focus, locale);
   })();
 
   return {
     selectedDate,
-    selectedEventId: resolution.selectedEventId,
-    exactMatch: resolution.exactMatch,
+    selectedEventId: hasVisibleFocusContext ? resolution.selectedEventId : null,
+    exactMatch: hasVisibleFocusContext ? resolution.exactMatch : false,
     outOfHorizon: resolution.outOfHorizon,
     message,
     contextTitle:

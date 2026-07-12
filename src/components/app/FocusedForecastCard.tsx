@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   CalendarClock,
@@ -101,11 +100,10 @@ export function FocusedForecastCard({
             </p>
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
-            {focus
-              ? view.message
-              : locale === "ru"
+            {view.message ??
+              (locale === "ru"
                 ? "Здесь показана та же прогнозная линия, на которую опирается экран «Сегодня»."
-                : "This uses the same forecast line that powers Today."}
+                : "This uses the same forecast line that powers Today.")}
           </p>
         </div>
 
@@ -114,12 +112,6 @@ export function FocusedForecastCard({
             {locale === "ru"
               ? "В текущем горизонте прогноза пока нет событий."
               : "There are no events on the current forecast horizon yet."}
-          </div>
-        ) : null}
-
-        {focus && view.outOfHorizon ? (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground">
-            {view.message}
           </div>
         ) : null}
 
@@ -287,17 +279,6 @@ export function FocusedForecastCard({
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            ) : forecast.events.length > 0 ? (
-              <div className="rounded-xl border border-border/70 bg-background/80 p-3 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>
-                    {locale === "ru"
-                      ? "Дата фокуса не найдена, поэтому прогноз открыт в обычном режиме."
-                      : "The focus date was not found, so the forecast opened in normal mode."}
-                  </span>
                 </div>
               </div>
             ) : null}
