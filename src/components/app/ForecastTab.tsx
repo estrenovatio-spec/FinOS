@@ -76,6 +76,7 @@ export function ForecastTab({
         locale={locale}
         forecast={snapshot.forecast}
         focus={focus}
+        explanation={snapshot.constraintExplanation}
       />
       <PlanningPanel collapsible={false} />
       <TipsPanel collapsible={false} />

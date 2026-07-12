@@ -869,6 +869,16 @@ test("Reserve-required focuses the first limiting date instead of the nearest pa
   assert.equal(scenario.result.safeUntil.title, "До 3 августа");
   assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
   assert.equal(scenario.result.allowed.horizonDate, "2026-08-03");
+  assert.equal(scenario.result.constraintExplanation?.date, "2026-08-03");
+  assert.equal(scenario.result.constraintExplanation?.kind, "reserve");
+  assert.match(
+    scenario.result.constraintExplanation?.summary ?? "",
+    /После платежа «Финальный платёж» на 40[\s\u00A0]000 ₽ останется 0 ₽\./,
+  );
+  assert.equal(
+    scenario.result.constraintExplanation?.detail,
+    "Эти деньги уже нужны на базовые расходы.",
+  );
   assert.equal(scenario.result.mainAction.command.type, "open_forecast");
   if (scenario.result.mainAction.command.type === "open_forecast") {
     assert.equal(scenario.result.mainAction.command.focusDate, "2026-08-03");
@@ -955,6 +965,113 @@ test("safeUntil and allowed use the same later constraint point instead of the e
   assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
   assert.equal(scenario.result.allowed.horizonDate, "2026-08-03");
   assert.equal(scenario.result.mainAction.dueDate, "2026-08-03");
+  assert.equal(scenario.result.constraintExplanation?.date, "2026-08-03");
+});
+
+test("deficit explanation uses negative balance language", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 25000, me: 25000, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "mortgage",
+          amount: 40000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Ипотека",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-08-10",
+        expectedIncomeAmount: 1000,
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(scenario.result.constraintExplanation?.kind, "deficit");
+  assert.equal(scenario.result.constraintExplanation?.date, "2026-08-03");
+  assert.match(scenario.result.constraintExplanation?.title ?? "", /денег уже не хватит/);
+  assert.match(
+    scenario.result.constraintExplanation?.summary ?? "",
+    /баланс станет −15[\s\u00A0]000 ₽/,
+  );
+  assert.equal(scenario.result.constraintExplanation?.detail, null);
+});
+
+test("multiple events on one date are explained by the day total", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 48000, me: 48000, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "school",
+          amount: 20000,
+          type: "expense",
+          categoryId: "kids_family",
+          note: "Школа",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+        recurring({
+          id: "utilities",
+          amount: 22791,
+          type: "expense",
+          categoryId: "services",
+          note: "ЖКХ",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+        recurring({
+          id: "salary",
+          amount: 10000,
+          type: "income",
+          categoryId: "salary",
+          note: "Подработка",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 3,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-08-20",
+        expectedIncomeAmount: 1000,
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(scenario.result.constraintExplanation?.eventCount, 3);
+  assert.match(
+    scenario.result.constraintExplanation?.summary ?? "",
+    /придёт 10[\s\u00A0]000 ₽ и спишется 42[\s\u00A0]791 ₽/,
+  );
+  assert.equal(scenario.result.constraintExplanation?.balanceAfter, -16582);
+});
+
+test("no constraint point means there is no artificial explanation", () => {
+  const scenario = evaluate(
+    buildState({
+      balances: { all: 50000, me: 50000, partner: 0 },
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-07-20",
+        expectedIncomeAmount: 100000,
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(scenario.result.constraintExplanation, null);
 });
 
 test("Nearest payment with healthy balance does not become the next risk", () => {

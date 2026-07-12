@@ -1,6 +1,7 @@
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
+import { buildConstraintExplanation } from "@/lib/decision-core/constraint-explanation";
 import { getRequiredFloor } from "@/lib/decision-core/constraint-point";
 import { buildEssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
 import { buildForecastLine } from "@/lib/decision-core/forecast-line";
@@ -91,6 +92,7 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
   const mainAction = buildMainAction(primaryDecision, ctx, nextRisk);
   const avoid = buildAvoid(primaryDecision, ctx, nextRisk);
   const allowed = buildAllowed(primaryDecision, ctx);
+  const constraintExplanation = buildConstraintExplanation(ctx);
   const peaceIndex = buildPeaceIndex({
     locale: ctx.locale,
     status,
@@ -107,6 +109,7 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     mainAction,
     avoid,
     allowed,
+    constraintExplanation,
     peaceIndex,
     hasHistory: ctx.confirmedTransactions.length > 0,
     forecast: ctx.forecast,
@@ -125,6 +128,7 @@ export type {
   DecisionCoreResult,
   DecisionCoreSnapshot,
   DecisionCoreState,
+  DecisionConstraintExplanation,
   DecisionMainAction,
   DecisionNextRisk,
   DecisionPeaceIndex,

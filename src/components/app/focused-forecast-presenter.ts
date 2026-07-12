@@ -5,7 +5,10 @@ import {
   type ForecastFocus,
 } from "@/lib/forecast-focus";
 import { formatMoney } from "@/lib/format-money";
-import type { BalanceForecast } from "@/lib/decision-core/types";
+import type {
+  BalanceForecast,
+  DecisionConstraintExplanation,
+} from "@/lib/decision-core/types";
 import type { Locale } from "@/types";
 
 export type FocusedForecastView = {
@@ -15,8 +18,9 @@ export type FocusedForecastView = {
   outOfHorizon: boolean;
   message: string | null;
   contextTitle: string | null;
+  contextSummary: string | null;
+  contextDetail: string | null;
   contextBalance: string | null;
-  contextDeficit: string | null;
 };
 
 function focusReasonText(focus: ForecastFocus, locale: Locale): string {
@@ -40,6 +44,7 @@ export function buildFocusedForecastView(
   forecast: BalanceForecast,
   focus: ForecastFocus | null,
   locale: Locale,
+  explanation?: DecisionConstraintExplanation | null,
 ): FocusedForecastView {
   const groups = groupForecastEventsByDate(forecast);
   const resolution = resolveForecastFocus(forecast, focus);
@@ -63,18 +68,26 @@ export function buildFocusedForecastView(
     contextTitle:
       selectedGroup == null
         ? null
-        : locale === "ru"
-          ? `Почему FIN OS привёл вас на ${formatTransactionDate(selectedGroup.date, locale)}`
-          : `Why FIN OS brought you to ${formatTransactionDate(selectedGroup.date, locale)}`,
+        : explanation && explanation.date === selectedGroup.date
+          ? explanation.title
+          : locale === "ru"
+            ? `Почему FIN OS привёл вас на ${formatTransactionDate(selectedGroup.date, locale)}`
+            : `Why FIN OS brought you to ${formatTransactionDate(selectedGroup.date, locale)}`,
+    contextSummary:
+      selectedGroup == null
+        ? null
+        : explanation && explanation.date === selectedGroup.date
+          ? explanation.summary
+          : null,
+    contextDetail:
+      selectedGroup == null
+        ? null
+        : explanation && explanation.date === selectedGroup.date
+          ? explanation.detail
+          : null,
     contextBalance:
       selectedGroup == null
         ? null
         : `${formatMoney(selectedGroup.balanceAfter, locale)} ${locale === "ru" ? "₽" : "RUB"}`,
-    contextDeficit:
-      selectedGroup == null || selectedGroup.balanceAfter >= 0
-        ? null
-        : locale === "ru"
-          ? `После этих операций: −${formatMoney(Math.abs(selectedGroup.balanceAfter), locale)} ₽`
-          : `After these events: −${formatMoney(Math.abs(selectedGroup.balanceAfter), locale)} RUB`,
   };
 }

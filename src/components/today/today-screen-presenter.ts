@@ -493,15 +493,21 @@ function buildTimingItem(input: TodayPresentationInput): TodayOverviewItem | nul
   }
 
   if (decision.safeUntil.title) {
+    const explanationCaption = decision.constraintExplanation
+      ? [decision.constraintExplanation.summary, decision.constraintExplanation.detail]
+          .filter(Boolean)
+          .join(" ")
+      : null;
     return {
       id: "safe-until",
       label: locale === "ru" ? "Денег хватит до" : "Money lasts until",
       value: decision.safeUntil.title,
       caption:
-        decision.safeUntil.note &&
+        explanationCaption ||
+        (decision.safeUntil.note &&
         !decision.safeUntil.note.toLocaleLowerCase("ru-RU").includes("прогноз")
           ? decision.safeUntil.note
-          : null,
+          : null),
     };
   }
 

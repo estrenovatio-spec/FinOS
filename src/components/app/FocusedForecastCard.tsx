@@ -16,7 +16,11 @@ import {
   resolveForecastFocus,
   type ForecastFocus,
 } from "@/lib/forecast-focus";
-import type { BalanceForecast, ForecastEvent } from "@/lib/decision-core/types";
+import type {
+  BalanceForecast,
+  DecisionConstraintExplanation,
+  ForecastEvent,
+} from "@/lib/decision-core/types";
 import type { Locale } from "@/types";
 
 function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
@@ -36,10 +40,12 @@ export function FocusedForecastCard({
   locale,
   forecast,
   focus,
+  explanation,
 }: {
   locale: Locale;
   forecast: BalanceForecast;
   focus: ForecastFocus | null;
+  explanation?: DecisionConstraintExplanation | null;
 }) {
   const groups = useMemo(() => groupForecastEventsByDate(forecast), [forecast]);
   const focusResolution = useMemo(
@@ -47,8 +53,8 @@ export function FocusedForecastCard({
     [focus, forecast],
   );
   const view = useMemo(
-    () => buildFocusedForecastView(forecast, focus, locale),
-    [focus, forecast, locale],
+    () => buildFocusedForecastView(forecast, focus, locale, explanation),
+    [explanation, focus, forecast, locale],
   );
   const [manualSelectedDate, setManualSelectedDate] = useState<string | null>(null);
   const selectedDate = manualSelectedDate ?? view.selectedDate;
@@ -176,15 +182,25 @@ export function FocusedForecastCard({
                         {view.contextTitle}
                       </p>
                     ) : null}
-                    {view.contextDeficit ? (
-                      <p className="mt-1 text-sm font-medium text-rose-600">
-                        {view.contextDeficit}
+                    {view.contextSummary ? (
+                      <p
+                        className={[
+                          "mt-1 text-sm font-medium",
+                          explanation?.kind === "deficit" ? "text-rose-600" : "text-foreground",
+                        ].join(" ")}
+                      >
+                        {view.contextSummary}
                       </p>
                     ) : view.contextBalance ? (
                       <p className="mt-1 text-sm font-medium text-foreground">
                         {locale === "ru"
                           ? `Баланс после событий: ${view.contextBalance}`
                           : `Balance after events: ${view.contextBalance}`}
+                      </p>
+                    ) : null}
+                    {view.contextDetail ? (
+                      <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                        {view.contextDetail}
                       </p>
                     ) : null}
                   </div>

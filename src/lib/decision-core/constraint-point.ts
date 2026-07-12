@@ -6,6 +6,11 @@ export function getRequiredFloor(ctx: DecisionCoreContext): number {
 
 export type ConstraintPoint = {
   event: ForecastEvent;
+  date: string;
+  eventId: string;
+  eventTitle: string;
+  eventAmount: number;
+  balanceAfter: number;
   kind: "deficit" | "reserve";
   requiredFloor: number;
 };
@@ -19,6 +24,11 @@ export function getConstraintPoint(ctx: DecisionCoreContext): ConstraintPoint | 
     return event
       ? {
           event,
+          date: event.date,
+          eventId: event.id,
+          eventTitle: event.title,
+          eventAmount: event.amount,
+          balanceAfter: event.balanceAfter,
           kind: "deficit",
           requiredFloor: getRequiredFloor(ctx),
         }
@@ -35,6 +45,11 @@ export function getConstraintPoint(ctx: DecisionCoreContext): ConstraintPoint | 
   return event
     ? {
         event,
+        date: event.date,
+        eventId: event.id,
+        eventTitle: event.title,
+        eventAmount: event.amount,
+        balanceAfter: event.balanceAfter,
         kind: "reserve",
         requiredFloor,
       }

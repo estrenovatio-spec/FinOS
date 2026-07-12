@@ -53,6 +53,7 @@ function makeDecision(
       horizonDate: "2026-07-25",
       reason: "Это сумма сверх обязательств и резерва.",
     },
+    constraintExplanation: null,
     peaceIndex: {
       value: 72,
       note: "Прогноз остаётся устойчивым.",
@@ -641,12 +642,26 @@ test("focused forecast view explains why the selected context is shown", () => {
       eventId: "rent-2026-07-27",
     },
     "ru",
+    {
+      date: "2026-07-27",
+      kind: "deficit",
+      title: "27 июля денег уже не хватит.",
+      summary: "После 3 платежей баланс станет −8 500 ₽.",
+      detail: null,
+      eventId: "rent-2026-07-27",
+      eventTitle: "Аренда",
+      eventAmount: -101000,
+      balanceAfter: -8500,
+      requiredFloor: 0,
+      eventCount: 3,
+      totalDelta: 0,
+    },
   );
 
   assert.equal(view.selectedDate, "2026-07-27");
   assert.equal(view.selectedEventId, "rent-2026-07-27");
-  assert.match(view.contextTitle ?? "", /27\.07\.2026/);
-  assert.match(view.contextDeficit ?? "", /8[\s\u00A0]500/);
+  assert.match(view.contextTitle ?? "", /27 июля/);
+  assert.match(view.contextSummary ?? "", /−8[\s\u00A0]500 ₽/);
 });
 
 test("focused forecast view keeps other events visible on the same day", () => {
@@ -688,6 +703,78 @@ test("missing focused date quietly falls back to the regular forecast view", () 
   assert.equal(view.selectedEventId, null);
   assert.equal(view.message, null);
   assert.equal(view.contextTitle, null);
+});
+
+test("Today safe-until card uses the same constraint explanation source", () => {
+  const explanation = {
+    date: "2026-08-03",
+    kind: "reserve" as const,
+    title: "Почему до 3 августа?",
+    summary: "После платежа «Ипотека» на 40 000 ₽ останется 8 500 ₽.",
+    detail: "Эти деньги уже нужны на базовые расходы.",
+    eventId: "mortgage",
+    eventTitle: "Ипотека",
+    eventAmount: -40000,
+    balanceAfter: 8500,
+    requiredFloor: 8500,
+    eventCount: 1,
+    totalDelta: -40000,
+  };
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      safeUntil: {
+        title: "До 3 августа",
+        note: "Расчёт по прогнозной линии.",
+        isReady: true,
+        needsSetup: false,
+        rawStatus: "ready",
+        safeToday: 0,
+        nextIncomeDate: "2026-08-10",
+      },
+      constraintExplanation: explanation,
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-08-10",
+    },
+    balances: { all: 84994, me: 84994, partner: 0 },
+  });
+
+  const safeUntil = view.overviewItems.find((item) => item.id === "safe-until");
+  assert.equal(
+    safeUntil?.caption,
+    "После платежа «Ипотека» на 40 000 ₽ останется 8 500 ₽. Эти деньги уже нужны на базовые расходы.",
+  );
+
+  const focused = buildFocusedForecastView(
+    makeForecast({
+      firstDeficitDate: null,
+      nextIncomeDate: "2026-08-10",
+      events: [
+        {
+          id: "mortgage",
+          title: "Ипотека",
+          amount: -40000,
+          date: "2026-08-03",
+          balanceAfter: 8500,
+          source: "recurring",
+        },
+      ],
+    }),
+    {
+      date: "2026-08-03",
+      source: "today_main_action",
+      reason: "reserve_required",
+      eventId: "mortgage",
+    },
+    "ru",
+    explanation,
+  );
+
+  assert.equal(focused.contextSummary, explanation.summary);
+  assert.equal(focused.contextDetail, explanation.detail);
 });
 
 test("money setup progress is based on filled data", () => {

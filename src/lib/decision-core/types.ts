@@ -119,6 +119,21 @@ export type DecisionAllowed = {
   reason?: string | null;
 };
 
+export type DecisionConstraintExplanation = {
+  date: string;
+  kind: "deficit" | "reserve";
+  title: string;
+  summary: string;
+  detail: string | null;
+  eventId?: string | null;
+  eventTitle?: string | null;
+  eventAmount?: number | null;
+  balanceAfter: number;
+  requiredFloor: number;
+  eventCount: number;
+  totalDelta: number;
+};
+
 export type DecisionPeaceIndex = {
   value: number;
   note: string;
@@ -132,6 +147,7 @@ export type DecisionCoreResult = {
   mainAction: DecisionMainAction;
   avoid: DecisionAvoid;
   allowed: DecisionAllowed;
+  constraintExplanation: DecisionConstraintExplanation | null;
   peaceIndex: DecisionPeaceIndex;
   hasHistory: boolean;
 };
