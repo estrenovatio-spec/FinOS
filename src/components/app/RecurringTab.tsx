@@ -1,15 +1,22 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { MoneySetupDialog } from "@/components/MoneySetupDialog";
 import { PendingRecurringCard } from "@/components/PendingRecurringCard";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatMoney } from "@/lib/format-money";
 import { formatTransactionDateShort } from "@/lib/format-date";
+import { hasPartnerBudget } from "@/lib/owner-labels";
 import { useStore } from "@/store/useStore";
 
 export function RecurringTab() {
   const locale = useStore((s) => s.locale);
   const recurringTransactions = useStore((s) => s.recurringTransactions);
+  const partnerName = useStore((s) => s.partnerName);
+  const partnerKeywords = useStore((s) => s.partnerKeywords);
+  const [moneySetupOpen, setMoneySetupOpen] = useState(false);
+  const showHouseholdToggle = hasPartnerBudget(partnerName, partnerKeywords);
 
   const activeRecurring = useMemo(
     () =>
@@ -29,6 +36,16 @@ export function RecurringTab() {
           {locale === "ru"
             ? "Ближайшие регулярные списания и напоминания."
             : "Upcoming recurring payments and reminders."}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={() => setMoneySetupOpen(true)}>
+            {locale === "ru" ? "Добавить доход" : "Add income"}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {locale === "ru"
+            ? "Для регулярного или планового дохода откроется финансовая база. Разовое поступление добавляйте через «Добавить операцию»."
+            : "Regular or planned income opens Money setup. One-off income still goes through Add entry."}
         </p>
       </div>
 
@@ -65,6 +82,13 @@ export function RecurringTab() {
           )}
         </CardContent>
       </Card>
+
+      <MoneySetupDialog
+        open={moneySetupOpen}
+        onOpenChange={setMoneySetupOpen}
+        showHouseholdToggle={showHouseholdToggle}
+        initialSection="income"
+      />
     </div>
   );
 }

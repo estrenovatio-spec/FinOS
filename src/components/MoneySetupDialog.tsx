@@ -16,6 +16,15 @@ import {
   type MoneySetupIncomeSource,
   type MoneySetupIncomeSourceKind,
 } from "@/lib/money-setup";
+import {
+  buildIncomeSetupSavePayload,
+  emptyIncomeSourceDraft,
+  getPrimaryIncomeSourceDraft,
+  hasLegacyIncomeSetup,
+  startIncomeSourcesEditing,
+  toIncomeSourceDraft,
+  type IncomeSourceDraft,
+} from "@/components/today/income-sources-helpers";
 import { useToast } from "@/components/ui/toast";
 import { useHouseholdBalances, useStore } from "@/store/useStore";
 
@@ -43,15 +52,6 @@ const ESSENTIAL_EXCLUDED_KEYWORDS = [
   "регуляр",
 ] as const;
 
-type IncomeSourceDraft = {
-  id: string;
-  label: string;
-  expectedDate: string;
-  expectedAmount: string;
-  kind: MoneySetupIncomeSourceKind;
-  isPrimary: boolean;
-};
-
 function toggleId(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
 }
@@ -72,41 +72,6 @@ function isServiceEssentialCategory(
   return ESSENTIAL_EXCLUDED_KEYWORDS.some((keyword) =>
     haystack.includes(keyword),
   );
-}
-
-function makeIncomeSourceId(): string {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-  return `income-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function toIncomeSourceDraft(
-  source: MoneySetupIncomeSource,
-): IncomeSourceDraft {
-  return {
-    id: source.id,
-    label: source.label,
-    expectedDate: source.expectedDate ?? "",
-    expectedAmount:
-      source.expectedAmount != null ? String(source.expectedAmount) : "",
-    kind: source.kind,
-    isPrimary: Boolean(source.isPrimary),
-  };
-}
-
-function emptyIncomeSourceDraft(isPrimary: boolean): IncomeSourceDraft {
-  return {
-    id: makeIncomeSourceId(),
-    label: "",
-    expectedDate: "",
-    expectedAmount: "",
-    kind: "salary",
-    isPrimary,
-  };
 }
 
 export function MoneySetupDialog({
@@ -236,6 +201,39 @@ export function MoneySetupDialog({
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
   }, [moneySetup, open]);
 
+  const visibleIncomeSources = useMemo(() => {
+    if (showIncomeSources) {
+      return incomeSources;
+    }
+    if (moneySetup.incomeSources.length > 0) {
+      return moneySetup.incomeSources.map((source) => ({
+        id: source.id,
+        label: source.label,
+        expectedDate: source.expectedDate ?? "",
+        expectedAmount:
+          source.expectedAmount != null ? String(source.expectedAmount) : "",
+        kind: source.kind,
+        isPrimary: Boolean(source.isPrimary),
+      }));
+    }
+    if (hasLegacyIncomeSetup(moneySetup)) {
+      return [
+        {
+          id: "legacy-income",
+          label: locale === "ru" ? "Основной доход" : "Primary income",
+          expectedDate: moneySetup.nextIncomeDate ?? "",
+          expectedAmount:
+            moneySetup.expectedIncomeAmount != null
+              ? String(moneySetup.expectedIncomeAmount)
+              : "",
+          kind: "salary" as MoneySetupIncomeSourceKind,
+          isPrimary: true,
+        },
+      ];
+    }
+    return [];
+  }, [incomeSources, locale, moneySetup, showIncomeSources]);
+
   useEffect(() => {
     if (!open || !initialSection) return;
 
@@ -258,10 +256,14 @@ export function MoneySetupDialog({
 
   const addIncomeSource = () => {
     setShowIncomeSources(true);
-    setIncomeSources((prev) => [
-      ...prev,
-      emptyIncomeSourceDraft(prev.length === 0),
-    ]);
+    setIncomeSources((prev) =>
+      startIncomeSourcesEditing({
+        moneySetup,
+        currentDrafts: prev,
+        locale,
+        appendBlank: true,
+      }),
+    );
   };
 
   const updateIncomeSource = (
@@ -298,27 +300,26 @@ export function MoneySetupDialog({
   };
 
   const confirmSingleIncomeMode = () => {
+    const primary = getPrimaryIncomeSourceDraft(incomeSources);
+    if (primary) {
+      setNextIncomeDate(primary.expectedDate);
+      setExpectedIncomeAmount(primary.expectedAmount);
+    }
     setIncomeSources([]);
     setShowIncomeSources(false);
     setConfirmResetIncomeSources(false);
   };
 
   const handleSave = () => {
-    const normalizedIncomeSources: MoneySetupIncomeSource[] = incomeSources.map(
-      (item) => ({
-        id: item.id,
-        label: item.label.trim(),
-        expectedDate: item.expectedDate || null,
-        expectedAmount: parseAmount(item.expectedAmount),
-        kind: item.kind,
-        ...(item.isPrimary ? { isPrimary: true } : {}),
-      }),
-    );
+    const incomePayload = buildIncomeSetupSavePayload({
+      showIncomeSources,
+      incomeSources,
+      nextIncomeDate,
+      expectedIncomeAmount,
+    });
 
     updateMoneySetup({
-      nextIncomeDate: nextIncomeDate || null,
-      expectedIncomeAmount: parseAmount(expectedIncomeAmount),
-      incomeSources: normalizedIncomeSources,
+      ...incomePayload,
       requiredRecurringIds: hasNoRequiredFixedExpenses
         ? []
         : requiredRecurringIds,
@@ -383,55 +384,118 @@ export function MoneySetupDialog({
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto px-4 py-4">
-          {!showIncomeSources ? (
-            <>
-              <div ref={incomeSectionRef} className="space-y-2">
-                <label className="block text-sm font-medium text-foreground">
-                  {locale === "ru" ? "Следующий доход" : "Next income"}
-                </label>
-                <Input
-                  ref={incomeDateInputRef}
-                  type="date"
-                  value={nextIncomeDate}
-                  onChange={(event) => setNextIncomeDate(event.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-foreground">
-                  {locale === "ru"
-                    ? "Примерная сумма дохода"
-                    : "Estimated income amount"}
-                </label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  placeholder={
-                    locale === "ru" ? "Например, 120000" : "For example, 120000"
-                  }
-                  value={expectedIncomeAmount}
-                  onChange={(event) =>
-                    setExpectedIncomeAmount(event.target.value)
-                  }
-                />
-              </div>
-            </>
-          ) : null}
-
-          <div className="space-y-2">
-            {!showIncomeSources ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-9 w-full justify-center text-sm font-medium"
-                onClick={() => setShowIncomeSources(true)}
-              >
+          <div ref={incomeSectionRef} className="space-y-3">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium text-foreground">
+                {locale === "ru" ? "Доходы" : "Income"}
+              </p>
+              <p className="text-xs text-muted-foreground">
                 {locale === "ru"
-                  ? "+ У меня несколько выплат"
-                  : "+ I have multiple payouts"}
-              </Button>
+                  ? "Регулярный или плановый доход добавляйте здесь. Разовое поступление остаётся через «Добавить операцию»."
+                  : "Add regular or planned income here. One-off money still goes through Add entry."}
+              </p>
+            </div>
+
+            {!showIncomeSources ? (
+              <>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    {locale === "ru" ? "Следующий доход" : "Next income"}
+                  </label>
+                  <Input
+                    ref={incomeDateInputRef}
+                    type="date"
+                    value={nextIncomeDate}
+                    onChange={(event) => setNextIncomeDate(event.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    {locale === "ru"
+                      ? "Примерная сумма дохода"
+                      : "Estimated income amount"}
+                  </label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    placeholder={
+                      locale === "ru" ? "Например, 120000" : "For example, 120000"
+                    }
+                    value={expectedIncomeAmount}
+                    onChange={(event) =>
+                      setExpectedIncomeAmount(event.target.value)
+                    }
+                  />
+                </div>
+              </>
             ) : null}
+
+            {visibleIncomeSources.length > 0 ? (
+              <div className="space-y-2">
+                {visibleIncomeSources.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-md border border-border/70 bg-background px-3 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {item.label || (locale === "ru" ? "Источник дохода" : "Income source")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.expectedAmount
+                            ? `${item.expectedAmount} ${locale === "ru" ? "₽" : "RUB"}`
+                            : locale === "ru"
+                              ? "Сумма не указана"
+                              : "Amount missing"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.expectedDate
+                            ? item.expectedDate
+                            : locale === "ru"
+                              ? "Дата не указана"
+                              : "Date missing"}
+                        </p>
+                      </div>
+                      {!showIncomeSources ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-0 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setShowIncomeSources(true);
+                            setIncomeSources(
+                              startIncomeSourcesEditing({
+                                moneySetup,
+                                currentDrafts: incomeSources,
+                                locale,
+                                appendBlank: false,
+                              }),
+                            );
+                          }}
+                        >
+                          {locale === "ru" ? "Изменить доход" : "Edit income"}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <Button
+              type="button"
+              variant={showIncomeSources ? "outline" : "secondary"}
+              className="h-9 w-full justify-center text-sm font-medium"
+              onClick={addIncomeSource}
+            >
+              {locale === "ru"
+                ? "Добавить источник дохода"
+                : "Add income source"}
+            </Button>
 
             {showIncomeSources ? (
               <div className="space-y-3 rounded-md border border-border/60 bg-muted/10 p-3">
@@ -601,16 +665,6 @@ export function MoneySetupDialog({
                   </p>
                 )}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addIncomeSource}
-                >
-                  {locale === "ru"
-                    ? "Добавить источник дохода"
-                    : "Add income source"}
-                </Button>
               </div>
             ) : null}
           </div>
