@@ -8,6 +8,7 @@ import {
 } from "@/components/TransactionEditDialog";
 import { TodayHero } from "@/components/today/TodayHero";
 import { TodayOverview } from "@/components/today/TodayOverview";
+import { TodayRatesCard } from "@/components/today/TodayRatesCard";
 import { TodaySecondaryInsights } from "@/components/today/TodaySecondaryInsights";
 import {
   executeMainActionCommand,
@@ -35,6 +36,7 @@ export function TodayScreen({
   ) => void;
 }) {
   const locale = useStore((s) => s.locale);
+  const liveRatesEnabled = useStore((s) => s.liveRatesEnabled);
   const forecastHorizonMonths = useStore((s) => s.forecastHorizonMonths);
   const categories = useStore((s) => s.categories);
   const moneySetup = useStore((s) => s.moneySetup);
@@ -235,6 +237,8 @@ export function TodayScreen({
       ) : null}
 
       <TodaySecondaryInsights avoid={view.avoid} peaceIndex={view.peaceIndex} />
+
+      {liveRatesEnabled ? <TodayRatesCard locale={locale} /> : null}
 
       <QuickAddOperationDialog
         open={quickAddOpen}
