@@ -306,6 +306,7 @@ test("planned free money includes recurring income from the current period", () 
   const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
   assert.equal(result.amount, 28322);
   assert.equal(result.breakdown?.expectedRecurringIncome, 24000);
+  assert.equal(result.breakdown?.periodStartDate, "2026-07-13");
   assert.equal(result.includesUnconfirmedIncome, false);
 });
 
@@ -483,4 +484,61 @@ test("planned free money becomes zero after spending the whole planned amount", 
 
   const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
   assert.equal(result.amount, 0);
+});
+
+test("planned free money subtracts recurring expense occurrence inside the current period", () => {
+  const state = makeState();
+  const snapshot = makeSnapshot([
+    {
+      id: "recurring-rent-2026-07-20",
+      title: "Аренда квартиры",
+      amount: -10000,
+      date: "2026-07-20",
+      balanceAfter: 35754,
+      source: "recurring",
+      recurringId: "rent-series",
+    },
+  ]);
+
+  const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.mandatoryPayments, 10000);
+  assert.equal(result.amount, 35754);
+});
+
+test("planned free money ignores recurring expense outside the current period", () => {
+  const state = makeState();
+  const snapshot = makeSnapshot([
+    {
+      id: "recurring-rent-2026-08-20",
+      title: "Аренда квартиры",
+      amount: -10000,
+      date: "2026-08-20",
+      balanceAfter: 35754,
+      source: "recurring",
+      recurringId: "rent-series",
+    },
+  ]);
+
+  const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.mandatoryPayments, 0);
+});
+
+test("planned free money includes recurring income events from the current period", () => {
+  const state = makeState();
+  const snapshot = makeSnapshot([
+    {
+      id: "recurring-side-income-2026-07-15",
+      title: "Подработка",
+      amount: 18000,
+      date: "2026-07-15",
+      balanceAfter: 63754,
+      source: "recurring",
+      recurringId: "side-income",
+    },
+  ]);
+
+  const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.expectedRecurringIncome, 18000);
+  assert.equal(result.amount, 63754);
+  assert.equal(result.includesUnconfirmedIncome, true);
 });

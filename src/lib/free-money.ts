@@ -1,4 +1,5 @@
 import { getCurrentBudgetPeriod } from "@/lib/budget-period";
+import { formatIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { DecisionCoreSnapshot, DecisionCoreState } from "@/lib/decision-core";
 import type { ResolvedMoneySetupIncomeSource } from "@/lib/money-setup";
@@ -19,6 +20,7 @@ export type PlannedFreeMoneyBreakdown = {
   essentialPlannedSpending: number;
   otherRequiredExpenses: number;
   plannedFreeMoney: number;
+  periodStartDate: string;
   periodEndDate: string;
 };
 
@@ -34,6 +36,7 @@ export type PlannedFreeMoneyView = {
   status: "available" | "restricted" | "unknown";
   amount: number | null;
   periodEndDate: string | null;
+  periodStartDate: string | null;
   expectedRecurringIncome: number;
   includesUnconfirmedIncome: boolean;
   breakdown: PlannedFreeMoneyBreakdown | null;
@@ -68,6 +71,9 @@ function collectRequiredSpending(
   state: DecisionCoreState,
   snapshot: DecisionCoreSnapshot,
   periodEndDate: string,
+  options?: {
+    includeAllRecurringExpenses?: boolean;
+  },
 ) {
   const requiredRecurringIds = new Set(state.moneySetup.requiredRecurringIds ?? []);
   let mandatoryPayments = 0;
@@ -88,7 +94,10 @@ function collectRequiredSpending(
     }
 
     if (event.source === "recurring") {
-      if (event.recurringId && requiredRecurringIds.has(event.recurringId)) {
+      if (
+        options?.includeAllRecurringExpenses ||
+        (event.recurringId && requiredRecurringIds.has(event.recurringId))
+      ) {
         mandatoryPayments += -event.amount;
       }
       continue;
@@ -109,6 +118,7 @@ function collectRequiredSpending(
 function sumExpectedRecurringIncome(
   state: DecisionCoreState,
   snapshot: DecisionCoreSnapshot,
+  periodStartDate: string,
   periodEndDate: string,
 ) {
   const resolved = snapshot.resolvedIncomeSources ?? [];
@@ -116,11 +126,18 @@ function sumExpectedRecurringIncome(
   let includesUnconfirmedIncome = false;
 
   for (const income of resolved) {
-    if (!shouldCountRecurringIncome(income, state.today, periodEndDate)) continue;
+    if (!shouldCountRecurringIncome(income, periodStartDate, periodEndDate)) continue;
     expectedRecurringIncome += Math.round(income.expectedAmount ?? 0);
     if (income.status === "overdue_unconfirmed" || income.status === "due_today") {
       includesUnconfirmedIncome = true;
     }
+  }
+
+  for (const event of snapshot.forecast.events) {
+    if (event.source !== "recurring" || event.amount <= 0) continue;
+    if (event.date < periodStartDate || event.date > periodEndDate) continue;
+    expectedRecurringIncome += Math.round(event.amount);
+    includesUnconfirmedIncome = true;
   }
 
   return {
@@ -131,12 +148,14 @@ function sumExpectedRecurringIncome(
 
 function shouldCountRecurringIncome(
   income: ResolvedMoneySetupIncomeSource,
-  today: string,
+  periodStartDate: string,
   periodEndDate: string,
 ): boolean {
   if ((income.recurrence ?? "monthly") === "once") return false;
   if (income.status === "received") return false;
-  if (income.occurrenceDate < today || income.occurrenceDate > periodEndDate) return false;
+  if (income.occurrenceDate < periodStartDate || income.occurrenceDate > periodEndDate) {
+    return false;
+  }
   return (income.expectedAmount ?? 0) > 0;
 }
 
@@ -173,13 +192,13 @@ export function calculateFreeMoneyUntilPeriodEnd(
     note:
       breakdown.freeMoney > 0
         ? state.locale === "ru"
-          ? `Из уже полученных денег после обязательных платежей и плановых базовых трат до ${period.to} остаётся ${rub(breakdown.freeMoney, state.locale)}.`
+          ? `Из уже полученных денег после обязательных платежей и плановых базовых трат до ${formatIsoDate(period.to, state.locale)} остаётся ${rub(breakdown.freeMoney, state.locale)}.`
           : `After required payments and planned essentials until ${period.to}, ${rub(
               breakdown.freeMoney,
               state.locale,
             )} remains free.`
         : state.locale === "ru"
-          ? `Текущих денег пока не остаётся сверх обязательных и плановых расходов до ${period.to}.`
+          ? `Текущих денег пока не остаётся сверх обязательных и плановых расходов до ${formatIsoDate(period.to, state.locale)}.`
           : `No current money remains beyond required and planned spending until ${period.to}.`,
   };
 }
@@ -193,10 +212,13 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
     state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
   );
   const { mandatoryPayments, essentialPlannedSpending, otherRequiredExpenses } =
-    collectRequiredSpending(state, snapshot, period.to);
+    collectRequiredSpending(state, snapshot, period.to, {
+      includeAllRecurringExpenses: true,
+    });
   const { expectedRecurringIncome, includesUnconfirmedIncome } = sumExpectedRecurringIncome(
     state,
     snapshot,
+    state.today,
     period.to,
   );
 
@@ -216,6 +238,7 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
     essentialPlannedSpending: roundAmount(essentialPlannedSpending),
     otherRequiredExpenses: roundAmount(otherRequiredExpenses),
     plannedFreeMoney: roundAmount(plannedFreeMoney),
+    periodStartDate: state.today,
     periodEndDate: period.to,
   };
 
@@ -223,13 +246,14 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
     status: breakdown.plannedFreeMoney > 0 ? "available" : "restricted",
     amount: breakdown.plannedFreeMoney,
     periodEndDate: period.to,
+    periodStartDate: state.today,
     expectedRecurringIncome: breakdown.expectedRecurringIncome,
     includesUnconfirmedIncome,
     note:
       state.locale === "ru"
         ? includesUnconfirmedIncome
-          ? `После всех платежей и базовых расходов до ${period.to}, если регулярные доходы придут по плану. Поступление ещё не подтверждено.`
-          : `После всех платежей и базовых расходов до ${period.to}, если регулярные доходы придут по плану.`
+          ? `После всех платежей и базовых расходов до ${formatIsoDate(period.to, state.locale)}, если регулярные доходы придут по плану. Поступление ещё не подтверждено.`
+          : `После всех платежей и базовых расходов до ${formatIsoDate(period.to, state.locale)}, если регулярные доходы придут по плану.`
         : includesUnconfirmedIncome
           ? `After all payments and planned essentials until ${period.to}, if recurring income arrives as planned. The income is not confirmed yet.`
           : `After all payments and planned essentials until ${period.to}, if recurring income arrives as planned.`,
