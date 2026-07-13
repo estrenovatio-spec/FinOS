@@ -1,5 +1,6 @@
 import { getMainActionButtonLabel } from "@/components/today/main-action-resolver";
 import type { MoneySetup } from "@/lib/money-setup";
+import type { DailySafeSpendingView } from "@/lib/daily-safe-spending";
 import type {
   DecisionAllowed,
   DecisionCoreResult,
@@ -63,6 +64,7 @@ type TodayPresentationInput = {
     me: number;
     partner: number;
   };
+  dailySafeSpending?: DailySafeSpendingView;
 };
 
 const MONTHS_RU = [
@@ -417,20 +419,47 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
   };
 }
 
-function buildAllowedItem(allowed: DecisionAllowed, locale: Locale): TodayOverviewItem {
+function buildAllowedItem(
+  allowed: DecisionAllowed,
+  locale: Locale,
+  dailySafeSpending?: DailySafeSpendingView,
+): TodayOverviewItem {
   if (allowed.status === "available" && allowed.amount != null) {
+    const remainingAmount =
+      dailySafeSpending?.status === "available" &&
+      dailySafeSpending.remainingAmount != null
+        ? dailySafeSpending.remainingAmount
+        : allowed.amount;
+    const baseAmount =
+      dailySafeSpending?.status === "available" && dailySafeSpending.baseAmount != null
+        ? dailySafeSpending.baseAmount
+        : allowed.amount;
+    const spentToday =
+      dailySafeSpending?.status === "available" && dailySafeSpending.spentToday != null
+        ? dailySafeSpending.spentToday
+        : 0;
+    const remainingValue = rub(remainingAmount, locale) ?? "";
+    const baseValue = rub(baseAmount, locale) ?? remainingValue;
+    const spentCaption =
+      spentToday > 0
+        ? locale === "ru"
+          ? `Из ${baseValue} на сегодня. Уже учтено расходов: ${rub(spentToday, locale)}.`
+          : `From ${baseValue} for today. Already spent: ${rub(spentToday, locale)}.`
+        : locale === "ru"
+          ? `Из ${baseValue} на сегодня.`
+          : `From ${baseValue} for today.`;
     return {
       id: "allowed",
-      label: locale === "ru" ? "Можно потратить сегодня" : "You can spend today",
-      value: rub(allowed.amount, locale) ?? "",
+      label: locale === "ru" ? "Можно потратить ещё" : "You can still spend",
+      value: remainingValue,
       caption:
         locale === "ru"
           ? allowed.horizonDate
-            ? `${allowed.confidence === "confirmed" ? "Сумма рассчитана" : "Сумма пока рассчитана по плану"} с учётом всех платежей до ${formatDayMonth(allowed.horizonDate, locale)}.${allowed.confidenceNote ? ` ${allowed.confidenceNote}` : ""}`
-            : "Сумма рассчитана с учётом известных обязательств."
+            ? `${spentCaption} ${allowed.confidence === "confirmed" ? "Остаток пересчитан" : "Остаток пока пересчитан по плану"} с учётом всех платежей до ${formatDayMonth(allowed.horizonDate, locale)}.${allowed.confidenceNote ? ` ${allowed.confidenceNote}` : ""}`
+            : `${spentCaption} Сумма рассчитана с учётом известных обязательств.`
           : allowed.horizonDate
-            ? `Calculated with all payments until ${formatDayMonth(allowed.horizonDate, locale)}.`
-            : "Calculated with the known obligations.",
+            ? `${spentCaption} Calculated with all payments until ${formatDayMonth(allowed.horizonDate, locale)}.`
+            : `${spentCaption} Calculated with the known obligations.`,
     };
   }
 
@@ -615,7 +644,7 @@ function buildOverview(input: TodayPresentationInput): {
     items.push(reserveItem);
   }
 
-  items.push(buildAllowedItem(decision.allowed, locale));
+  items.push(buildAllowedItem(decision.allowed, locale, input.dailySafeSpending));
 
   const nextIncomeItem = buildNextIncomeItem(decision, locale);
   if (nextIncomeItem) {

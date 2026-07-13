@@ -339,11 +339,53 @@ test("allowed available shows amount instead of prose", () => {
       nextIncomeDate: "2026-07-25",
     },
     balances: { all: 40000, me: 40000, partner: 0 },
+    dailySafeSpending: {
+      status: "available",
+      remainingAmount: 3500,
+      baseAmount: 3500,
+      spentToday: 0,
+    },
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Можно потратить сегодня");
+  assert.equal(allowed?.label, "Можно потратить ещё");
   assert.match(allowed?.value ?? "", /3[\s\u00A0]500 ₽/);
+  assert.match(allowed?.caption ?? "", /Из 3[\s\u00A0]500 ₽ на сегодня/);
+});
+
+test("allowed available shows remaining amount after today's spending", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      allowed: {
+        text: "Можно потратить сегодня до 34 418 ₽ без риска для прогноза.",
+        hasRestPermission: true,
+        status: "available",
+        amount: 3320,
+        horizonDate: "2026-08-03",
+        reason: "Это сумма сверх обязательств и резерва.",
+        confidence: "confirmed",
+      },
+    }),
+    locale: "ru",
+    transactionCount: 5,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+    },
+    balances: { all: 40000, me: 40000, partner: 0 },
+    dailySafeSpending: {
+      status: "available",
+      remainingAmount: 3320,
+      baseAmount: 34418,
+      spentToday: 31098,
+    },
+  });
+
+  const allowed = view.overviewItems.find((item) => item.id === "allowed");
+  assert.equal(allowed?.label, "Можно потратить ещё");
+  assert.match(allowed?.value ?? "", /3[\s\u00A0]320 ₽/);
+  assert.match(allowed?.caption ?? "", /Из 34[\s\u00A0]418 ₽ на сегодня/);
+  assert.match(allowed?.caption ?? "", /31[\s\u00A0]098 ₽/);
 });
 
 test("allowed restricted does not show false amount", () => {

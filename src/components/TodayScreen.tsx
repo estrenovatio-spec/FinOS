@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QuickAddOperationDialog } from "@/components/today/QuickAddOperationDialog";
 import {
   TransactionEditDialog,
@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { AppTabId } from "@/lib/app-bottom-nav";
 import { decisionCore } from "@/lib/decision-core";
+import { resolveDailySafeSpending } from "@/lib/daily-safe-spending";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
@@ -44,6 +45,8 @@ export function TodayScreen({
   const debts = useStore((s) => s.debts);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
   const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
+  const dailySafeSpendingSnapshot = useStore((s) => s.dailySafeSpendingSnapshot);
+  const setDailySafeSpendingSnapshot = useStore((s) => s.setDailySafeSpendingSnapshot);
   const householdFilter = useStore((s) => s.householdFilter);
   const partnerName = useStore((s) => s.partnerName);
   const partnerKeywords = useStore((s) => s.partnerKeywords);
@@ -96,6 +99,74 @@ export function TodayScreen({
       transactions,
     ],
   );
+  const dailySafeSpending = useMemo(() => {
+    const currentBalance = moneySetup.useHouseholdBalance ? balances.all : balances.me;
+    const categoryBudgetsFingerprint = JSON.stringify(
+      categoryBudgets.map((budget) => [
+        budget.categoryId,
+        budget.monthlyLimit,
+        budget.updatedAt ?? "",
+      ]),
+    );
+    const recurringFingerprint = JSON.stringify(
+      recurringTransactions.map((item) => [
+        item.id,
+        item.amount,
+        item.type,
+        item.categoryId,
+        item.note,
+        item.nextRunDate,
+        item.frequency,
+        item.intervalMonths ?? null,
+        item.dayOfMonth ?? null,
+        item.enabled !== false,
+        item.updatedAt ?? "",
+      ]),
+    );
+    const debtsFingerprint = JSON.stringify(
+      debts.map((debt) => [
+        debt.id,
+        debt.balance,
+        debt.minPayment,
+        debt.nextPaymentDate ?? null,
+        debt.owner,
+        debt.priority,
+        debt.updatedAt ?? "",
+      ]),
+    );
+    return resolveDailySafeSpending({
+      today,
+      allowed: decision.allowed,
+      transactions,
+      currentBalance,
+      forecastHorizonMonths,
+      moneySetup,
+      budgetMonthStartDay,
+      categoryBudgetsFingerprint,
+      recurringFingerprint,
+      debtsFingerprint,
+      snapshot: dailySafeSpendingSnapshot,
+    });
+  }, [
+    balances.all,
+    balances.me,
+    budgetMonthStartDay,
+    categoryBudgets,
+    dailySafeSpendingSnapshot,
+    debts,
+    decision.allowed,
+    forecastHorizonMonths,
+    moneySetup,
+    recurringTransactions,
+    today,
+    transactions,
+  ]);
+
+  useEffect(() => {
+    if (!dailySafeSpending.shouldPersist) return;
+    setDailySafeSpendingSnapshot(dailySafeSpending.nextSnapshot);
+  }, [dailySafeSpending.nextSnapshot, dailySafeSpending.shouldPersist, setDailySafeSpendingSnapshot]);
+
   const view = useMemo(
     () =>
       buildTodayScreenView({
@@ -104,8 +175,9 @@ export function TodayScreen({
         transactionCount: transactions.length,
         moneySetup,
         balances,
+        dailySafeSpending: dailySafeSpending.view,
       }),
-    [balances, decision, locale, moneySetup, transactions.length],
+    [balances, dailySafeSpending.view, decision, locale, moneySetup, transactions.length],
   );
   const zeroState = isTodayZeroState({
     decision,

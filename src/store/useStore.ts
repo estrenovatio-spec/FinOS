@@ -116,6 +116,7 @@ import type {
   Transaction,
   TxType,
 } from "@/types";
+import type { DailySafeSpendingSnapshot } from "@/lib/daily-safe-spending";
 import type {
   CategoryBudget,
   DebtItem,
@@ -201,6 +202,8 @@ interface StoreState {
   pendingOdometerPrompt: PendingOdometerPrompt | null;
   /** День начала бюджетного месяца (1 = календарный, 25 = с 25-го по 24-е) */
   budgetMonthStartDay: number;
+  dailySafeSpendingSnapshot: DailySafeSpendingSnapshot | null;
+  setDailySafeSpendingSnapshot: (snapshot: DailySafeSpendingSnapshot | null) => void;
   /** Период для статистики; null = текущий отчётный месяц */
   statsPeriodOverride: { from: string; to: string } | null;
   setStatsPeriodRange: (from: string, to: string) => void;
@@ -587,6 +590,9 @@ export const useStore = create<StoreState>()(
       lastFuelVehicleId: null,
       pendingOdometerPrompt: null,
       budgetMonthStartDay: 1,
+      dailySafeSpendingSnapshot: null,
+      setDailySafeSpendingSnapshot: (dailySafeSpendingSnapshot) =>
+        set({ dailySafeSpendingSnapshot }),
       statsPeriodOverride: null,
       setStatsPeriodRange: (from, to) =>
         set({ statsPeriodOverride: { from, to } }),
@@ -1775,7 +1781,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: "voicebudget-store",
-      version: 24,
+      version: 25,
       migrate: (persisted, version) => {
         const raw = (persisted ?? {}) as Record<string, unknown>;
         const categories = sanitizeCategories(raw.categories);
@@ -1964,6 +1970,43 @@ export const useStore = create<StoreState>()(
               ? raw.budgetMonthStartDay
               : 1,
           ),
+          dailySafeSpendingSnapshot:
+            raw.dailySafeSpendingSnapshot &&
+            typeof raw.dailySafeSpendingSnapshot === "object" &&
+            typeof (raw.dailySafeSpendingSnapshot as { date?: string }).date === "string" &&
+            typeof (raw.dailySafeSpendingSnapshot as { baseAmount?: number }).baseAmount ===
+              "number" &&
+            typeof (
+              raw.dailySafeSpendingSnapshot as { baselineCountableSpent?: number }
+            ).baselineCountableSpent === "number" &&
+            typeof (raw.dailySafeSpendingSnapshot as { fingerprint?: string }).fingerprint ===
+              "string"
+              ? {
+                  date: (raw.dailySafeSpendingSnapshot as { date: string }).date,
+                  baseAmount: roundMoneyUp(
+                    Number(
+                      (raw.dailySafeSpendingSnapshot as { baseAmount: number }).baseAmount,
+                    ) || 0,
+                  ),
+                  baselineCountableSpent: roundMoneyUp(
+                    Number(
+                      (
+                        raw.dailySafeSpendingSnapshot as {
+                          baselineCountableSpent: number;
+                        }
+                      ).baselineCountableSpent,
+                    ) || 0,
+                  ),
+                  fingerprint: String(
+                    (raw.dailySafeSpendingSnapshot as { fingerprint: string }).fingerprint,
+                  ),
+                  updatedAt:
+                    typeof (raw.dailySafeSpendingSnapshot as { updatedAt?: string }).updatedAt ===
+                    "string"
+                      ? (raw.dailySafeSpendingSnapshot as { updatedAt: string }).updatedAt
+                      : new Date().toISOString(),
+                }
+              : null,
           statsPeriodOverride:
             raw.statsPeriodOverride &&
             typeof raw.statsPeriodOverride === "object" &&
