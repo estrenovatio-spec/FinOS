@@ -350,30 +350,46 @@ export function buildMainAction(
       }
 
       if (missingExpenses) {
+        const missingRequiredExpenses = decision.missing.includes("required_expenses");
+        const missingEssentialBudgets = decision.missing.includes("essential_budgets");
         return {
           type: "complete_required_expenses_setup",
           title:
-            locale === "ru"
-              ? "Добавьте обязательные платежи"
-              : "Add required payments",
+            missingRequiredExpenses
+              ? locale === "ru"
+                ? "Добавьте обязательные платежи"
+                : "Add required payments"
+              : locale === "ru"
+                ? "Настройте базовые траты"
+                : "Set essential spending",
           text:
-            locale === "ru"
-              ? "Добавьте обязательные платежи и базовые категории расходов."
-              : "Add required payments and essential spending categories.",
+            missingRequiredExpenses && missingEssentialBudgets
+              ? locale === "ru"
+                ? "Добавьте обязательные платежи и базовые категории расходов."
+                : "Add required payments and essential spending categories."
+              : missingRequiredExpenses
+                ? locale === "ru"
+                  ? "Добавьте обязательные платежи, чтобы прогноз не пропускал фиксированные расходы."
+                  : "Add required payments so the forecast does not miss fixed expenses."
+                : locale === "ru"
+                  ? "Отметьте базовые категории расходов и их лимиты."
+                  : "Mark essential spending categories and their limits.",
           description:
             locale === "ru"
               ? "Иначе прогноз может показывать ложную уверенность."
               : "Otherwise the forecast may show false confidence.",
           reason:
-            locale === "ru"
-              ? "Сейчас не хватает данных об обязательных расходах."
-              : "Required expense data is incomplete.",
+            missingRequiredExpenses
+              ? locale === "ru"
+                ? "Сейчас не хватает данных об обязательных расходах."
+                : "Required expense data is incomplete."
+              : locale === "ru"
+                ? "Сейчас не хватает данных о базовых тратах периода."
+                : "Essential spending data for this period is incomplete.",
           priority: "medium",
           command: {
             type: "open_money_setup",
-            scope: decision.missing.includes("required_expenses")
-              ? "required_expenses"
-              : "essential_budgets",
+            scope: missingRequiredExpenses ? "required_expenses" : "essential_budgets",
           },
         };
       }
