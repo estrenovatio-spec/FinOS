@@ -51,10 +51,10 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
+  { id: "cloud", titleKey: "cloudTitle", descriptionKey: "cloudHint" },
   { id: "categories", titleKey: "categoriesTitle", descriptionKey: "categoriesHint" },
   { id: "memory", titleKey: "settingsFinancialMemory", descriptionKey: "settingsFinancialMemoryHint" },
   { id: "household", titleKey: "householdTitle", descriptionKey: "householdHint" },
-  { id: "cloud", titleKey: "cloudTitle", descriptionKey: "cloudHint" },
   { id: "vehicle", titleKey: "vehicleGarageTitle", descriptionKey: "vehicleHintMulti" },
   { id: "help", titleKey: "helpTitle" },
   { id: "language", titleKey: "settingsLanguage", descriptionKey: "settingsLanguageHint" },
@@ -202,11 +202,18 @@ export function SettingsDialogNav({
   };
 
   const activeItem = MENU_ITEMS.find((m) => m.id === screen);
+  const cloudSectionTitle = locale === "ru" ? "Аккаунт и синхронизация" : "Account and sync";
+  const cloudSectionDescription =
+    locale === "ru"
+      ? "Вход по email, статус синхронизации и выход."
+      : "Email sign-in, sync status, and logout.";
   const dialogTitle =
     screen === "menu"
       ? t(locale, "settings")
       : activeItem
-        ? t(locale, activeItem.titleKey)
+        ? activeItem.id === "cloud"
+          ? cloudSectionTitle
+          : t(locale, activeItem.titleKey)
         : t(locale, "settings");
 
   const detailContent: Record<Exclude<SettingsScreen, "menu">, ReactNode> = {
@@ -357,6 +364,12 @@ export function SettingsDialogNav({
 
       {screen === "menu" ? (
         <div className="space-y-3">
+          <SettingsSection
+            title={cloudSectionTitle}
+            description={cloudSectionDescription}
+          >
+            <HouseholdCloudPanel embedded />
+          </SettingsSection>
           <div className="space-y-2 rounded-xl border-2 border-primary/20 bg-primary/5 p-3">
             <ToggleQuestionRow
               locale={locale}
@@ -415,9 +428,13 @@ export function SettingsDialogNav({
           {MENU_ITEMS.map((item) => (
             <SettingsMenuRow
               key={item.id}
-              title={t(locale, item.titleKey)}
+              title={item.id === "cloud" ? cloudSectionTitle : t(locale, item.titleKey)}
               description={
-                item.descriptionKey ? t(locale, item.descriptionKey) : undefined
+                item.id === "cloud"
+                  ? cloudSectionDescription
+                  : item.descriptionKey
+                    ? t(locale, item.descriptionKey)
+                    : undefined
               }
               danger={item.danger}
               onClick={() => setScreen(item.id)}
