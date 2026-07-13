@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
+import {
+  calculateFreeMoneyUntilPeriodEnd,
+  calculatePlannedFreeMoneyUntilPeriodEnd,
+} from "@/lib/free-money";
 import type { DecisionCoreSnapshot, DecisionCoreState } from "@/lib/decision-core";
 
 function makeState(overrides: Partial<DecisionCoreState> = {}): DecisionCoreState {
@@ -234,4 +237,250 @@ test("last day of the budget period rolls free-money horizon to the next period"
 
   const result = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
   assert.equal(result.periodEndDate, "2026-08-13");
+});
+
+test("planned free money includes recurring income from the current period", () => {
+  const state = makeState({
+    moneySetup: {
+      ...makeState().moneySetup,
+      incomeSources: [
+        {
+          id: "salary",
+          label: "Зарплата",
+          expectedDate: "2026-07-14",
+          expectedAmount: 24000,
+          kind: "salary",
+          recurrence: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 14,
+          endDate: null,
+        },
+      ],
+    },
+  });
+  const snapshot = makeSnapshot([
+    {
+      id: "salary-1",
+      title: "Зарплата",
+      amount: 24000,
+      date: "2026-07-14",
+      balanceAfter: 69754,
+      source: "income_source",
+    },
+    {
+      id: "rent-1",
+      title: "Аренда",
+      amount: -21000,
+      date: "2026-07-20",
+      balanceAfter: 24754,
+      source: "pending_transaction",
+    },
+    {
+      id: "essential-budget-2026-07-18",
+      title: "Плановые повседневные траты",
+      amount: -20432,
+      date: "2026-07-18",
+      balanceAfter: 43122,
+      source: "essential_budget",
+    },
+  ]);
+  snapshot.resolvedIncomeSources = [
+    {
+      id: "salary",
+      label: "Зарплата",
+      expectedDate: "2026-07-14",
+      expectedAmount: 24000,
+      kind: "salary",
+      recurrence: "monthly",
+      intervalMonths: 1,
+      dayOfMonth: 14,
+      endDate: null,
+      occurrenceId: "income-salary-2026-07-14",
+      occurrenceDate: "2026-07-14",
+      status: "scheduled",
+      matchedTransactionId: null,
+      matchedTransactionDate: null,
+    },
+  ];
+
+  const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.amount, 28322);
+  assert.equal(result.breakdown?.expectedRecurringIncome, 24000);
+  assert.equal(result.includesUnconfirmedIncome, false);
+});
+
+test("planned free money does not include one-off expected income", () => {
+  const state = makeState({
+    moneySetup: {
+      ...makeState().moneySetup,
+      incomeSources: [
+        {
+          id: "sale",
+          label: "Продажа",
+          expectedDate: "2026-07-14",
+          expectedAmount: 24000,
+          kind: "other",
+          recurrence: "once",
+          intervalMonths: 1,
+          dayOfMonth: 14,
+          endDate: null,
+        },
+      ],
+    },
+  });
+  const snapshot = makeSnapshot([]);
+  snapshot.resolvedIncomeSources = [
+    {
+      id: "sale",
+      label: "Продажа",
+      expectedDate: "2026-07-14",
+      expectedAmount: 24000,
+      kind: "other",
+      recurrence: "once",
+      intervalMonths: 1,
+      dayOfMonth: 14,
+      endDate: null,
+      occurrenceId: "income-sale-2026-07-14",
+      occurrenceDate: "2026-07-14",
+      status: "scheduled",
+      matchedTransactionId: null,
+      matchedTransactionDate: null,
+    },
+  ];
+
+  const actual = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
+  const planned = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(actual.amount, planned.amount);
+  assert.equal(planned.breakdown?.expectedRecurringIncome, 0);
+});
+
+test("planned free money decreases one-to-one after optional spending", () => {
+  const baseState = makeState({
+    moneySetup: {
+      ...makeState().moneySetup,
+      incomeSources: [
+        {
+          id: "salary",
+          label: "Зарплата",
+          expectedDate: "2026-07-14",
+          expectedAmount: 11592,
+          kind: "salary",
+          recurrence: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 14,
+          endDate: null,
+        },
+      ],
+    },
+  });
+  const snapshot = makeSnapshot([
+    {
+      id: "rent-1",
+      title: "Аренда",
+      amount: -25000,
+      date: "2026-07-20",
+      balanceAfter: 20754,
+      source: "pending_transaction",
+    },
+    {
+      id: "essential-budget-2026-07-18",
+      title: "Плановые повседневные траты",
+      amount: -20754,
+      date: "2026-07-18",
+      balanceAfter: 25000,
+      source: "essential_budget",
+    },
+  ]);
+  snapshot.resolvedIncomeSources = [
+    {
+      id: "salary",
+      label: "Зарплата",
+      expectedDate: "2026-07-14",
+      expectedAmount: 11592,
+      kind: "salary",
+      recurrence: "monthly",
+      intervalMonths: 1,
+      dayOfMonth: 14,
+      endDate: null,
+      occurrenceId: "income-salary-2026-07-14",
+      occurrenceDate: "2026-07-14",
+      status: "due_today",
+      matchedTransactionId: null,
+      matchedTransactionDate: null,
+    },
+  ];
+
+  const before = calculatePlannedFreeMoneyUntilPeriodEnd(baseState, snapshot);
+  const after = calculatePlannedFreeMoneyUntilPeriodEnd(
+    makeState({
+      balances: { all: 40754, me: 40754, partner: 0 },
+      moneySetup: baseState.moneySetup,
+    }),
+    snapshot,
+  );
+
+  assert.equal(before.amount, 11592);
+  assert.equal(after.amount, 6592);
+  assert.equal(after.includesUnconfirmedIncome, true);
+});
+
+test("planned free money becomes zero after spending the whole planned amount", () => {
+  const state = makeState({
+    moneySetup: {
+      ...makeState().moneySetup,
+      incomeSources: [
+        {
+          id: "salary",
+          label: "Зарплата",
+          expectedDate: "2026-07-14",
+          expectedAmount: 11592,
+          kind: "salary",
+          recurrence: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 14,
+          endDate: null,
+        },
+      ],
+    },
+    balances: { all: 34162, me: 34162, partner: 0 },
+  });
+  const snapshot = makeSnapshot([
+    {
+      id: "rent-1",
+      title: "Аренда",
+      amount: -25000,
+      date: "2026-07-20",
+      balanceAfter: 20754,
+      source: "pending_transaction",
+    },
+    {
+      id: "essential-budget-2026-07-18",
+      title: "Плановые повседневные траты",
+      amount: -20754,
+      date: "2026-07-18",
+      balanceAfter: 25000,
+      source: "essential_budget",
+    },
+  ]);
+  snapshot.resolvedIncomeSources = [
+    {
+      id: "salary",
+      label: "Зарплата",
+      expectedDate: "2026-07-14",
+      expectedAmount: 11592,
+      kind: "salary",
+      recurrence: "monthly",
+      intervalMonths: 1,
+      dayOfMonth: 14,
+      endDate: null,
+      occurrenceId: "income-salary-2026-07-14",
+      occurrenceDate: "2026-07-14",
+      status: "due_today",
+      matchedTransactionId: null,
+      matchedTransactionDate: null,
+    },
+  ];
+
+  const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.amount, 0);
 });

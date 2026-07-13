@@ -353,12 +353,33 @@ test("allowed available shows amount instead of prose", () => {
       },
       note: null,
     },
+    plannedFreeMoney: {
+      status: "available",
+      amount: 11592,
+      expectedRecurringIncome: 24000,
+      includesUnconfirmedIncome: false,
+      periodEndDate: "2026-08-13",
+      breakdown: {
+        currentActualBalance: 40000,
+        expectedRecurringIncome: 24000,
+        mandatoryPayments: 12000,
+        essentialPlannedSpending: 40408,
+        otherRequiredExpenses: 0,
+        plannedFreeMoney: 11592,
+        periodEndDate: "2026-08-13",
+      },
+      note: null,
+    },
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Свободные деньги");
+  assert.equal(allowed?.label, "Свободно сейчас");
   assert.match(allowed?.value ?? "", /3[\s\u00A0]500 ₽/);
   assert.match(allowed?.caption ?? "", /до 13 августа/);
+  const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
+  assert.match(planned?.label ?? "", /По плану свободно до 13 августа/);
+  assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
+  assert.equal(planned?.layout, "wide");
 });
 
 test("allowed available shows remaining amount after today's spending", () => {
@@ -398,7 +419,7 @@ test("allowed available shows remaining amount after today's spending", () => {
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Свободные деньги");
+  assert.equal(allowed?.label, "Свободно сейчас");
   assert.match(allowed?.value ?? "", /3[\s\u00A0]320 ₽/);
   assert.match(allowed?.caption ?? "", /до 13 августа/);
 });
@@ -425,8 +446,60 @@ test("allowed restricted does not show false amount", () => {
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Свободные деньги");
+  assert.equal(allowed?.label, "Свободно сейчас");
   assert.equal(allowed?.value, "пока неизвестно");
+});
+
+test("planned free money copy explains recurring-income plan without using narrow card text", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision(),
+    locale: "ru",
+    transactionCount: 2,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-14",
+    },
+    balances: { all: 69071, me: 69071, partner: 0 },
+    freeMoney: {
+      status: "restricted",
+      amount: 0,
+      periodEndDate: "2026-07-31",
+      breakdown: {
+        currentActualBalance: 69071,
+        mandatoryPayments: 53000,
+        essentialPlannedSpending: 16071,
+        otherRequiredExpenses: 0,
+        freeMoney: 0,
+        periodEndDate: "2026-07-31",
+      },
+      note: null,
+    },
+    plannedFreeMoney: {
+      status: "available",
+      amount: 11592,
+      expectedRecurringIncome: 24000,
+      includesUnconfirmedIncome: true,
+      periodEndDate: "2026-07-31",
+      breakdown: {
+        currentActualBalance: 69071,
+        expectedRecurringIncome: 24000,
+        mandatoryPayments: 53000,
+        essentialPlannedSpending: 28479,
+        otherRequiredExpenses: 0,
+        plannedFreeMoney: 11592,
+        periodEndDate: "2026-07-31",
+      },
+      note: null,
+    },
+  });
+
+  const actual = view.overviewItems.find((item) => item.id === "allowed");
+  const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
+  assert.equal(actual?.value, "0 ₽");
+  assert.match(actual?.caption ?? "", /до 31 июля/);
+  assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
+  assert.match(planned?.caption ?? "", /регулярные доходы придут по плану/i);
+  assert.match(planned?.caption ?? "", /не подтверждено/i);
 });
 
 test("allowed unknown shows uncertainty instead of zero", () => {

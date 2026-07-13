@@ -1,6 +1,7 @@
 import { getCurrentBudgetPeriod } from "@/lib/budget-period";
 import { formatMoney } from "@/lib/format-money";
 import type { DecisionCoreSnapshot, DecisionCoreState } from "@/lib/decision-core";
+import type { ResolvedMoneySetupIncomeSource } from "@/lib/money-setup";
 
 export type FreeMoneyBreakdown = {
   currentActualBalance: number;
@@ -11,11 +12,31 @@ export type FreeMoneyBreakdown = {
   periodEndDate: string;
 };
 
+export type PlannedFreeMoneyBreakdown = {
+  currentActualBalance: number;
+  expectedRecurringIncome: number;
+  mandatoryPayments: number;
+  essentialPlannedSpending: number;
+  otherRequiredExpenses: number;
+  plannedFreeMoney: number;
+  periodEndDate: string;
+};
+
 export type FreeMoneyView = {
   status: "available" | "restricted" | "unknown";
   amount: number | null;
   periodEndDate: string | null;
   breakdown: FreeMoneyBreakdown | null;
+  note: string | null;
+};
+
+export type PlannedFreeMoneyView = {
+  status: "available" | "restricted" | "unknown";
+  amount: number | null;
+  periodEndDate: string | null;
+  expectedRecurringIncome: number;
+  includesUnconfirmedIncome: boolean;
+  breakdown: PlannedFreeMoneyBreakdown | null;
   note: string | null;
 };
 
@@ -33,29 +54,28 @@ function addDays(iso: string, days: number): Date {
   return date;
 }
 
-export function calculateFreeMoneyUntilPeriodEnd(
-  state: DecisionCoreState,
-  snapshot: DecisionCoreSnapshot,
-): FreeMoneyView {
+function resolveTargetPeriod(state: DecisionCoreState) {
   const currentPeriod = getCurrentBudgetPeriod(
     state.budgetMonthStartDay,
     new Date(`${state.today}T12:00:00`),
   );
-  const period =
-    currentPeriod.to <= state.today
-      ? getCurrentBudgetPeriod(state.budgetMonthStartDay, addDays(state.today, 1))
-      : currentPeriod;
-  const currentActualBalance = roundAmount(
-    state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
-  );
+  return currentPeriod.to <= state.today
+    ? getCurrentBudgetPeriod(state.budgetMonthStartDay, addDays(state.today, 1))
+    : currentPeriod;
+}
 
+function collectRequiredSpending(
+  state: DecisionCoreState,
+  snapshot: DecisionCoreSnapshot,
+  periodEndDate: string,
+) {
   const requiredRecurringIds = new Set(state.moneySetup.requiredRecurringIds ?? []);
   let mandatoryPayments = 0;
   let essentialPlannedSpending = 0;
   let otherRequiredExpenses = 0;
 
   for (const event of snapshot.forecast.events) {
-    if (event.date < state.today || event.date > period.to || event.amount >= 0) continue;
+    if (event.date < state.today || event.date > periodEndDate || event.amount >= 0) continue;
 
     if (event.source === "essential_budget") {
       essentialPlannedSpending += -event.amount;
@@ -79,6 +99,58 @@ export function calculateFreeMoneyUntilPeriodEnd(
     }
   }
 
+  return {
+    mandatoryPayments,
+    essentialPlannedSpending,
+    otherRequiredExpenses,
+  };
+}
+
+function sumExpectedRecurringIncome(
+  state: DecisionCoreState,
+  snapshot: DecisionCoreSnapshot,
+  periodEndDate: string,
+) {
+  const resolved = snapshot.resolvedIncomeSources ?? [];
+  let expectedRecurringIncome = 0;
+  let includesUnconfirmedIncome = false;
+
+  for (const income of resolved) {
+    if (!shouldCountRecurringIncome(income, state.today, periodEndDate)) continue;
+    expectedRecurringIncome += Math.round(income.expectedAmount ?? 0);
+    if (income.status === "overdue_unconfirmed" || income.status === "due_today") {
+      includesUnconfirmedIncome = true;
+    }
+  }
+
+  return {
+    expectedRecurringIncome,
+    includesUnconfirmedIncome,
+  };
+}
+
+function shouldCountRecurringIncome(
+  income: ResolvedMoneySetupIncomeSource,
+  today: string,
+  periodEndDate: string,
+): boolean {
+  if ((income.recurrence ?? "monthly") === "once") return false;
+  if (income.status === "received") return false;
+  if (income.occurrenceDate < today || income.occurrenceDate > periodEndDate) return false;
+  return (income.expectedAmount ?? 0) > 0;
+}
+
+export function calculateFreeMoneyUntilPeriodEnd(
+  state: DecisionCoreState,
+  snapshot: DecisionCoreSnapshot,
+): FreeMoneyView {
+  const period = resolveTargetPeriod(state);
+  const currentActualBalance = roundAmount(
+    state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
+  );
+  const { mandatoryPayments, essentialPlannedSpending, otherRequiredExpenses } =
+    collectRequiredSpending(state, snapshot, period.to);
+
   const freeMoney = Math.max(
     currentActualBalance - mandatoryPayments - essentialPlannedSpending - otherRequiredExpenses,
     0,
@@ -101,16 +173,66 @@ export function calculateFreeMoneyUntilPeriodEnd(
     note:
       breakdown.freeMoney > 0
         ? state.locale === "ru"
-          ? `После обязательных платежей и плановых базовых трат до ${period.to} остаётся ${rub(
-              breakdown.freeMoney,
-              state.locale,
-            )}.`
+          ? `Из уже полученных денег после обязательных платежей и плановых базовых трат до ${period.to} остаётся ${rub(breakdown.freeMoney, state.locale)}.`
           : `After required payments and planned essentials until ${period.to}, ${rub(
               breakdown.freeMoney,
               state.locale,
             )} remains free.`
         : state.locale === "ru"
-          ? "Часть обязательных или плановых расходов внутри текущего периода пока не покрыта."
-          : "Some required or planned spending inside the current period is not covered yet.",
+          ? `Текущих денег пока не остаётся сверх обязательных и плановых расходов до ${period.to}.`
+          : `No current money remains beyond required and planned spending until ${period.to}.`,
+  };
+}
+
+export function calculatePlannedFreeMoneyUntilPeriodEnd(
+  state: DecisionCoreState,
+  snapshot: DecisionCoreSnapshot,
+): PlannedFreeMoneyView {
+  const period = resolveTargetPeriod(state);
+  const currentActualBalance = roundAmount(
+    state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
+  );
+  const { mandatoryPayments, essentialPlannedSpending, otherRequiredExpenses } =
+    collectRequiredSpending(state, snapshot, period.to);
+  const { expectedRecurringIncome, includesUnconfirmedIncome } = sumExpectedRecurringIncome(
+    state,
+    snapshot,
+    period.to,
+  );
+
+  const plannedFreeMoney = Math.max(
+    currentActualBalance +
+      expectedRecurringIncome -
+      mandatoryPayments -
+      essentialPlannedSpending -
+      otherRequiredExpenses,
+    0,
+  );
+
+  const breakdown: PlannedFreeMoneyBreakdown = {
+    currentActualBalance,
+    expectedRecurringIncome: roundAmount(expectedRecurringIncome),
+    mandatoryPayments: roundAmount(mandatoryPayments),
+    essentialPlannedSpending: roundAmount(essentialPlannedSpending),
+    otherRequiredExpenses: roundAmount(otherRequiredExpenses),
+    plannedFreeMoney: roundAmount(plannedFreeMoney),
+    periodEndDate: period.to,
+  };
+
+  return {
+    status: breakdown.plannedFreeMoney > 0 ? "available" : "restricted",
+    amount: breakdown.plannedFreeMoney,
+    periodEndDate: period.to,
+    expectedRecurringIncome: breakdown.expectedRecurringIncome,
+    includesUnconfirmedIncome,
+    note:
+      state.locale === "ru"
+        ? includesUnconfirmedIncome
+          ? `После всех платежей и базовых расходов до ${period.to}, если регулярные доходы придут по плану. Поступление ещё не подтверждено.`
+          : `После всех платежей и базовых расходов до ${period.to}, если регулярные доходы придут по плану.`
+        : includesUnconfirmedIncome
+          ? `After all payments and planned essentials until ${period.to}, if recurring income arrives as planned. The income is not confirmed yet.`
+          : `After all payments and planned essentials until ${period.to}, if recurring income arrives as planned.`,
+    breakdown,
   };
 }

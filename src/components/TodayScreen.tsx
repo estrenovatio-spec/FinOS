@@ -24,7 +24,10 @@ import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
-import { calculateFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
+import {
+  calculateFreeMoneyUntilPeriodEnd,
+  calculatePlannedFreeMoneyUntilPeriodEnd,
+} from "@/lib/free-money";
 import { hasPartnerBudget } from "@/lib/owner-labels";
 import { useViewerMappedTransactions, useHouseholdBalances, useStore } from "@/store/useStore";
 
@@ -131,6 +134,39 @@ export function TodayScreen({
     today,
     transactions,
   ]);
+  const plannedFreeMoney = useMemo(() => {
+    return calculatePlannedFreeMoneyUntilPeriodEnd(
+      {
+        locale,
+        today,
+        forecastHorizonMonths,
+        categories,
+        transactions,
+        householdFilter,
+        recurringTransactions,
+        debts,
+        moneySetup,
+        categoryBudgets,
+        budgetMonthStartDay,
+        balances,
+      },
+      decisionSnapshot,
+    );
+  }, [
+    balances,
+    budgetMonthStartDay,
+    categories,
+    categoryBudgets,
+    decisionSnapshot,
+    debts,
+    forecastHorizonMonths,
+    householdFilter,
+    locale,
+    moneySetup,
+    recurringTransactions,
+    today,
+    transactions,
+  ]);
 
   const view = useMemo(
     () =>
@@ -141,8 +177,9 @@ export function TodayScreen({
         moneySetup,
         balances,
         freeMoney,
+        plannedFreeMoney,
       }),
-    [balances, decision, freeMoney, locale, moneySetup, transactions.length],
+    [balances, decision, freeMoney, locale, moneySetup, plannedFreeMoney, transactions.length],
   );
   const zeroState = isTodayZeroState({
     decision,

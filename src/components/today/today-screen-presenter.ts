@@ -6,7 +6,7 @@ import type {
   DecisionTodayPayment,
 } from "@/lib/decision-core/types";
 import { formatMoney } from "@/lib/format-money";
-import type { FreeMoneyView } from "@/lib/free-money";
+import type { FreeMoneyView, PlannedFreeMoneyView } from "@/lib/free-money";
 import type { Locale } from "@/types";
 
 type TodayStatusTone = "calm" | "risk" | "action" | "setup";
@@ -29,6 +29,7 @@ export type TodayOverviewItem = {
   caption?: string | null;
   actionLabel?: string | null;
   actionKey?: "edit_current_balance" | null;
+  layout?: "default" | "wide";
 };
 
 export type TodayPaymentsView = {
@@ -64,6 +65,7 @@ type TodayPresentationInput = {
     partner: number;
   };
   freeMoney?: FreeMoneyView;
+  plannedFreeMoney?: PlannedFreeMoneyView;
 };
 
 const MONTHS_RU = [
@@ -425,39 +427,66 @@ function buildAllowedItem(
   if (freeMoney?.status === "available" && freeMoney.amount != null) {
     return {
       id: "allowed",
-      label: locale === "ru" ? "Свободные деньги" : "Free money",
+      label: locale === "ru" ? "Свободно сейчас" : "Free now",
       value: rub(freeMoney.amount, locale) ?? "",
       caption:
         locale === "ru"
-          ? `После обязательных платежей и плановых базовых расходов до ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
-          : `After required payments and planned essentials until ${formatDayMonth(freeMoney.periodEndDate, locale)}.`,
+          ? `Из уже полученных денег после обязательных платежей и плановых базовых расходов до ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
+          : `From money already received after required payments and planned essentials until ${formatDayMonth(freeMoney.periodEndDate, locale)}.`,
     };
   }
 
   if (freeMoney?.status === "restricted") {
     return {
       id: "allowed",
-      label: locale === "ru" ? "Свободных денег пока нет" : "No free money right now",
+      label: locale === "ru" ? "Свободно сейчас" : "Free now",
       value: locale === "ru" ? "0 ₽" : "0 RUB",
       caption:
         locale === "ru"
           ? freeMoney.periodEndDate
-            ? `Часть обязательных или плановых расходов до ${formatDayMonth(freeMoney.periodEndDate, locale)} пока не покрыта.`
-            : "Часть обязательных или плановых расходов пока не покрыта."
+            ? `Текущих денег пока хватает только на обязательные и плановые расходы до ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
+            : "Текущих денег пока хватает только на обязательные и плановые расходы."
           : freeMoney?.periodEndDate
-            ? `Some required or planned spending until ${formatDayMonth(freeMoney.periodEndDate, locale)} is not covered yet.`
-            : "Some required or planned spending is not covered yet.",
+            ? `Current money only covers required and planned spending until ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
+            : "Current money only covers required and planned spending.",
     };
   }
 
   return {
     id: "allowed",
-    label: locale === "ru" ? "Свободные деньги" : "Free money",
+    label: locale === "ru" ? "Свободно сейчас" : "Free now",
     value: locale === "ru" ? "пока неизвестно" : "unknown for now",
     caption:
       locale === "ru"
         ? "Нужны актуальный остаток и обязательные расходы текущего периода."
         : "Current balance and required spending for this period are needed.",
+  };
+}
+
+function buildPlannedFreeMoneyItem(
+  locale: Locale,
+  plannedFreeMoney?: PlannedFreeMoneyView,
+): TodayOverviewItem | null {
+  if (!plannedFreeMoney || plannedFreeMoney.amount == null || !plannedFreeMoney.periodEndDate) {
+    return null;
+  }
+
+  return {
+    id: "planned-free-money",
+    label:
+      locale === "ru"
+        ? `По плану свободно до ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`
+        : `Planned free money until ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`,
+    value: rub(plannedFreeMoney.amount, locale) ?? (locale === "ru" ? "0 ₽" : "0 RUB"),
+    caption:
+      locale === "ru"
+        ? plannedFreeMoney.includesUnconfirmedIncome
+          ? "После всех платежей и базовых расходов, если регулярные доходы придут по плану. Поступление ещё не подтверждено."
+          : "После всех платежей и базовых расходов, если регулярные доходы придут по плану."
+        : plannedFreeMoney.includesUnconfirmedIncome
+          ? "After all payments and planned essentials, if recurring income arrives as planned. The income is not confirmed yet."
+          : "After all payments and planned essentials, if recurring income arrives as planned.",
+    layout: "wide",
   };
 }
 
@@ -604,12 +633,17 @@ function buildOverview(input: TodayPresentationInput): {
     remainingPayments.length > 0 ? remainingPayments : decision.todayPayments;
   const items: TodayOverviewItem[] = [buildCurrentBalanceItem(input)];
 
+  items.push(buildAllowedItem(locale, input.freeMoney));
+
+  const plannedFreeMoneyItem = buildPlannedFreeMoneyItem(locale, input.plannedFreeMoney);
+  if (plannedFreeMoneyItem) {
+    items.push(plannedFreeMoneyItem);
+  }
+
   const reserveItem = buildReserveItem(input);
   if (reserveItem) {
     items.push(reserveItem);
   }
-
-  items.push(buildAllowedItem(locale, input.freeMoney));
 
   const nextIncomeItem = buildNextIncomeItem(decision, locale);
   if (nextIncomeItem) {

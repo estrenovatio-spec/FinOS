@@ -15,6 +15,8 @@ function iconForItem(id: TodayOverviewItem["id"]) {
       return CalendarClock;
     case "allowed":
       return Wallet;
+    case "planned-free-money":
+      return PiggyBank;
     case "reserve":
       return PiggyBank;
     case "safe-until":
@@ -44,7 +46,12 @@ export function TodayOverview({
           const Icon = iconForItem(item.id);
           if (!Icon) return null;
           return (
-            <Card key={item.id} className="border-border/25 bg-card/95 shadow-none">
+            <Card
+              key={item.id}
+              className={`border-border/25 bg-card/95 shadow-none ${
+                item.layout === "wide" ? "md:col-span-3" : ""
+              }`}
+            >
               <CardContent className="space-y-2 p-4">
                 <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
                   <Icon className="h-4 w-4 shrink-0" />
