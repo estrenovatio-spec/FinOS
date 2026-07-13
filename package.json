@@ -13,7 +13,7 @@
     "test:decision-core": "node --import tsx --test tests/decision-core.sprint-1-3.test.ts",
     "test:sprint-1-4": "node --import tsx --test tests/today-action-resolver.sprint-1-4.test.ts",
     "test:sprint-1-5": "node --import tsx --test tests/forecast-focus.sprint-1-5.test.ts",
-    "test:beta-polish": "node --import tsx --test tests/today-beta-polish.test.ts tests/income-hotfix.test.ts tests/daily-safe-spending.test.ts",
+    "test:beta-polish": "node --import tsx --test tests/today-beta-polish.test.ts tests/income-hotfix.test.ts tests/daily-safe-spending.test.ts tests/recurring-mobile-layout.test.ts",
     "test:cloud-auth": "node --import tsx --test tests/email-otp.test.ts tests/email-sender.test.ts",
     "test:currency": "node --import tsx --test tests/currency-widget.test.ts",
     "test:adviser": "node --import tsx --test tests/adviser-tab.test.ts",

@@ -1699,22 +1699,22 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                               })}
                             </p>
                           ) : null}
-                          <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                          <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
                             <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
                             <Input
                               type="date"
-                              className="h-8 w-auto max-w-[10.5rem] text-xs"
+                              className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
                               value={item.nextRunDate}
                               onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
                             />
                           </label>
-                          <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                          <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
                             <span className="shrink-0">
                               {locale === "ru" ? "До даты" : "Until"}
                             </span>
                             <Input
                               type="date"
-                              className="h-8 w-auto max-w-[10.5rem] text-xs"
+                              className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
                               value={item.endDate ?? ""}
                               onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
                             />
@@ -1743,11 +1743,12 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-2 flex justify-end gap-1 border-t border-border/50 pt-2">
+                      <div className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
                         <Button
                           variant="outline"
                           size="sm"
                           className={cn(
+                            "min-h-10",
                             item.enabled
                               ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
                               : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
@@ -1761,7 +1762,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-destructive"
+                          className="h-10 w-10 text-destructive"
                           onClick={() => removeRecurring(item.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1772,7 +1773,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 })
               )}
               <div className="space-y-2 border-t pt-3">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">
                       {t(locale, "planningRecurringAmount")}
@@ -1795,7 +1796,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                     />
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="grid grid-cols-1 gap-2">
                   <select
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={recFrequency}
@@ -1807,7 +1808,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                   </select>
                   {recFrequency === "monthly" ? (
                     <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-[11rem]"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                       value={recIntervalMonths}
                       onChange={(e) => setRecIntervalMonths(Number(e.target.value))}
                       aria-label={t(locale, "planningRecurringInterval")}
@@ -1835,14 +1836,14 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                       </option>
                     </select>
                   ) : null}
-	                  <Input
-	                    type="date"
-	                    className="w-full sm:w-auto"
-	                    value={recStartDate}
-	                    onChange={(e) => setRecStartDate(e.target.value)}
-	                    aria-label={t(locale, "planningRecurringDate")}
-	                  />
-	                  <div className="w-full space-y-2 rounded-md border border-border/70 p-3 sm:max-w-xs">
+                  <Input
+                    type="date"
+                    className="w-full"
+                    value={recStartDate}
+                    onChange={(e) => setRecStartDate(e.target.value)}
+                    aria-label={t(locale, "planningRecurringDate")}
+                  />
+                  <div className="w-full space-y-2 rounded-md border border-border/70 p-3">
 	                    <p className="text-xs font-medium text-foreground">
 	                      {locale === "ru" ? "Когда закончится?" : "When should it end?"}
 	                    </p>
@@ -1875,21 +1876,28 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
 	                      ) : null}
 	                    </div>
 	                    {recEndMode === "date" ? (
-	                      <Input
-	                        type="date"
-	                        value={recEndDate}
-	                        onChange={(e) => setRecEndDate(e.target.value)}
-	                      />
-	                    ) : null}
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">
+                            {locale === "ru" ? "Дата окончания" : "End date"}
+                          </span>
+                          <Input
+                            type="date"
+                            value={recEndDate}
+                            onChange={(e) => setRecEndDate(e.target.value)}
+                          />
+                        </div>
+                      ) : null}
 	                    {recEndMode === "months" && recFrequency === "monthly" ? (
-	                      <>
+	                      <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">
+                            {locale === "ru" ? "Количество месяцев" : "Months count"}
+                          </span>
 	                        <Input
 	                          type="number"
 	                          min="1"
 	                          max="120"
 	                          value={recDurationMonths}
 	                          onChange={(e) => setRecDurationMonths(e.target.value)}
-	                          placeholder={locale === "ru" ? "Количество месяцев" : "Months count"}
 	                        />
 	                        {recurringEndPreview ? (
 	                          <p className="text-xs text-muted-foreground">
@@ -1898,11 +1906,13 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
 	                              : `Last payment: ${formatTransactionDate(recurringEndPreview, locale)}`}
 	                          </p>
 	                        ) : null}
-	                      </>
+	                      </div>
 	                    ) : null}
-	                  </div>
-	                  <Button onClick={handleAddRecurring}>{t(locale, "planningRecurringAdd")}</Button>
-	                </div>
+                  </div>
+                  <Button className="w-full" onClick={handleAddRecurring}>
+                    {t(locale, "planningRecurringAdd")}
+                  </Button>
+                </div>
               </div>
             </TabsContent>
 
