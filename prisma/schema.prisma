@@ -10,7 +10,9 @@ datasource db {
 
 model User {
   id              String    @id @default(cuid())
-  telegramId      BigInt    @unique
+  telegramId      BigInt?   @unique
+  email           String?   @unique
+  emailVerifiedAt DateTime?
   firstName       String?
   username        String?
   trialGrantedAt              DateTime?
@@ -34,6 +36,25 @@ model User {
   aiAnalysisReports    AiAnalysisReport[]
   businessLedger       UserBusinessLedger?
   webLoginTokens       WebLoginToken[]
+  emailOtps            EmailOtp[]
+}
+
+model EmailOtp {
+  id             String   @id @default(cuid())
+  userId         String?
+  email          String
+  codeHash       String
+  requestedIpHash String?
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  attempts       Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@index([requestedIpHash, createdAt(sort: Desc)])
 }
 
 model WebLoginToken {
