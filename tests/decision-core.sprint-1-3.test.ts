@@ -1304,6 +1304,149 @@ test("Confirmed recurring transaction does not reappear as a recurring occurrenc
   );
 });
 
+test("Recurring occurrence is not collapsed by a similar transaction without recurringId", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-13",
+      balances: { all: 50000, me: 50000, partner: 0 },
+      transactions: [
+        tx({
+          id: "manual-zoom-like",
+          amount: 1500,
+          type: "expense",
+          categoryId: "services",
+          date: "2026-09-11T10:00:00.000Z",
+          note: "Zoom",
+          confirmed: true,
+          recurringId: null,
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "zoom",
+          amount: 1500,
+          type: "expense",
+          categoryId: "services",
+          note: "Zoom",
+          nextRunDate: "2026-09-11",
+          frequency: "monthly",
+          dayOfMonth: 11,
+        }),
+      ],
+    }),
+  );
+
+  const zoomEvents = ctx.forecast.events.filter((event) => event.date === "2026-09-11");
+  assert.equal(zoomEvents.some((event) => event.id === "manual-zoom-like"), true);
+  assert.equal(zoomEvents.some((event) => event.id === "recurring-zoom-2026-09-11"), true);
+});
+
+test("Future essential budgets appear for full future periods inside the horizon", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 200000, me: 200000, partner: 0 },
+      transactions: [
+        tx({
+          id: "july-groceries",
+          amount: 19000,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-07-05",
+          confirmed: true,
+        }),
+        tx({
+          id: "july-fuel",
+          amount: 2000,
+          type: "expense",
+          categoryId: "transport",
+          date: "2026-07-06",
+          confirmed: true,
+        }),
+      ],
+      categoryBudgets: [
+        { categoryId: "groceries", monthlyLimit: 30000 },
+        { categoryId: "transport", monthlyLimit: 10000 },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+        essentialCategoryIds: ["groceries", "transport"],
+      },
+    }),
+  );
+
+  assert.equal(ctx.essentialBudgetReserve.totalRemaining, 19000);
+
+  const budgetEvents = ctx.forecast.events.filter(
+    (event) => event.source === "essential_budget",
+  );
+  assert.deepEqual(
+    budgetEvents.map((event) => [event.date, event.amount]),
+    [
+      ["2026-08-01", -40000],
+      ["2026-09-01", -40000],
+    ],
+  );
+  assert.equal(budgetEvents.some((event) => event.date === "2026-10-01"), false);
+  assert.equal(ctx.forecast.minBalance, 120000);
+});
+
+test("Future essential budget reserve is reduced by spending and required recurring obligations", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 200000, me: 200000, partner: 0 },
+      transactions: [
+        tx({
+          id: "august-groceries",
+          amount: 5000,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-08-05",
+          confirmed: true,
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "rent",
+          amount: 12000,
+          type: "expense",
+          categoryId: "rent",
+          note: "Аренда",
+          nextRunDate: "2026-08-15",
+          frequency: "monthly",
+          dayOfMonth: 15,
+        }),
+      ],
+      categoryBudgets: [
+        { categoryId: "groceries", monthlyLimit: 30000 },
+        { categoryId: "rent", monthlyLimit: 20000 },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        requiredRecurringIds: ["rent"],
+        essentialCategoryIds: ["groceries", "rent"],
+      },
+    }),
+  );
+
+  const augustBudget = ctx.forecast.events.find(
+    (event) => event.id === "essential-budget-2026-08-01-2026-08-31",
+  );
+  assert.equal(augustBudget?.amount, -33000);
+  assert.equal(
+    ctx.forecast.events.some((event) => event.id === "recurring-rent-2026-08-15"),
+    true,
+  );
+  assert.equal(
+    ctx.forecast.events.some((event) => event.id === "august-groceries"),
+    true,
+  );
+});
+
 test("Pending payment confirmation is idempotent", () => {
   const originalTransactions = [
     tx({

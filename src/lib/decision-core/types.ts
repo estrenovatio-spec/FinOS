@@ -278,7 +278,8 @@ export type ForecastEventSource =
   | "confirmed_transaction"
   | "pending_transaction"
   | "recurring"
-  | "debt_payment";
+  | "debt_payment"
+  | "essential_budget";
 
 export type ForecastEvent = {
   id: string;
@@ -292,6 +293,13 @@ export type ForecastEvent = {
   incomeOccurrenceDate?: string | null;
   plannedIncomeStatus?: Exclude<MoneySetupIncomeSourceStatus, "received"> | null;
   plannedDate?: string | null;
+  budgetPeriodFrom?: string | null;
+  budgetPeriodTo?: string | null;
+  budgetReserveItems?: Array<{
+    categoryId: string;
+    title: string;
+    amount: number;
+  }> | null;
 };
 
 export type ForecastDay = {

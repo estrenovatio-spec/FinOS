@@ -1,4 +1,9 @@
 import { getCategoryLabel } from "@/lib/categories";
+import {
+  getCurrentBudgetPeriod,
+  isDateInBudgetPeriod,
+  type BudgetPeriod,
+} from "@/lib/budget-period";
 import { buildForecastDays } from "@/lib/decision-core/forecast-days";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
@@ -42,34 +47,20 @@ function addMonths(iso: string, months: 1 | 3 | 6): string {
   return `${y}-${mo}-${d}`;
 }
 
+function addDays(iso: string, days: number): string {
+  const date = isoToDate(iso);
+  if (!date) return iso;
+  date.setDate(date.getDate() + days);
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${d}`;
+}
+
 function sortEvents(left: ForecastEvent, right: ForecastEvent) {
   if (left.date !== right.date) return left.date.localeCompare(right.date);
   if (left.amount !== right.amount) return left.amount - right.amount;
   return left.id.localeCompare(right.id);
-}
-
-function normalizeRecurringMatchText(value: string | null | undefined): string {
-  return (value ?? "")
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/[^a-zа-я0-9]+/g, " ")
-    .trim();
-}
-
-function hasRecurringNameOverlap(
-  transactionNote: string | null | undefined,
-  recurringName: string,
-): boolean {
-  if (!recurringName) return false;
-  const txWords = new Set(
-    normalizeRecurringMatchText(transactionNote).split(" ").filter(Boolean),
-  );
-  if (txWords.size === 0) return false;
-
-  return recurringName
-    .split(" ")
-    .filter((word) => word.length >= 3)
-    .some((word) => txWords.has(word));
 }
 
 function hasMatchingActualTransaction(
@@ -77,33 +68,8 @@ function hasMatchingActualTransaction(
   item: RecurringTransaction,
   runDate: string,
 ): boolean {
-  const expectedAmount = Math.round(item.amount);
-  const expectedOwner = item.owner ?? "me";
-  const recurringName = normalizeRecurringMatchText(item.note);
-
   return transactions.some((tx) => {
-    if (
-      tx.date !== runDate ||
-      tx.type !== item.type ||
-      (tx.owner ?? "me") !== expectedOwner ||
-      Math.round(tx.amount) !== expectedAmount
-    ) {
-      return false;
-    }
-
-    if (tx.recurringId != null) {
-      return tx.recurringId === item.id;
-    }
-
-    if (tx.categoryId !== item.categoryId) {
-      return false;
-    }
-
-    if (recurringName) {
-      return hasRecurringNameOverlap(tx.note, recurringName);
-    }
-
-    return false;
+    return tx.date.slice(0, 10) === runDate && tx.recurringId === item.id;
   });
 }
 
@@ -229,6 +195,158 @@ function buildRecurringForecastEvents(
   return events;
 }
 
+function buildFutureBudgetPeriods(
+  ctx: DecisionCoreContext,
+  horizonEndDate: string,
+): BudgetPeriod[] {
+  const current = getCurrentBudgetPeriod(
+    ctx.budgetMonthStartDay,
+    new Date(`${ctx.today}T12:00:00`),
+  );
+  const periods: BudgetPeriod[] = [];
+  let anchor = new Date(`${addDays(current.to, 1)}T12:00:00`);
+
+  while (true) {
+    const period = getCurrentBudgetPeriod(ctx.budgetMonthStartDay, anchor);
+    if (period.from > horizonEndDate) break;
+    if (period.to <= horizonEndDate) {
+      periods.push(period);
+    }
+    anchor = new Date(`${addDays(period.to, 1)}T12:00:00`);
+  }
+
+  return periods;
+}
+
+function recurringOccurrencesInPeriod(
+  item: RecurringTransaction,
+  period: BudgetPeriod,
+): string[] {
+  const dates: string[] = [];
+  if (!item.enabled || !item.nextRunDate) return dates;
+
+  let runDate = item.nextRunDate.slice(0, 10);
+  while (runDate <= period.to) {
+    if (runDate >= period.from && !(item.skippedDates ?? []).includes(runDate)) {
+      dates.push(runDate);
+    }
+
+    const nextRunDate = advanceRecurringDate(
+      runDate,
+      item.frequency,
+      item.dayOfMonth,
+      item.intervalMonths ?? 1,
+    );
+    if (nextRunDate === runDate) break;
+    runDate = nextRunDate;
+  }
+
+  return dates;
+}
+
+function spentForCategoryInPeriod(
+  ctx: DecisionCoreContext,
+  categoryId: string,
+  period: BudgetPeriod,
+): number {
+  return ctx.transactions
+    .filter(
+      (transaction) =>
+        transaction.type === "expense" &&
+        transaction.categoryId === categoryId &&
+        isDateInBudgetPeriod(transaction.date.slice(0, 10), period),
+    )
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+}
+
+function requiredRecurringReservedForCategoryInPeriod(
+  ctx: DecisionCoreContext,
+  categoryId: string,
+  period: BudgetPeriod,
+): number {
+  const requiredRecurringIds = new Set(ctx.moneySetup.requiredRecurringIds);
+
+  return ctx.recurringTransactions
+    .filter(
+      (item) =>
+        requiredRecurringIds.has(item.id) &&
+        item.enabled &&
+        item.type === "expense" &&
+        item.categoryId === categoryId,
+    )
+    .reduce((sum, item) => {
+      return (
+        sum +
+        recurringOccurrencesInPeriod(item, period).reduce((occurrenceSum, runDate) => {
+          const materialized = hasMatchingActualTransaction(ctx.transactions, item, runDate);
+          return materialized ? occurrenceSum : occurrenceSum + item.amount;
+        }, 0)
+      );
+    }, 0);
+}
+
+function buildFutureEssentialBudgetEvents(
+  ctx: DecisionCoreContext,
+  horizonEndDate: string,
+): ForecastEvent[] {
+  const essentialIds = [...new Set(ctx.moneySetup.essentialCategoryIds)];
+  if (essentialIds.length === 0) return [];
+
+  const budgetsByCategory = new Map(
+    ctx.categoryBudgets.map((item) => [item.categoryId, item] as const),
+  );
+  const periods = buildFutureBudgetPeriods(ctx, horizonEndDate);
+  const events: ForecastEvent[] = [];
+
+  for (const period of periods) {
+    const items = essentialIds
+      .map((categoryId) => {
+        const budget = budgetsByCategory.get(categoryId);
+        if (!budget || !Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
+          return null;
+        }
+
+        const spent = spentForCategoryInPeriod(ctx, categoryId, period);
+        const recurringReserved = requiredRecurringReservedForCategoryInPeriod(
+          ctx,
+          categoryId,
+          period,
+        );
+        const amount = Math.max(0, budget.monthlyLimit - spent - recurringReserved);
+        if (amount <= 0) return null;
+
+        return {
+          categoryId,
+          title: getCategoryLabel(categoryId, ctx.categories, ctx.locale),
+          amount,
+        };
+      })
+      .filter((item): item is { categoryId: string; title: string; amount: number } => item != null);
+
+    const amount = items.reduce((sum, item) => sum + item.amount, 0);
+    if (amount <= 0) continue;
+
+    events.push({
+      id: `essential-budget-${period.from}-${period.to}`,
+      title: ctx.locale === "ru" ? "Базовые траты периода" : "Essential spending plan",
+      amount: -amount,
+      date: period.from,
+      balanceAfter: 0,
+      source: "essential_budget",
+      incomeSourceId: null,
+      incomeOccurrenceId: null,
+      incomeOccurrenceDate: null,
+      plannedIncomeStatus: null,
+      plannedDate: null,
+      budgetPeriodFrom: period.from,
+      budgetPeriodTo: period.to,
+      budgetReserveItems: items,
+    });
+  }
+
+  return events;
+}
+
 function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): ForecastEvent[] {
   return ctx.debts
     .filter((item) => item.nextPaymentDate && item.minPayment > 0)
@@ -260,6 +378,7 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
     ...buildPendingTransactionEvents(ctx),
     ...buildRecurringForecastEvents(ctx, horizonEndDate),
     ...buildDebtEvents(ctx, horizonEndDate),
+    ...buildFutureEssentialBudgetEvents(ctx, horizonEndDate),
   ]
     .filter((event) => event.date >= ctx.today && event.date <= horizonEndDate)
     .sort(sortEvents);
