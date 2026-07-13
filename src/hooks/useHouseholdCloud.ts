@@ -9,7 +9,10 @@ import {
   apiCreateHousehold,
   apiImportLocal,
   apiJoinHousehold,
+  apiLogoutCloudSession,
+  apiRequestEmailOtp,
   apiSync,
+  apiVerifyEmailOtp,
 } from "@/lib/cloud/client";
 import { clearWebTelegramLogin } from "@/lib/cloud/web-login-storage";
 import { hasTelegramWebApp } from "@/lib/cloud/telegram";
@@ -31,6 +34,8 @@ export function useHouseholdCloud() {
   const household = useCloudStore((s) => s.household);
   const subscription = useCloudStore((s) => s.subscription);
   const serverConfigured = useCloudStore((s) => s.serverConfigured);
+  const authEmail = useCloudStore((s) => s.authEmail);
+  const authMethod = useCloudStore((s) => s.authMethod);
 
   const subscriptionRequired = Boolean(subscription?.enforced && !subscription.active);
   const isActive = Boolean(
@@ -216,10 +221,6 @@ export function useHouseholdCloud() {
 
   /** Phone already has cloud — browser only needs the same Telegram session */
   const attachExistingCloud = useCallback(async () => {
-    if (!hasCloudAuth()) {
-      setError("telegram_required");
-      return false;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -258,6 +259,71 @@ export function useHouseholdCloud() {
     }
   }, []);
 
+  const requestEmailCode = useCallback(async (email: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiRequestEmailOtp(email);
+      if (!result.ok) {
+        setError(result.error ?? "provider_unavailable");
+        return null;
+      }
+      return result;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "provider_unavailable");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const verifyEmailCode = useCallback(async (email: string, code: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiVerifyEmailOtp(email, code, useCloudStore.getState().token);
+      if (result.subscription) useCloudStore.getState().setSubscription(result.subscription);
+      useCloudStore.getState().setAccessSummary(result.accessSummary ?? null);
+      if (result.user?.id) {
+        useCloudStore.getState().setCloudUserId(result.user.id);
+        useCloudStore.getState().setAuthIdentity({
+          email: result.user.email ?? null,
+          authMethod: "email",
+        });
+      }
+      setCloudPaused(false);
+      if (result.sync && result.token) {
+        applyHouseholdSync(result.sync, result.token);
+      } else if (result.token && result.household) {
+        useCloudStore.getState().setSession(result.token, result.household);
+      }
+      useCloudStore.getState().touchSync();
+      return Boolean(result.token && result.household);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "otp_invalid");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const logoutCloudSession = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await apiLogoutCloudSession();
+      clearWebTelegramLogin();
+      setCloudPaused(false);
+      useCloudStore.getState().clearSession();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "logout_failed");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -271,9 +337,14 @@ export function useHouseholdCloud() {
     replaceCloudWithThisDevice,
     importLocal: pushToCloud,
     loginWithTelegramWeb,
+    requestEmailCode,
+    verifyEmailCode,
+    logoutCloudSession,
     disconnectCloud,
     resumeCloud,
     attachExistingCloud,
+    authEmail,
+    authMethod,
     isTelegram: hasTelegramWebApp(),
     canUseCloud: hasTelegramWebApp() || hasCloudAuth() || Boolean(token),
     isActive,

@@ -290,6 +290,7 @@ export async function upsertTelegramUser(user: TelegramWebAppUser) {
     select: {
       id: true,
       telegramId: true,
+      email: true,
       firstName: true,
       username: true,
       googleSheetsOpenLogged: true,

@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       userId: user.id,
-      telegramId: user.telegramId.toString(),
+      telegramId: user.telegramId?.toString() ?? null,
       username: user.username,
       subscription,
       subscriptionReminderSentAt: user.subscriptionReminderSentAt,
@@ -121,6 +121,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "send_reminder") {
+    if (!user.telegramId) {
+      return NextResponse.json({ error: "telegram_not_linked" }, { status: 400 });
+    }
     const result = await sendSubscriptionExpiryReminder({
       userId: user.id,
       telegramId: user.telegramId,

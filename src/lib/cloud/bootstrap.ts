@@ -89,6 +89,10 @@ export async function runHouseholdBootstrap(): Promise<void> {
     useCloudStore.getState().setAccessSummary(res.accessSummary ?? null);
     useCloudStore.getState().setReferralsEnabled(Boolean(res.referralsEnabled));
     useCloudStore.getState().setReferralProfile(res.referralProfile ?? null);
+    useCloudStore.getState().setAuthIdentity({
+      email: res.user?.email ?? null,
+      authMethod: res.user?.authMethod ?? (auth.initData || auth.telegramLogin ? "telegram" : null),
+    });
 
     if (res.user?.id) {
       useCloudStore.getState().setCloudUserId(res.user.id);
@@ -151,5 +155,5 @@ export function canRunCloudBootstrap(): boolean {
   if (hasCloudAuth()) return true;
   // In Telegram Mini App always bootstrap via initData — never stale token alone.
   if (hasTelegramWebApp()) return false;
-  return Boolean(useCloudStore.getState().token);
+  return true;
 }

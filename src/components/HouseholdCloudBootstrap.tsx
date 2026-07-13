@@ -32,7 +32,13 @@ export function HouseholdCloudBootstrap() {
           setCloudPaused(false);
           if (res.subscription) useCloudStore.getState().setSubscription(res.subscription);
           useCloudStore.getState().setAccessSummary(res.accessSummary ?? null);
-          if (res.user?.id) useCloudStore.getState().setCloudUserId(res.user.id);
+          if (res.user?.id) {
+            useCloudStore.getState().setCloudUserId(res.user.id);
+            useCloudStore.getState().setAuthIdentity({
+              email: res.user.email ?? null,
+              authMethod: res.user.authMethod ?? "telegram",
+            });
+          }
           if (res.sync) applyHouseholdSync(res.sync, res.token);
           else useCloudStore.getState().setSession(res.token, res.household);
           useCloudStore.getState().touchSync();

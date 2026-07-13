@@ -18,7 +18,12 @@ export interface BootstrapResponse {
   ok: boolean;
   configured?: boolean;
   error?: string;
-  user?: { id: string; firstName: string | null };
+  user?: {
+    id: string;
+    firstName: string | null;
+    email?: string | null;
+    authMethod?: "telegram" | "email";
+  } | null;
   household: HouseholdPublic | null;
   token: string | null;
   sync: SyncPayload | null;
@@ -30,10 +35,17 @@ export interface BootstrapResponse {
 
 export interface HouseholdActionResponse {
   ok: boolean;
-  user?: { id: string };
+  user?: { id: string; email?: string | null };
   household: HouseholdPublic;
   token: string;
   sync: SyncPayload;
+}
+
+export interface EmailOtpRequestResponse {
+  ok: boolean;
+  maskedEmail?: string;
+  cooldownSeconds?: number;
+  error?: string;
 }
 
 async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
@@ -78,6 +90,41 @@ export async function apiBootstrap(auth: CloudAuthBody): Promise<BootstrapRespon
     };
   }
   return parseJson(res);
+}
+
+export async function apiRequestEmailOtp(email: string): Promise<EmailOtpRequestResponse> {
+  const res = await apiFetch("/api/auth/email/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = (await res.json().catch(() => ({}))) as EmailOtpRequestResponse;
+  if (!res.ok) return { ok: false, error: data.error, cooldownSeconds: data.cooldownSeconds };
+  return data;
+}
+
+export async function apiVerifyEmailOtp(email: string, code: string, token?: string | null) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await apiFetch("/api/auth/email/verify", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ email, code }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `http_${res.status}`);
+  }
+  return parseJson<BootstrapResponse>(res);
+}
+
+export async function apiLogoutCloudSession() {
+  const res = await apiFetch("/api/auth/logout", {
+    method: "POST",
+  });
+  return parseJson<{ ok: boolean }>(res);
 }
 
 export async function apiConsumeWebLoginToken(token: string): Promise<BootstrapResponse> {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { setHouseholdSessionCookie } from "@/lib/auth/session-cookie";
 import { dbUnavailable, notFound } from "@/lib/api/household-response";
 import { isDatabaseConfigured, prisma } from "@/lib/db";
 import { householdAuthBaseSchema } from "@/lib/household/auth-body";
@@ -48,7 +49,15 @@ export async function POST(req: NextRequest) {
       });
     }
     const token = signHouseholdSession({ userId: user.id, householdId: household.id });
-    return NextResponse.json({ ok: true, user: { id: user.id }, household, token, sync });
+    const response = NextResponse.json({
+      ok: true,
+      user: { id: user.id, email: user.email ?? null },
+      household,
+      token,
+      sync,
+    });
+    setHouseholdSessionCookie(response, token);
+    return response;
   } catch (e) {
     if (!(e instanceof Error)) {
       console.error("[household/join]", e);

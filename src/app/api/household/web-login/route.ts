@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setHouseholdSessionCookie } from "@/lib/auth/session-cookie";
 import { dbUnavailable } from "@/lib/api/household-response";
 import { isDatabaseConfigured } from "@/lib/db";
 import { mapHouseholdApiError } from "@/lib/household/api-errors";
@@ -53,27 +54,31 @@ export async function POST(req: NextRequest) {
 
     if (subscription.enforced && !subscription.active) {
       const householdRow = await buildSyncPayload(membership.householdId, userId);
-      return NextResponse.json({
+      const response = NextResponse.json({
         ok: true,
-        user: { id: userId, firstName: null },
+        user: { id: userId, firstName: null, email: null },
         household: householdRow.household,
         token: sessionToken,
         sync: null,
         subscription,
         accessSummary,
       });
+      setHouseholdSessionCookie(response, sessionToken);
+      return response;
     }
 
     const sync = await buildSyncPayload(membership.householdId, userId);
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
-      user: { id: userId, firstName: null },
+      user: { id: userId, firstName: null, email: null },
       household: sync.household,
       token: sessionToken,
       sync,
       subscription,
       accessSummary,
     });
+    setHouseholdSessionCookie(response, sessionToken);
+    return response;
   } catch (e) {
     console.error("[household/web-login]", e);
     const { code, status } = mapHouseholdApiError(e);

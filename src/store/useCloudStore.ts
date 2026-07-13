@@ -9,6 +9,8 @@ import { isValidSubscriptionPublic } from "@/lib/billing/subscription-shape";
 interface CloudState {
   token: string | null;
   household: HouseholdPublic | null;
+  authEmail: string | null;
+  authMethod: "telegram" | "email" | null;
   /** Текущий пользователь в облаке (Telegram → User.id) */
   cloudUserId: string | null;
   householdMemberUserIds: string[];
@@ -39,6 +41,10 @@ interface CloudState {
   /** Последняя ошибка записи в облако (операция остаётся локально) */
   lastWriteError: string | null;
   setServerConfigured: (value: boolean) => void;
+  setAuthIdentity: (identity: {
+    email?: string | null;
+    authMethod?: "telegram" | "email" | null;
+  }) => void;
   setSubscription: (subscription: SubscriptionPublic | null) => void;
   setAccessSummary: (accessSummary: AccessSummaryPublic | null) => void;
   setReferralsEnabled: (enabled: boolean) => void;
@@ -80,6 +86,8 @@ export const useCloudStore = create<CloudState>()(
     (set) => ({
       token: null,
       household: null,
+      authEmail: null,
+      authMethod: null,
       cloudUserId: null,
       householdMemberUserIds: [],
       balanceOffsets: {},
@@ -101,6 +109,11 @@ export const useCloudStore = create<CloudState>()(
       pendingTransactionUpdateIds: {},
       lastWriteError: null,
       setServerConfigured: (serverConfigured) => set({ serverConfigured }),
+      setAuthIdentity: ({ email, authMethod }) =>
+        set({
+          authEmail: email ?? null,
+          authMethod: authMethod ?? null,
+        }),
       setLastWriteError: (lastWriteError) => set({ lastWriteError }),
       setSubscription: (subscription) => set({ subscription }),
       setAccessSummary: (accessSummary) => set({ accessSummary }),
@@ -113,6 +126,8 @@ export const useCloudStore = create<CloudState>()(
           return {
             token,
             household,
+            authEmail: sameSession ? state.authEmail : state.authEmail,
+            authMethod: sameSession ? state.authMethod : state.authMethod,
             cloudUserId: sameSession ? state.cloudUserId : null,
             householdMemberUserIds: sameSession ? state.householdMemberUserIds : [],
             deletedRecurringIds: sameSession ? state.deletedRecurringIds : [],
@@ -200,6 +215,8 @@ export const useCloudStore = create<CloudState>()(
         set({
           token: null,
           household: null,
+          authEmail: null,
+          authMethod: null,
           cloudUserId: null,
           householdMemberUserIds: [],
           balanceOffsets: {},
@@ -224,6 +241,8 @@ export const useCloudStore = create<CloudState>()(
         set({
           token: null,
           household: null,
+          authEmail: null,
+          authMethod: null,
           cloudUserId: null,
           householdMemberUserIds: [],
           lastSyncedAt: null,
@@ -242,7 +261,7 @@ export const useCloudStore = create<CloudState>()(
     }),
     {
       name: "voicebudget-cloud",
-      version: 7,
+      version: 8,
       migrate: (persisted, version) => {
         const state = persisted as CloudState;
         let next = state;
@@ -294,8 +313,17 @@ export const useCloudStore = create<CloudState>()(
             deletedDebtIds: next.deletedDebtIds ?? [],
           };
         }
+        if (version < 8) {
+          next = {
+            ...next,
+            authEmail: null,
+            authMethod: next.token ? "telegram" : null,
+          };
+        }
         next = {
           ...next,
+          authEmail: next.authEmail ?? null,
+          authMethod: next.authMethod ?? null,
           pendingTransactionUpdateIds: next.pendingTransactionUpdateIds ?? {},
         };
         return next;

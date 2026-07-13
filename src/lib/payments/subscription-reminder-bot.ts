@@ -108,6 +108,10 @@ export async function runSubscriptionReminderCron(): Promise<{
   let errors = 0;
 
   for (const user of users) {
+    if (!user.telegramId) {
+      skipped += 1;
+      continue;
+    }
     const sub = await getSubscriptionForUser(user.id);
     if (sub.active) {
       skipped += 1;

@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { getHouseholdSessionCookie } from "@/lib/auth/session-cookie";
 import { verifyHouseholdSession } from "@/lib/household/token";
 
 export function getBearerToken(req: NextRequest): string | null {
@@ -8,7 +9,7 @@ export function getBearerToken(req: NextRequest): string | null {
 }
 
 export function requireSession(req: NextRequest) {
-  const token = getBearerToken(req);
+  const token = getBearerToken(req) ?? getHouseholdSessionCookie(req);
   if (!token) return null;
   return verifyHouseholdSession(token);
 }
