@@ -1,46 +1,12 @@
 import { calculateSafeSpending } from "@/lib/safe-spending";
 import { daysInclusiveUntilDate } from "@/lib/format-date";
+import { formatIsoDate } from "@/lib/format-date";
 import { getForecastConfidence } from "@/lib/decision-core/forecast-confidence";
 import { getConstraintPoint } from "@/lib/decision-core/constraint-point";
 import type { DecisionCoreContext, DecisionCoreState, DecisionSafeUntil } from "@/lib/decision-core/types";
 
-const MONTHS_RU = [
-  "января",
-  "февраля",
-  "марта",
-  "апреля",
-  "мая",
-  "июня",
-  "июля",
-  "августа",
-  "сентября",
-  "октября",
-  "ноября",
-  "декабря",
-] as const;
-
-const MONTHS_EN = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-] as const;
-
 function formatDayMonth(iso: string, locale: DecisionCoreState["locale"]): string {
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return iso;
-  const monthIndex = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  if (locale === "en") return `${MONTHS_EN[monthIndex]} ${day}`;
-  return `${day} ${MONTHS_RU[monthIndex]}`;
+  return formatIsoDate(iso, locale);
 }
 
 function formatHorizonLabel(

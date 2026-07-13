@@ -431,7 +431,7 @@ test("Allowed uses the forecast horizon end when there is no constraint point", 
   assert.equal(scenario.result.allowed.horizonDate, "2026-10-10");
   assert.equal(scenario.result.safeUntil.status, "no_risk_in_horizon");
   assert.match(scenario.result.safeUntil.title, /3 месяца/);
-  assert.match(scenario.result.safeUntil.note ?? "", /10 октября/);
+  assert.match(scenario.result.safeUntil.note ?? "", /10\.10\.2026/);
   assert.ok((scenario.result.allowed.amount ?? 0) > 0);
 });
 
@@ -1870,7 +1870,7 @@ test("constraint point uses the next truly limiting day instead of a same-day in
   assert.notEqual(point?.eventId, "school-july-25");
   assert.equal(scenario.result.nextRisk?.date, "2026-07-28");
   assert.equal(scenario.result.allowed.horizonDate, "2026-07-28");
-  assert.match(scenario.result.safeUntil.note ?? "", /28 июля/);
+  assert.match(scenario.result.safeUntil.note ?? "", /28\.07\.2026/);
 });
 
 test("same-day constraint semantics do not depend on event order", () => {
@@ -2059,7 +2059,7 @@ test("next income does not become safe-until when there is no risk in the select
   assert.equal(scenario.result.safeUntil.horizonEndDate, "2026-10-13");
   assert.equal(scenario.result.safeUntil.nextIncomeDate, "2026-07-14");
   assert.match(scenario.result.safeUntil.title, /3 месяца/);
-  assert.match(scenario.result.safeUntil.note ?? "", /13 октября/);
+  assert.match(scenario.result.safeUntil.note ?? "", /13\.10\.2026/);
   assert.doesNotMatch(scenario.result.safeUntil.title, /14 июля/);
   assert.equal(scenario.result.allowed.horizonDate, "2026-10-13");
 });

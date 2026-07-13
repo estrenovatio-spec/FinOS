@@ -23,7 +23,7 @@ function makeDecision(
     },
     safeUntil: {
       status: "constraint_found",
-      title: "До 25 июля",
+      title: "До 25.07.2026",
       note: "Расчёт по прогнозной линии.",
       isReady: true,
       needsSetup: false,
@@ -195,16 +195,16 @@ test("hero without urgent action does not show forced CTA", () => {
   });
 
   assert.equal(view.hero.ctaLabel, null);
-  assert.match(view.hero.due ?? "", /25 июля/);
+  assert.match(view.hero.due ?? "", /25\.07\.2026/);
   assert.equal(view.hero.title, "Сегодня всё спокойно");
 });
 
-test("hero and safe-until overview use the same canonical date", () => {
+test("hero keeps the same canonical date even without a separate safe-until card", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       safeUntil: {
         status: "constraint_found",
-        title: "До 3 августа",
+        title: "До 03.08.2026",
         note: "Расчёт по прогнозной линии.",
         isReady: true,
         needsSetup: false,
@@ -241,12 +241,12 @@ test("hero and safe-until overview use the same canonical date", () => {
   });
 
   const safeUntil = view.overviewItems.find((item) => item.id === "safe-until");
-  assert.equal(safeUntil?.value, "До 3 августа");
-  assert.equal(view.hero.due, "Денег хватает до 3 августа");
-  assert.doesNotMatch(view.hero.due ?? "", /25 июля/);
+  assert.equal(safeUntil, undefined);
+  assert.equal(view.hero.due, "Денег хватает до 03.08.2026");
+  assert.doesNotMatch(view.hero.due ?? "", /25\.07\.2026/);
 });
 
-test("no-risk horizon shows the calm period while the next income is displayed separately", () => {
+test("Today overview no longer duplicates forecast horizon or next income cards", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       safeUntil: {
@@ -300,14 +300,8 @@ test("no-risk horizon shows the calm period while the next income is displayed s
   });
 
   assert.equal(view.hero.due, "На ближайшие 3 месяца всё спокойно");
-  const horizon = view.overviewItems.find((item) => item.id === "safe-until");
-  assert.equal(horizon?.label, "Горизонт прогноза");
-  assert.equal(horizon?.value, "До 13 октября");
-  const nextIncome = view.overviewItems.find((item) => item.id === "next-income");
-  assert.equal(nextIncome?.label, "Ближайшее поступление");
-  assert.match(nextIncome?.value ?? "", /24[\s\u00A0]000 ₽/);
-  assert.match(nextIncome?.caption ?? "", /14 июля/);
-  assert.doesNotMatch(horizon?.value ?? "", /14 июля/);
+  assert.equal(view.overviewItems.find((item) => item.id === "safe-until"), undefined);
+  assert.equal(view.overviewItems.find((item) => item.id === "next-income"), undefined);
 });
 
 test("current balance is always visible when known", () => {
@@ -329,7 +323,7 @@ test("current balance is always visible when known", () => {
   assert.equal(currentBalance?.actionKey, "edit_current_balance");
 });
 
-test("allowed available shows amount instead of prose", () => {
+test("Today overview shows only current balance and planned free money", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),
     locale: "ru",
@@ -358,6 +352,7 @@ test("allowed available shows amount instead of prose", () => {
       amount: 11592,
       expectedRecurringIncome: 24000,
       includesUnconfirmedIncome: false,
+      periodStartDate: "2026-07-13",
       periodEndDate: "2026-08-13",
       breakdown: {
         currentActualBalance: 40000,
@@ -366,23 +361,25 @@ test("allowed available shows amount instead of prose", () => {
         essentialPlannedSpending: 40408,
         otherRequiredExpenses: 0,
         plannedFreeMoney: 11592,
+        periodStartDate: "2026-07-13",
         periodEndDate: "2026-08-13",
       },
       note: null,
     },
   });
 
+  assert.equal(view.overviewItems.length, 2);
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Свободно сейчас");
-  assert.match(allowed?.value ?? "", /3[\s\u00A0]500 ₽/);
-  assert.match(allowed?.caption ?? "", /до 13 августа/);
+  assert.equal(allowed, undefined);
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.match(planned?.label ?? "", /По плану свободно до 13 августа/);
+  assert.equal(planned?.label, "По плану свободно");
+  assert.equal(planned?.subtitle, "до 13.08.2026");
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.equal(planned?.layout, "wide");
+  assert.equal(planned?.details?.at(-1)?.value, "11 592 ₽");
 });
 
-test("allowed available shows remaining amount after today's spending", () => {
+test("planned free money card uses digital dates and keeps breakdown details", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       allowed: {
@@ -402,52 +399,31 @@ test("allowed available shows remaining amount after today's spending", () => {
       nextIncomeDate: "2026-07-25",
     },
     balances: { all: 40000, me: 40000, partner: 0 },
-    freeMoney: {
+    plannedFreeMoney: {
       status: "available",
       amount: 3320,
+      expectedRecurringIncome: 5000,
+      includesUnconfirmedIncome: true,
+      periodStartDate: "2026-07-13",
       periodEndDate: "2026-08-13",
       breakdown: {
         currentActualBalance: 40000,
+        expectedRecurringIncome: 5000,
         mandatoryPayments: 12000,
-        essentialPlannedSpending: 24680,
+        essentialPlannedSpending: 29680,
         otherRequiredExpenses: 0,
-        freeMoney: 3320,
+        plannedFreeMoney: 3320,
+        periodStartDate: "2026-07-13",
         periodEndDate: "2026-08-13",
       },
       note: null,
     },
   });
 
-  const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Свободно сейчас");
-  assert.match(allowed?.value ?? "", /3[\s\u00A0]320 ₽/);
-  assert.match(allowed?.caption ?? "", /до 13 августа/);
-});
-
-test("allowed restricted does not show false amount", () => {
-  const view = buildTodayScreenView({
-    decision: makeDecision({
-      allowed: {
-        text: "Сегодня лучше ограничиться обязательным.",
-        hasRestPermission: false,
-        status: "restricted",
-        amount: 0,
-        horizonDate: "2026-07-25",
-        reason: "Необязательные траты нарушат обязательные платежи.",
-      },
-    }),
-    locale: "ru",
-    transactionCount: 3,
-    moneySetup: {
-      ...emptyMoneySetup(),
-      nextIncomeDate: "2026-07-25",
-    },
-    balances: { all: 15000, me: 15000, partner: 0 },
-  });
-
-  const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Свободно сейчас");
-  assert.equal(allowed?.value, "пока неизвестно");
+  const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
+  assert.equal(planned?.subtitle, "до 13.08.2026");
+  assert.equal(planned?.details?.[0]?.label, "Сейчас в кошельке");
+  assert.equal(planned?.details?.[1]?.value, "+5 000 ₽");
 });
 
 test("planned free money copy explains recurring-income plan without using narrow card text", () => {
@@ -479,6 +455,7 @@ test("planned free money copy explains recurring-income plan without using narro
       amount: 11592,
       expectedRecurringIncome: 24000,
       includesUnconfirmedIncome: true,
+      periodStartDate: "2026-07-13",
       periodEndDate: "2026-07-31",
       breakdown: {
         currentActualBalance: 69071,
@@ -487,22 +464,21 @@ test("planned free money copy explains recurring-income plan without using narro
         essentialPlannedSpending: 28479,
         otherRequiredExpenses: 0,
         plannedFreeMoney: 11592,
+        periodStartDate: "2026-07-13",
         periodEndDate: "2026-07-31",
       },
       note: null,
     },
   });
 
-  const actual = view.overviewItems.find((item) => item.id === "allowed");
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.equal(actual?.value, "0 ₽");
-  assert.match(actual?.caption ?? "", /до 31 июля/);
+  assert.equal(view.overviewItems.find((item) => item.id === "allowed"), undefined);
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.match(planned?.caption ?? "", /регулярные доходы придут по плану/i);
   assert.match(planned?.caption ?? "", /не подтверждено/i);
 });
 
-test("allowed unknown shows uncertainty instead of zero", () => {
+test("planned free money breakdown arithmetic stays explicit", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       allowed: {
@@ -518,10 +494,40 @@ test("allowed unknown shows uncertainty instead of zero", () => {
     transactionCount: 1,
     moneySetup: emptyMoneySetup(),
     balances: { all: 10000, me: 10000, partner: 0 },
+    plannedFreeMoney: {
+      status: "available",
+      amount: 2500,
+      expectedRecurringIncome: 5000,
+      includesUnconfirmedIncome: true,
+      periodStartDate: "2026-07-13",
+      periodEndDate: "2026-07-31",
+      breakdown: {
+        currentActualBalance: 10000,
+        expectedRecurringIncome: 5000,
+        mandatoryPayments: 8000,
+        essentialPlannedSpending: 4500,
+        otherRequiredExpenses: 0,
+        plannedFreeMoney: 2500,
+        periodStartDate: "2026-07-13",
+        periodEndDate: "2026-07-31",
+      },
+      note: null,
+    },
   });
 
-  const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.value, "пока неизвестно");
+  const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
+  assert.deepEqual(
+    planned?.details?.map((item) => item.label),
+    [
+      "Сейчас в кошельке",
+      "Регулярные доходы",
+      "Обязательные платежи",
+      "Плановые базовые траты",
+      "Другие обязательные расходы",
+      "По плану свободно",
+    ],
+  );
+  assert.equal(planned?.details?.at(-1)?.value, "2 500 ₽");
 });
 
 test("main payment is not duplicated as equal secondary card", () => {
@@ -626,7 +632,7 @@ test("calm state stays non-alarming and keeps quick add available", () => {
   assert.equal(view.showQuickAddHint, true);
 });
 
-test("reserve required uses human copy and keeps amounts separate", () => {
+test("reserve required keeps the reserve guidance in hero without duplicating a Today card", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       mainAction: {
@@ -667,12 +673,8 @@ test("reserve required uses human copy and keeps amounts separate", () => {
   assert.equal(view.hero.title, "Лучше оставить");
   assert.doesNotMatch(view.hero.title, /Сохраните резерв/);
   const reserve = view.overviewItems.find((item) => item.id === "reserve");
-  assert.match(reserve?.label ?? "", /Лучше оставить до 20 июля/);
-  assert.match(reserve?.value ?? "", /18[\s\u00A0]000 ₽/);
-  assert.notEqual(
-    view.overviewItems.find((item) => item.id === "current-balance")?.label,
-    reserve?.label,
-  );
+  assert.equal(reserve, undefined);
+  assert.equal(view.overviewItems.length <= 2, true);
 });
 
 test("avoid is suppressed when it only repeats reserve wording", () => {
@@ -742,7 +744,7 @@ test("future deficit says money may run short", () => {
     balances: { all: 12000, me: 12000, partner: 0 },
   });
 
-  assert.match(view.hero.title, /27 июля денег может не хватить/);
+  assert.match(view.hero.title, /27\.07\.2026 денег может не хватить/);
   assert.match(view.hero.reason ?? "", /баланс уйдёт в минус/);
 });
 
@@ -912,7 +914,7 @@ test("missing focused date quietly falls back to the regular forecast view", () 
   assert.equal(view.contextTitle, null);
 });
 
-test("Today safe-until card uses the same constraint explanation source", () => {
+test("Today no longer renders a separate safe-until explanation card", () => {
   const explanation = {
     date: "2026-08-03",
     kind: "reserve" as const,
@@ -931,7 +933,7 @@ test("Today safe-until card uses the same constraint explanation source", () => 
     decision: makeDecision({
       safeUntil: {
         status: "constraint_found",
-        title: "До 3 августа",
+        title: "До 03.08.2026",
         note: "Расчёт по прогнозной линии.",
         isReady: true,
         needsSetup: false,
@@ -956,10 +958,7 @@ test("Today safe-until card uses the same constraint explanation source", () => 
   });
 
   const safeUntil = view.overviewItems.find((item) => item.id === "safe-until");
-  assert.equal(
-    safeUntil?.caption,
-    "После платежа «Ипотека» на 40 000 ₽ останется 8 500 ₽. Эти деньги уже нужны на базовые расходы.",
-  );
+  assert.equal(safeUntil, undefined);
 
   const focused = buildFocusedForecastView(
     makeForecast({
@@ -1020,6 +1019,34 @@ test("optional recurring absence can still count as completed setup", () => {
 
   const requiredExpenses = progress.items.find((item) => item.id === "required_expenses");
   assert.equal(requiredExpenses?.done, true);
+});
+
+test("essential-only missing data no longer asks to add required payments", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "complete_required_expenses_setup",
+        title: "Настройте базовые траты",
+        text: "Отметьте базовые категории расходов и их лимиты.",
+        description: "Иначе прогноз может показывать ложную уверенность.",
+        reason: "Сейчас не хватает данных о базовых тратах периода.",
+        priority: "medium",
+        command: { type: "open_money_setup", scope: "essential_budgets" },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+      hasNoRequiredFixedExpenses: true,
+    },
+    balances: { all: 15000, me: 15000, partner: 0 },
+  });
+
+  assert.equal(view.hero.title, "Настройте базовые траты");
+  assert.equal(view.hero.ctaLabel, "Настроить важные траты");
+  assert.match(view.hero.reason ?? "", /базовых тратах периода/i);
 });
 
 test("money setup progress updates when another section is filled", () => {

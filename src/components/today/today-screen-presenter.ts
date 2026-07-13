@@ -1,4 +1,5 @@
 import { getMainActionButtonLabel } from "@/components/today/main-action-resolver";
+import { formatIsoDate } from "@/lib/format-date";
 import type { MoneySetup } from "@/lib/money-setup";
 import type {
   DecisionCoreResult,
@@ -26,10 +27,16 @@ export type TodayOverviewItem = {
   id: string;
   label: string;
   value: string;
+  subtitle?: string | null;
   caption?: string | null;
   actionLabel?: string | null;
   actionKey?: "edit_current_balance" | null;
   layout?: "default" | "wide";
+  details?: Array<{
+    label: string;
+    value: string;
+    tone?: "positive" | "negative" | "neutral" | "total";
+  }> | null;
 };
 
 export type TodayPaymentsView = {
@@ -68,44 +75,8 @@ type TodayPresentationInput = {
   plannedFreeMoney?: PlannedFreeMoneyView;
 };
 
-const MONTHS_RU = [
-  "января",
-  "февраля",
-  "марта",
-  "апреля",
-  "мая",
-  "июня",
-  "июля",
-  "августа",
-  "сентября",
-  "октября",
-  "ноября",
-  "декабря",
-] as const;
-
-const MONTHS_EN = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-] as const;
-
 function formatDayMonth(iso: string | null | undefined, locale: Locale): string | null {
-  if (!iso) return null;
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return iso;
-  const monthIndex = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  if (locale === "en") return `${MONTHS_EN[monthIndex]} ${day}`;
-  return `${day} ${MONTHS_RU[monthIndex]}`;
+  return iso ? formatIsoDate(iso, locale) : null;
 }
 
 function rub(amount: number | null | undefined, locale: Locale): string | null {
@@ -204,7 +175,7 @@ function buildHeroTitle(mainAction: DecisionMainAction, locale: Locale): string 
     case "complete_balance_setup":
       return locale === "ru" ? "Укажите, сколько денег сейчас" : "Set your current balance";
     case "complete_required_expenses_setup":
-      return locale === "ru" ? "Добавьте обязательные платежи" : "Add required payments";
+      return mainAction.title;
     case "hold":
       return locale === "ru" ? "Сегодня всё спокойно" : "Today is calm";
     default:
@@ -327,9 +298,7 @@ function buildHeroReason(
         ? "Без даты поступления нельзя точно сказать, сколько можно потратить."
         : "Without the next income date, the app cannot tell how much you can safely spend.";
     case "complete_required_expenses_setup":
-      return locale === "ru"
-        ? "Так будет понятно, какие деньги уже заняты обязательствами."
-        : "This tells the app which money is already spoken for.";
+      return mainAction.reason ?? null;
     case "add_first_entry":
       return currentBalanceKnown
         ? locale === "ru"
@@ -420,49 +389,6 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
   };
 }
 
-function buildAllowedItem(
-  locale: Locale,
-  freeMoney?: FreeMoneyView,
-): TodayOverviewItem {
-  if (freeMoney?.status === "available" && freeMoney.amount != null) {
-    return {
-      id: "allowed",
-      label: locale === "ru" ? "Свободно сейчас" : "Free now",
-      value: rub(freeMoney.amount, locale) ?? "",
-      caption:
-        locale === "ru"
-          ? `Из уже полученных денег после обязательных платежей и плановых базовых расходов до ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
-          : `From money already received after required payments and planned essentials until ${formatDayMonth(freeMoney.periodEndDate, locale)}.`,
-    };
-  }
-
-  if (freeMoney?.status === "restricted") {
-    return {
-      id: "allowed",
-      label: locale === "ru" ? "Свободно сейчас" : "Free now",
-      value: locale === "ru" ? "0 ₽" : "0 RUB",
-      caption:
-        locale === "ru"
-          ? freeMoney.periodEndDate
-            ? `Текущих денег пока хватает только на обязательные и плановые расходы до ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
-            : "Текущих денег пока хватает только на обязательные и плановые расходы."
-          : freeMoney?.periodEndDate
-            ? `Current money only covers required and planned spending until ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
-            : "Current money only covers required and planned spending.",
-    };
-  }
-
-  return {
-    id: "allowed",
-    label: locale === "ru" ? "Свободно сейчас" : "Free now",
-    value: locale === "ru" ? "пока неизвестно" : "unknown for now",
-    caption:
-      locale === "ru"
-        ? "Нужны актуальный остаток и обязательные расходы текущего периода."
-        : "Current balance and required spending for this period are needed.",
-  };
-}
-
 function buildPlannedFreeMoneyItem(
   locale: Locale,
   plannedFreeMoney?: PlannedFreeMoneyView,
@@ -473,10 +399,11 @@ function buildPlannedFreeMoneyItem(
 
   return {
     id: "planned-free-money",
-    label:
+    label: locale === "ru" ? "По плану свободно" : "Planned free money",
+    subtitle:
       locale === "ru"
-        ? `По плану свободно до ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`
-        : `Planned free money until ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`,
+        ? `до ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`
+        : `until ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`,
     value: rub(plannedFreeMoney.amount, locale) ?? (locale === "ru" ? "0 ₽" : "0 RUB"),
     caption:
       locale === "ru"
@@ -487,125 +414,52 @@ function buildPlannedFreeMoneyItem(
           ? "After all payments and planned essentials, if recurring income arrives as planned. The income is not confirmed yet."
           : "After all payments and planned essentials, if recurring income arrives as planned.",
     layout: "wide",
-  };
-}
-
-function buildNextIncomeItem(decision: DecisionCoreResult, locale: Locale): TodayOverviewItem | null {
-  if (decision.mainAction.type !== "hold") return null;
-  if (!decision.safeUntil.nextIncomeDate) return null;
-  const amount = moneyValue(decision.safeUntil.nextIncomeAmount, locale);
-  const captionParts = [
-    formatDayMonth(decision.safeUntil.nextIncomeDate, locale),
-    decision.safeUntil.nextIncomeTitle ?? null,
-  ].filter(Boolean);
-
-  return {
-    id: "next-income",
-    label: locale === "ru" ? "Ближайшее поступление" : "Next income",
-    value:
-      amount ??
-      (locale === "ru"
-        ? "Ожидается"
-        : "Expected"),
-    caption: captionParts.length > 0 ? captionParts.join(" · ") : null,
+    details: plannedFreeMoney.breakdown
+      ? [
+          {
+            label: locale === "ru" ? "Сейчас в кошельке" : "Available now",
+            value: moneyValue(plannedFreeMoney.breakdown.currentActualBalance, locale) ?? "",
+            tone: "neutral",
+          },
+          {
+            label: locale === "ru" ? "Регулярные доходы" : "Recurring income",
+            value: `+${moneyValue(plannedFreeMoney.breakdown.expectedRecurringIncome, locale) ?? ""}`,
+            tone: "positive",
+          },
+          {
+            label: locale === "ru" ? "Обязательные платежи" : "Required payments",
+            value: `-${moneyValue(plannedFreeMoney.breakdown.mandatoryPayments, locale) ?? ""}`,
+            tone: "negative",
+          },
+          {
+            label: locale === "ru" ? "Плановые базовые траты" : "Planned essentials",
+            value: `-${moneyValue(plannedFreeMoney.breakdown.essentialPlannedSpending, locale) ?? ""}`,
+            tone: "negative",
+          },
+          {
+            label: locale === "ru" ? "Другие обязательные расходы" : "Other required spending",
+            value: `-${moneyValue(plannedFreeMoney.breakdown.otherRequiredExpenses, locale) ?? ""}`,
+            tone: "negative",
+          },
+          {
+            label: locale === "ru" ? "По плану свободно" : "Planned free money",
+            value: moneyValue(plannedFreeMoney.breakdown.plannedFreeMoney, locale) ?? "",
+            tone: "total",
+          },
+        ]
+      : null,
   };
 }
 
 function isAvoidDuplicate(mainAction: DecisionMainAction, text: string | null): boolean {
   if (!text) return true;
-  if (mainAction.type === "pay_overdue" || mainAction.type === "pay_today") {
-    return text.toLocaleLowerCase("ru-RU").includes("обязатель");
-  }
   if (mainAction.type === "reserve_for_risk") {
     return text.toLocaleLowerCase("ru-RU").includes("резерв");
   }
-  if (mainAction.type === "complete_income_setup") {
-    return true;
-  }
-  if (mainAction.type === "complete_balance_setup") {
+  if (mainAction.type === "complete_income_setup" || mainAction.type === "complete_balance_setup") {
     return true;
   }
   return false;
-}
-
-function buildReserveItem(input: TodayPresentationInput): TodayOverviewItem | null {
-  const { decision, locale } = input;
-  if (decision.mainAction.type !== "reserve_for_risk" || decision.mainAction.amount == null) {
-    return null;
-  }
-
-  return {
-    id: "reserve",
-    label:
-      decision.mainAction.dueDate && locale === "ru"
-        ? `Лучше оставить до ${formatDayMonth(decision.mainAction.dueDate, locale)}`
-        : locale === "ru"
-          ? "Лучше не тратить"
-          : "Better to keep",
-    value: rub(decision.mainAction.amount, locale) ?? "",
-    caption:
-      decision.nextRisk?.title && locale === "ru"
-        ? `После ${decision.nextRisk.title.toLocaleLowerCase("ru-RU")} свободных денег почти не останется.`
-        : decision.mainAction.reason ?? null,
-  };
-}
-
-function buildTimingItem(input: TodayPresentationInput): TodayOverviewItem | null {
-  const { decision, locale } = input;
-
-  if (
-    decision.nextRisk &&
-    decision.mainAction.type !== "reserve_for_risk" &&
-    !(decision.mainAction.type === "cover_deficit" && decision.mainAction.dueDate === decision.nextRisk.date) &&
-    decision.mainAction.type !== "pay_today" &&
-    decision.mainAction.type !== "pay_overdue"
-  ) {
-    return {
-      id: "next-payment",
-      label: locale === "ru" ? "Ближайший платёж" : "Next payment",
-      value: decision.nextRisk.title,
-      caption: formatDayMonth(decision.nextRisk.date, locale),
-    };
-  }
-
-  if (decision.safeUntil.title) {
-    const explanationCaption = decision.constraintExplanation
-      ? [decision.constraintExplanation.summary, decision.constraintExplanation.detail]
-          .filter(Boolean)
-          .join(" ")
-      : null;
-    const confidenceCaption =
-      !decision.constraintExplanation && decision.safeUntil.confidenceNote
-        ? decision.safeUntil.confidenceNote
-        : null;
-    return {
-      id: "safe-until",
-      label:
-        decision.safeUntil.status === "no_risk_in_horizon"
-          ? locale === "ru"
-            ? "Горизонт прогноза"
-            : "Forecast horizon"
-          : locale === "ru"
-            ? "Денег хватит до"
-            : "Money lasts until",
-      value:
-        decision.safeUntil.status === "no_risk_in_horizon" &&
-        decision.safeUntil.horizonEndDate
-          ? locale === "ru"
-            ? `До ${formatDayMonth(decision.safeUntil.horizonEndDate, locale)}`
-            : `Until ${formatDayMonth(decision.safeUntil.horizonEndDate, locale)}`
-          : decision.safeUntil.title,
-      caption:
-        explanationCaption ||
-        confidenceCaption ||
-        (decision.safeUntil.note &&
-        !decision.safeUntil.note.toLocaleLowerCase("ru-RU").includes("прогноз")
-          ? decision.safeUntil.note
-          : null),
-    };
-  }
-
-  return null;
 }
 
 function buildOverview(input: TodayPresentationInput): {
@@ -633,48 +487,9 @@ function buildOverview(input: TodayPresentationInput): {
     remainingPayments.length > 0 ? remainingPayments : decision.todayPayments;
   const items: TodayOverviewItem[] = [buildCurrentBalanceItem(input)];
 
-  items.push(buildAllowedItem(locale, input.freeMoney));
-
   const plannedFreeMoneyItem = buildPlannedFreeMoneyItem(locale, input.plannedFreeMoney);
   if (plannedFreeMoneyItem) {
     items.push(plannedFreeMoneyItem);
-  }
-
-  const reserveItem = buildReserveItem(input);
-  if (reserveItem) {
-    items.push(reserveItem);
-  }
-
-  const nextIncomeItem = buildNextIncomeItem(decision, locale);
-  if (nextIncomeItem) {
-    items.push(nextIncomeItem);
-  }
-
-  const timingItem = buildTimingItem(input);
-  if (timingItem) {
-    items.push(timingItem);
-  }
-
-  if (paymentsToSummarize.length > 0) {
-    const total = paymentsToSummarize.reduce((sum, payment) => sum + payment.amount, 0);
-    items.push({
-      id: "payments",
-      label:
-        hiddenPrimaryPaymentId && remainingPayments.length > 0
-          ? locale === "ru"
-            ? "Другие платежи"
-            : "Other payments"
-          : locale === "ru"
-            ? "Платежи"
-            : "Payments",
-      value: rub(total, locale) ?? "",
-      caption:
-        paymentsToSummarize.length > 1
-          ? locale === "ru"
-            ? `${paymentsToSummarize.length} шт.`
-            : `${paymentsToSummarize.length} items`
-          : null,
-    });
   }
 
   return {
