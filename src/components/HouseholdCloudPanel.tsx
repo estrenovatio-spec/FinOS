@@ -20,6 +20,35 @@ import { useStore } from "@/store/useStore";
 const TG_BOT = process.env.NEXT_PUBLIC_TG_BOT_NAME?.replace(/^@/, "") ?? "";
 
 function mapCloudError(locale: "ru" | "en", error: string): string {
+  if (error === "invalid_email") {
+    return locale === "ru" ? "Введите корректный email." : "Enter a valid email.";
+  }
+  if (error === "provider_unavailable") {
+    return locale === "ru"
+      ? "Не удалось отправить код. Попробуйте позже."
+      : "The sign-in code could not be sent. Please try again later.";
+  }
+  if (error === "cooldown_active") {
+    return locale === "ru"
+      ? "Новый код можно запросить чуть позже."
+      : "You can request a new code a little later.";
+  }
+  if (error === "rate_limited") {
+    return locale === "ru"
+      ? "Слишком много запросов. Попробуйте позже."
+      : "Too many requests. Please try again later.";
+  }
+  if (error === "otp_invalid") {
+    return locale === "ru" ? "Код не подошёл." : "The code is invalid.";
+  }
+  if (error === "otp_expired") {
+    return locale === "ru" ? "Срок действия кода истёк." : "The code has expired.";
+  }
+  if (error === "otp_attempts_exceeded") {
+    return locale === "ru"
+      ? "Превышено число попыток. Запросите новый код."
+      : "Too many attempts. Request a new code.";
+  }
   const key =
     error === "database_not_configured" || error === "db_unavailable"
       ? "cloudErrDbUnavailable"
@@ -73,6 +102,11 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
     replaceCloudWithThisDevice,
     loginWithTelegramWeb,
     attachExistingCloud,
+    requestEmailCode,
+    verifyEmailCode,
+    logoutCloudSession,
+    authEmail,
+    authMethod,
     isTelegram,
     isActive,
     subscription,
@@ -83,7 +117,20 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
   const [joinCode, setJoinCode] = useState("");
   const [partnerLabel, setPartnerLabel] = useState(partnerName ?? "");
   const [showNewHousehold, setShowNewHousehold] = useState(false);
+  const [authStep, setAuthStep] = useState<"intro" | "email" | "code">("intro");
+  const [email, setEmail] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpCooldown, setOtpCooldown] = useState(0);
   const autoAttachStarted = useRef(false);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setOtpCooldown((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [otpCooldown]);
 
   const handleReplaceCloud = async () => {
     if (!window.confirm(t(locale, "cloudSyncReplaceConfirm"))) return;
@@ -98,6 +145,25 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
     autoAttachStarted.current = true;
     void attachExistingCloud();
   }, [loggedInWeb, isActive, attachExistingCloud]);
+
+  const cloudAuthEnabled = process.env.NEXT_PUBLIC_CLOUD_SYNC_ENABLED !== "false";
+
+  if (!cloudAuthEnabled) {
+    return (
+      <div className={shellClass(embedded, "space-y-3 rounded-lg border border-dashed border-border/70 p-3")}>
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium">
+            {locale === "ru" ? "Аккаунт и синхронизация" : "Account and sync"}
+          </p>
+          <p className="break-words text-xs text-muted-foreground">
+            {locale === "ru"
+              ? "Синхронизация пока отключена для этого окружения."
+              : "Sync is disabled in this environment for now."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (subscriptionRequired && subscription) {
     return (
@@ -121,14 +187,119 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
           "space-y-3 rounded-lg border border-dashed border-border/70 p-3",
         )}
       >
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium">{t(locale, "cloudWebLoginTitle")}</p>
-          <p className="break-words text-xs text-muted-foreground">{t(locale, "cloudWebLoginHint")}</p>
+        {authStep === "intro" ? (
+          <>
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">
+                {locale === "ru" ? "Аккаунт и синхронизация" : "Account and sync"}
+              </p>
+              <p className="break-words text-xs text-muted-foreground">
+                {locale === "ru"
+                  ? "Ваши данные хранятся только на этом устройстве."
+                  : "Your data is stored only on this device."}
+              </p>
+            </div>
+            <Button type="button" className="w-full" onClick={() => setAuthStep("email")}>
+              {locale === "ru" ? "Включить синхронизацию" : "Enable sync"}
+            </Button>
+          </>
+        ) : authStep === "email" ? (
+          <>
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">
+                {locale === "ru" ? "Войти в FIN OS" : "Sign in to FIN OS"}
+              </p>
+              <p className="break-words text-xs text-muted-foreground">
+                {locale === "ru"
+                  ? "Введите email и получите одноразовый код."
+                  : "Enter your email to receive a one-time code."}
+              </p>
+            </div>
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              inputMode="email"
+              autoComplete="email"
+            />
+            <Button
+              type="button"
+              className="w-full"
+              disabled={loading || email.trim().length < 3}
+              onClick={async () => {
+                const result = await requestEmailCode(email);
+                if (!result) return;
+                setMaskedEmail(result.maskedEmail ?? email.trim());
+                setOtpCooldown(result.cooldownSeconds ?? 60);
+                setOtpCode("");
+                setAuthStep("code");
+              }}
+            >
+              {locale === "ru" ? "Получить код" : "Get code"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">
+                {locale === "ru" ? "Введите код из письма" : "Enter the code from your email"}
+              </p>
+              <p className="break-words text-xs text-muted-foreground">
+                {maskedEmail ??
+                  (locale === "ru"
+                    ? "Код отправлен на ваш email."
+                    : "The code was sent to your email.")}
+              </p>
+            </div>
+            <Input
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="123456"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+            <Button
+              type="button"
+              className="w-full"
+              disabled={loading || otpCode.length !== 6}
+              onClick={async () => {
+                const ok = await verifyEmailCode(email, otpCode);
+                if (!ok) return;
+                setAuthStep("intro");
+              }}
+            >
+              {locale === "ru" ? "Войти" : "Sign in"}
+            </Button>
+            <button
+              type="button"
+              className="w-full text-xs text-muted-foreground underline disabled:no-underline"
+              disabled={loading || otpCooldown > 0}
+              onClick={async () => {
+                const result = await requestEmailCode(email);
+                if (!result) return;
+                setMaskedEmail(result.maskedEmail ?? email.trim());
+                setOtpCooldown(result.cooldownSeconds ?? 60);
+              }}
+            >
+              {otpCooldown > 0
+                ? locale === "ru"
+                  ? `Отправить код повторно через ${otpCooldown} сек.`
+                  : `Resend code in ${otpCooldown}s`
+                : locale === "ru"
+                  ? "Отправить код повторно"
+                  : "Resend code"}
+            </button>
+          </>
+        )}
+        <div className="border-t border-border/60 pt-3">
+          <p className="mb-2 text-xs text-muted-foreground">
+            {locale === "ru" ? "Или войдите через Telegram" : "Or sign in with Telegram"}
+          </p>
+          <TelegramLoginButton
+            botUsername={TG_BOT}
+            onAuth={(user) => void loginWithTelegramWeb(user)}
+          />
         </div>
-        <TelegramLoginButton
-          botUsername={TG_BOT}
-          onAuth={(user) => void loginWithTelegramWeb(user)}
-        />
         {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
       </div>
     );
@@ -147,6 +318,7 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
       <div className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-lg border bg-muted/30 p-3">
         <div className="min-w-0 space-y-1">
           <p className="break-words text-sm font-medium">{t(locale, "cloudActiveTitle")}</p>
+          {authEmail ? <p className="break-words text-xs text-muted-foreground">{authEmail}</p> : null}
           <p className="break-words text-xs text-muted-foreground">
             {household.mode === "solo"
               ? t(locale, "cloudModeSolo")
@@ -183,7 +355,18 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
           </div>
         ) : null}
 
-        <CloudSyncActions embedded showReplace={false} />
+        <CloudSyncActions embedded showReplace />
+        {(authMethod === "email" || authEmail) && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={loading}
+            onClick={() => void logoutCloudSession()}
+          >
+            {locale === "ru" ? "Выйти" : "Log out"}
+          </Button>
+        )}
         <ArchiveRestorePanel />
 
         {subscription?.enforced && subscription.active && (
