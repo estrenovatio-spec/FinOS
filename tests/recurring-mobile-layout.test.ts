@@ -13,6 +13,13 @@ test("recurring add form uses a single-column mobile layout before widening", ()
   assert.match(planningPanelSource, /<div className="grid grid-cols-1 gap-2">/);
 });
 
+test("recurring add form exposes one repeat control instead of duplicate monthly selectors", () => {
+  assert.match(planningPanelSource, /Повторять/);
+  assert.doesNotMatch(planningPanelSource, /planningRecurringMonthly"\)\}<\/option>[\s\S]*planningRecurringEveryMonth/);
+  assert.match(planningPanelSource, /<option value="monthly_1">/);
+  assert.match(planningPanelSource, /<option value="monthly_3">/);
+});
+
 test("recurring end selector stays vertical on mobile with full-width add button", () => {
   assert.match(planningPanelSource, /Когда закончится\?/);
   assert.match(planningPanelSource, /<div className="grid grid-cols-1 gap-2">/);

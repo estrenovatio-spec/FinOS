@@ -66,6 +66,15 @@ type PlanningTab =
   | "stats"
   | "advisor";
 
+type RecurringPreset =
+  | "weekly_1"
+  | "monthly_1"
+  | "monthly_2"
+  | "monthly_3"
+  | "monthly_4"
+  | "monthly_6"
+  | "yearly_1";
+
 function replaceTokens(template: string, tokens: Record<string, string>): string {
   let s = template;
   for (const [key, value] of Object.entries(tokens)) {
@@ -139,6 +148,45 @@ function recurringEndDateFromMonths(
     runDate = advanceRecurringDate(runDate, "monthly", dayOfMonth, intervalMonths);
   }
   return runDate;
+}
+
+function getRecurringPresetValue(
+  frequency: RecurringFrequency,
+  intervalMonths: number,
+): RecurringPreset {
+  if (frequency === "weekly") return "weekly_1";
+  if (frequency === "yearly") return "yearly_1";
+  const interval = Math.max(1, Math.min(60, Math.round(intervalMonths || 1)));
+  if (interval === 2) return "monthly_2";
+  if (interval === 3) return "monthly_3";
+  if (interval === 4) return "monthly_4";
+  if (interval === 6) return "monthly_6";
+  return "monthly_1";
+}
+
+function applyRecurringPreset(preset: RecurringPreset): {
+  frequency: RecurringFrequency;
+  intervalMonths: number;
+} {
+  if (preset === "weekly_1") {
+    return { frequency: "weekly", intervalMonths: 1 };
+  }
+  if (preset === "yearly_1") {
+    return { frequency: "yearly", intervalMonths: 1 };
+  }
+  if (preset === "monthly_2") {
+    return { frequency: "monthly", intervalMonths: 2 };
+  }
+  if (preset === "monthly_3") {
+    return { frequency: "monthly", intervalMonths: 3 };
+  }
+  if (preset === "monthly_4") {
+    return { frequency: "monthly", intervalMonths: 4 };
+  }
+  if (preset === "monthly_6") {
+    return { frequency: "monthly", intervalMonths: 6 };
+  }
+  return { frequency: "monthly", intervalMonths: 1 };
 }
 
 function debtOwnerLabel(owner: DebtItem["owner"], locale: Locale): string {
@@ -1797,45 +1845,40 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-2">
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={recFrequency}
-                    onChange={(e) => setRecFrequency(e.target.value as RecurringFrequency)}
-                  >
-                    <option value="weekly">{t(locale, "planningRecurringWeekly")}</option>
-                    <option value="monthly">{t(locale, "planningRecurringMonthly")}</option>
-                    <option value="yearly">{t(locale, "planningRecurringYearly")}</option>
-                  </select>
-                  {recFrequency === "monthly" ? (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">
+                      {locale === "ru" ? "Повторять" : "Repeat"}
+                    </span>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={recIntervalMonths}
-                      onChange={(e) => setRecIntervalMonths(Number(e.target.value))}
-                      aria-label={t(locale, "planningRecurringInterval")}
+                      value={getRecurringPresetValue(recFrequency, recIntervalMonths)}
+                      onChange={(e) => {
+                        const next = applyRecurringPreset(e.target.value as RecurringPreset);
+                        setRecFrequency(next.frequency);
+                        setRecIntervalMonths(next.intervalMonths);
+                        if (next.frequency !== "monthly" && recEndMode === "months") {
+                          setRecEndMode("never");
+                        }
+                      }}
+                      aria-label={locale === "ru" ? "Повторять" : "Repeat"}
                     >
-                      <option value={1}>{t(locale, "planningRecurringEveryMonth")}</option>
-                      <option value={2}>
-                        {replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                          count: "2",
-                        })}
+                      <option value="weekly_1">{locale === "ru" ? "Каждую неделю" : "Every week"}</option>
+                      <option value="monthly_1">{locale === "ru" ? "Каждый месяц" : "Every month"}</option>
+                      <option value="monthly_2">
+                        {locale === "ru" ? "Раз в 2 месяца" : "Every 2 months"}
                       </option>
-                      <option value={3}>
-                        {replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                          count: "3",
-                        })}
+                      <option value="monthly_3">
+                        {locale === "ru" ? "Раз в 3 месяца" : "Every 3 months"}
                       </option>
-                      <option value={4}>
-                        {replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                          count: "4",
-                        })}
+                      <option value="monthly_4">
+                        {locale === "ru" ? "Раз в 4 месяца" : "Every 4 months"}
                       </option>
-                      <option value={6}>
-                        {replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                          count: "6",
-                        })}
+                      <option value="monthly_6">
+                        {locale === "ru" ? "Раз в 6 месяцев" : "Every 6 months"}
                       </option>
+                      <option value="yearly_1">{locale === "ru" ? "Каждый год" : "Every year"}</option>
                     </select>
-                  ) : null}
+                  </div>
                   <Input
                     type="date"
                     className="w-full"
