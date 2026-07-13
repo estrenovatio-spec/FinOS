@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { FocusedForecastCard } from "@/components/app/FocusedForecastCard";
 import { PlanningPanel } from "@/components/PlanningPanel";
-import { TipsPanel } from "@/components/TipsPanel";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import type { ForecastFocus } from "@/lib/forecast-focus";
@@ -92,7 +91,6 @@ export function ForecastTab({
         explanation={snapshot.constraintExplanation}
       />
       <PlanningPanel collapsible={false} />
-      <TipsPanel collapsible={false} />
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialChart } from "@/components/FinancialChart";
+import { AiAnalysisTab } from "@/components/AiAnalysisTab";
 import {
   getCategoryLabel,
   getFallbackCategoryId,
@@ -53,6 +54,16 @@ import { EMERGENCY_GOAL_ID } from "@/types/planning";
 import type { DebtItem, RecurringFrequency, SavingsGoal } from "@/types/planning";
 
 const HOUSEHOLD_DEBT_STRATEGY_KEY = "voicebudget-household-debt-strategy";
+
+type PlanningTab =
+  | "goals"
+  | "funds"
+  | "limits"
+  | "debts"
+  | "emergency"
+  | "recurring"
+  | "stats"
+  | "advisor";
 
 function replaceTokens(template: string, tokens: Record<string, string>): string {
   let s = template;
@@ -284,6 +295,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
   const [editDebtOwner, setEditDebtOwner] = useState<DebtItem["owner"]>("all");
   const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
   const [recurringFilter, setRecurringFilter] = useState<"unpaid" | "paid" | "all">("unpaid");
+  const [planningTab, setPlanningTab] = useState<PlanningTab>("goals");
 
   const customGoals = useMemo(
     () =>
@@ -666,7 +678,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
       />
       {open ? (
         <CardContent className={homeSectionContentClassName}>
-          <Tabs defaultValue="goals">
+          <Tabs value={planningTab} onValueChange={(value) => setPlanningTab(value as PlanningTab)}>
             <TabsList className="mb-3 grid h-auto w-full grid-cols-4 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1 shadow-sm">
               <TabsTrigger value="goals" className={planningTabClass}>
                 {t(locale, "planningTabGoals")}
@@ -688,6 +700,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
               </TabsTrigger>
               <TabsTrigger value="stats" className={planningTabClass}>
                 {locale === "ru" ? "Статистика" : "Stats"}
+              </TabsTrigger>
+              <TabsTrigger value="advisor" className={planningTabClass}>
+                {locale === "ru" ? "Советник" : "Advisor"}
               </TabsTrigger>
             </TabsList>
 
@@ -1766,6 +1781,10 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
 
             <TabsContent value="stats" className="space-y-3">
               <FinancialChart collapsible={false} />
+            </TabsContent>
+
+            <TabsContent value="advisor" className="space-y-3">
+              <AiAnalysisTab active={planningTab === "advisor"} />
             </TabsContent>
           </Tabs>
         </CardContent>
