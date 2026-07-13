@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { EmailSenderError, sendOtpEmail } from "@/lib/email-sender";
 import { createHousehold, getHouseholdSessionForUser } from "@/lib/household/service";
 import {
   emailOtpExpiryDate,
@@ -36,14 +37,6 @@ export class EmailOtpError extends Error {
   }
 }
 
-function resendApiKey(): string | null {
-  return process.env.RESEND_API_KEY?.trim() || null;
-}
-
-function authEmailFrom(): string | null {
-  return process.env.AUTH_EMAIL_FROM?.trim() || null;
-}
-
 function isEmailLike(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -52,27 +45,12 @@ export async function sendEmailOtpCode(params: {
   email: string;
   code: string;
 }): Promise<void> {
-  const apiKey = resendApiKey();
-  const from = authEmailFrom();
-  if (!apiKey || !from) {
-    throw new EmailOtpError("provider_unavailable");
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [params.email],
-      subject: "Код входа в FIN OS",
-      text: `Ваш код входа в FIN OS: ${params.code}. Код действует 10 минут.`,
-    }),
-  });
-
-  if (!response.ok) {
+  try {
+    await sendOtpEmail(params);
+  } catch (error) {
+    if (error instanceof EmailSenderError) {
+      throw new EmailOtpError("provider_unavailable");
+    }
     throw new EmailOtpError("provider_unavailable");
   }
 }
