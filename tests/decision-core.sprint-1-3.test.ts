@@ -435,7 +435,7 @@ test("Allowed uses the forecast horizon end when there is no constraint point", 
   assert.ok((scenario.result.allowed.amount ?? 0) > 0);
 });
 
-test("Allowed subtracts remaining essential limits without double counting spent", () => {
+test("Allowed uses the forecast minimum after essential budgets are spread once", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
@@ -468,11 +468,9 @@ test("Allowed subtracts remaining essential limits without double counting spent
 
   assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 10800);
   assert.equal(scenario.result.allowed.status, "available");
-  assert.equal(scenario.result.allowed.amount, 29200);
-  assert.equal(
-    (scenario.result.allowed.amount ?? 0) + getRequiredFloor(scenario.ctx),
-    scenario.ctx.forecast.minBalance,
-  );
+  assert.equal(getRequiredFloor(scenario.ctx), 0);
+  assert.equal(scenario.result.allowed.amount, 35680);
+  assert.equal(scenario.result.allowed.amount, scenario.ctx.forecast.minBalance);
 });
 
 test("Spent above the essential limit does not create a negative reserve", () => {
@@ -610,7 +608,7 @@ test("Required recurring expense is not duplicated through an essential budget",
   assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 8000);
 });
 
-test("If minBalance equals the required floor, allowed becomes zero", () => {
+test("Distributed essential budgets affect minBalance directly instead of becoming a separate floor", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
@@ -642,12 +640,12 @@ test("If minBalance equals the required floor, allowed becomes zero", () => {
     }),
   );
 
-  assert.equal(scenario.ctx.forecast.minBalance, 10000);
-  assert.equal(getRequiredFloor(scenario.ctx), 10000);
-  assert.equal(scenario.result.allowed.amount, 0);
+  assert.equal(scenario.ctx.forecast.minBalance, 6000);
+  assert.equal(getRequiredFloor(scenario.ctx), 0);
+  assert.equal(scenario.result.allowed.amount, 6000);
 });
 
-test("If minBalance is below the required floor, allowed stays zero and reserve becomes honest", () => {
+test("Without a separate reserve floor, essential budgets no longer create a fake reserve decision", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
@@ -679,10 +677,9 @@ test("If minBalance is below the required floor, allowed stays zero and reserve 
     }),
   );
 
-  assert.equal(getRequiredFloor(scenario.ctx), 10000);
-  assert.ok(scenario.ctx.forecast.minBalance < getRequiredFloor(scenario.ctx));
-  assert.equal(scenario.result.allowed.amount, 0);
-  assert.equal(scenario.primaryDecision.type, "reserve_required");
+  assert.equal(getRequiredFloor(scenario.ctx), 0);
+  assert.notEqual(scenario.primaryDecision.type, "reserve_required");
+  assert.ok((scenario.result.allowed.amount ?? 0) >= 0);
 });
 
 test("Missing required expenses returns a targeted setup command", () => {
@@ -738,7 +735,7 @@ test("Future deficit opens forecast with the stable risk date", () => {
   });
 });
 
-test("Reserve-required uses forecast instead of a fake reserve confirmation", () => {
+test("Distributed essential budgets no longer create a fake reserve confirmation flow", () => {
   const scenario = evaluate(
     buildState({
       balances: { all: 18000, me: 18000, partner: 0 },
@@ -790,16 +787,11 @@ test("Reserve-required uses forecast instead of a fake reserve confirmation", ()
     }),
   );
 
-  assert.equal(scenario.primaryDecision.type, "reserve_required");
-  assert.deepEqual(scenario.result.mainAction.command, {
-    type: "open_forecast",
-    focusDate: scenario.primaryDecision.dueDate,
-    reason: "reserve_required",
-    eventId: "recurring-school-2026-07-16",
-  });
+  assert.equal(scenario.primaryDecision.type, "no_urgent_action");
+  assert.notEqual(scenario.result.mainAction.command.type, "open_forecast");
 });
 
-test("Reserve-required focuses the first limiting date instead of the nearest payment", () => {
+test("Distributed essential spending keeps the constraint point on the real later deficit", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
@@ -874,32 +866,18 @@ test("Reserve-required focuses the first limiting date instead of the nearest pa
   );
 
   const july15 = scenario.ctx.forecast.events.find((event) => event.id === "recurring-utilities-2026-07-15");
-  const july25 = scenario.ctx.forecast.events.find((event) => event.id === "recurring-late-risk-2026-07-25");
-  const august3 = scenario.ctx.forecast.events.find((event) => event.id === "recurring-final-risk-2026-08-03");
   const constraint = findConstraintEvent(scenario.ctx);
-  assert.equal(july15?.balanceAfter, 55691);
-  assert.equal(july25?.balanceAfter, 40791);
-  assert.equal(august3?.balanceAfter, 0);
+  assert.equal(july15?.balanceAfter, 54071);
   assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 10800);
-  assert.equal(getRequiredFloor(scenario.ctx), 10800);
+  assert.equal(getRequiredFloor(scenario.ctx), 0);
   assert.equal(constraint?.date, "2026-08-03");
-  assert.ok((july25?.balanceAfter ?? 0) > getRequiredFloor(scenario.ctx));
-  assert.ok((august3?.balanceAfter ?? 0) <= getRequiredFloor(scenario.ctx));
-  assert.equal(scenario.primaryDecision.type, "reserve_required");
-  assert.equal(scenario.primaryDecision.dueDate, "2026-08-03");
-  assert.equal(scenario.result.safeUntil.title, "До 3 августа");
+  assert.equal(scenario.primaryDecision.type, "future_deficit");
+  assert.equal(scenario.primaryDecision.riskDate, "2026-08-03");
+  assert.match(scenario.result.safeUntil.title, /Дефицит через/);
   assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
   assert.equal(scenario.result.allowed.horizonDate, "2026-08-03");
   assert.equal(scenario.result.constraintExplanation?.date, "2026-08-03");
-  assert.equal(scenario.result.constraintExplanation?.kind, "reserve");
-  assert.match(
-    scenario.result.constraintExplanation?.summary ?? "",
-    /После платежа «Финальный платёж» на 40[\s\u00A0]000 ₽ останется 0 ₽\./,
-  );
-  assert.equal(
-    scenario.result.constraintExplanation?.detail,
-    "Эти деньги уже нужны на базовые расходы.",
-  );
+  assert.equal(scenario.result.constraintExplanation?.kind, "deficit");
   assert.equal(scenario.result.mainAction.command.type, "open_forecast");
   if (scenario.result.mainAction.command.type === "open_forecast") {
     assert.equal(scenario.result.mainAction.command.focusDate, "2026-08-03");
@@ -907,7 +885,7 @@ test("Reserve-required focuses the first limiting date instead of the nearest pa
   }
 });
 
-test("safeUntil and allowed use the same later constraint point instead of the earlier next income", () => {
+test("safeUntil and allowed still use the same later deficit point instead of the earlier next income", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-12",
@@ -983,11 +961,12 @@ test("safeUntil and allowed use the same later constraint point instead of the e
 
   assert.equal(scenario.ctx.forecast.nextIncomeDate, "2026-07-13");
   assert.equal(findConstraintEvent(scenario.ctx)?.date, "2026-08-03");
-  assert.equal(scenario.result.safeUntil.title, "До 3 августа");
+  assert.match(scenario.result.safeUntil.title, /Дефицит через/);
   assert.equal(scenario.result.nextRisk?.date, "2026-08-03");
   assert.equal(scenario.result.allowed.horizonDate, "2026-08-03");
   assert.equal(scenario.result.mainAction.dueDate, "2026-08-03");
   assert.equal(scenario.result.constraintExplanation?.date, "2026-08-03");
+  assert.notEqual(scenario.result.allowed.horizonDate, "2026-07-13");
 });
 
 test("deficit explanation uses negative balance language", () => {
@@ -1341,7 +1320,7 @@ test("Recurring occurrence is not collapsed by a similar transaction without rec
   assert.equal(zoomEvents.some((event) => event.id === "recurring-zoom-2026-09-11"), true);
 });
 
-test("Future essential budgets appear for full future periods inside the horizon", () => {
+test("Essential budgets are spread across the visible budget periods instead of one lump sum", () => {
   const ctx = buildContext(
     buildState({
       today: "2026-07-13",
@@ -1382,18 +1361,21 @@ test("Future essential budgets appear for full future periods inside the horizon
   const budgetEvents = ctx.forecast.events.filter(
     (event) => event.source === "essential_budget",
   );
-  assert.deepEqual(
-    budgetEvents.map((event) => [event.date, event.amount]),
-    [
-      ["2026-08-01", -40000],
-      ["2026-09-01", -40000],
-    ],
-  );
-  assert.equal(budgetEvents.some((event) => event.date === "2026-10-01"), false);
-  assert.equal(ctx.forecast.minBalance, 120000);
+  assert.equal(budgetEvents.some((event) => event.amount === -40000), false);
+
+  const totalForRange = (from: string, to: string) =>
+    budgetEvents
+      .filter((event) => event.date >= from && event.date <= to)
+      .reduce((sum, event) => sum + Math.abs(event.amount), 0);
+
+  assert.equal(totalForRange("2026-07-13", "2026-07-31"), 19000);
+  assert.equal(totalForRange("2026-08-01", "2026-08-31"), 40000);
+  assert.equal(totalForRange("2026-09-01", "2026-09-30"), 40000);
+  assert.equal(totalForRange("2026-10-01", "2026-10-13"), 16757);
+  assert.equal(budgetEvents[0]?.title, "Плановые повседневные траты");
 });
 
-test("Future essential budget reserve is reduced by spending and required recurring obligations", () => {
+test("Future essential budgets stay reduced by spending and required recurring obligations after spreading", () => {
   const ctx = buildContext(
     buildState({
       today: "2026-07-13",
@@ -1433,10 +1415,11 @@ test("Future essential budget reserve is reduced by spending and required recurr
     }),
   );
 
-  const augustBudget = ctx.forecast.events.find(
-    (event) => event.id === "essential-budget-2026-08-01-2026-08-31",
-  );
-  assert.equal(augustBudget?.amount, -33000);
+  const augustBudgetTotal = ctx.forecast.events
+    .filter((event) => event.source === "essential_budget")
+    .filter((event) => event.date >= "2026-08-01" && event.date <= "2026-08-31")
+    .reduce((sum, event) => sum + Math.abs(event.amount), 0);
+  assert.equal(augustBudgetTotal, 33000);
   assert.equal(
     ctx.forecast.events.some((event) => event.id === "recurring-rent-2026-08-15"),
     true,

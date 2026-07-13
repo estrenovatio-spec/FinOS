@@ -5,7 +5,8 @@ import {
 import type { DecisionCoreContext, ForecastEvent } from "@/lib/decision-core/types";
 
 export function getRequiredFloor(ctx: DecisionCoreContext): number {
-  return Math.ceil(ctx.essentialBudgetReserve.totalRemaining);
+  void ctx;
+  return 0;
 }
 
 export type ConstraintPoint = {

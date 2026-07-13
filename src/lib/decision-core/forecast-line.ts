@@ -199,23 +199,52 @@ function buildFutureBudgetPeriods(
   ctx: DecisionCoreContext,
   horizonEndDate: string,
 ): BudgetPeriod[] {
-  const current = getCurrentBudgetPeriod(
-    ctx.budgetMonthStartDay,
-    new Date(`${ctx.today}T12:00:00`),
-  );
   const periods: BudgetPeriod[] = [];
-  let anchor = new Date(`${addDays(current.to, 1)}T12:00:00`);
+  let anchor = new Date(`${ctx.today}T12:00:00`);
 
   while (true) {
     const period = getCurrentBudgetPeriod(ctx.budgetMonthStartDay, anchor);
     if (period.from > horizonEndDate) break;
-    if (period.to <= horizonEndDate) {
-      periods.push(period);
-    }
+    periods.push(period);
     anchor = new Date(`${addDays(period.to, 1)}T12:00:00`);
   }
 
   return periods;
+}
+
+function enumeratePeriodDays(period: BudgetPeriod): string[] {
+  const days: string[] = [];
+  let cursor = period.from;
+  while (cursor <= period.to) {
+    days.push(cursor);
+    if (cursor === period.to) break;
+    cursor = addDays(cursor, 1);
+  }
+  return days;
+}
+
+function buildDistributedAmounts(days: string[], totalAmount: number): Array<{
+  date: string;
+  amount: number;
+}> {
+  if (days.length === 0 || totalAmount <= 0) return [];
+  const baseAmount = Math.floor(totalAmount / days.length);
+  let assigned = 0;
+
+  return days.map((date, index) => {
+    const isLastDay = index === days.length - 1;
+    const amount = isLastDay ? totalAmount - assigned : baseAmount;
+    assigned += amount;
+    return { date, amount };
+  });
+}
+
+function intersectsRange(
+  day: string,
+  from: string,
+  to: string,
+): boolean {
+  return day >= from && day <= to;
 }
 
 function recurringOccurrencesInPeriod(
@@ -296,55 +325,94 @@ function buildFutureEssentialBudgetEvents(
     ctx.categoryBudgets.map((item) => [item.categoryId, item] as const),
   );
   const periods = buildFutureBudgetPeriods(ctx, horizonEndDate);
-  const events: ForecastEvent[] = [];
+  const dailyEvents = new Map<
+    string,
+    {
+      amount: number;
+      items: Map<string, { title: string; amount: number }>;
+      budgetPeriodFrom: string;
+      budgetPeriodTo: string;
+    }
+  >();
 
   for (const period of periods) {
-    const items = essentialIds
-      .map((categoryId) => {
-        const budget = budgetsByCategory.get(categoryId);
-        if (!budget || !Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
-          return null;
+    const allocationPeriodDays = enumeratePeriodDays(
+      period.from <= ctx.today && period.to >= ctx.today
+        ? { ...period, from: ctx.today }
+        : period,
+    );
+    if (allocationPeriodDays.length === 0) continue;
+
+    const visibleFrom = period.from <= ctx.today && period.to >= ctx.today ? ctx.today : period.from;
+    const visibleTo = period.to <= horizonEndDate ? period.to : horizonEndDate;
+    if (visibleFrom > visibleTo) continue;
+
+    for (const categoryId of essentialIds) {
+      const budget = budgetsByCategory.get(categoryId);
+      if (!budget || !Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
+        continue;
+      }
+
+      const spent = spentForCategoryInPeriod(ctx, categoryId, period);
+      const recurringReserved = requiredRecurringReservedForCategoryInPeriod(
+        ctx,
+        categoryId,
+        period,
+      );
+      const remainingAmount = Math.max(0, budget.monthlyLimit - spent - recurringReserved);
+      if (remainingAmount <= 0) continue;
+
+      const distributedAmounts = buildDistributedAmounts(allocationPeriodDays, remainingAmount);
+      const categoryTitle = getCategoryLabel(categoryId, ctx.categories, ctx.locale);
+
+      for (const allocation of distributedAmounts) {
+        if (!intersectsRange(allocation.date, visibleFrom, visibleTo) || allocation.amount <= 0) {
+          continue;
         }
 
-        const spent = spentForCategoryInPeriod(ctx, categoryId, period);
-        const recurringReserved = requiredRecurringReservedForCategoryInPeriod(
-          ctx,
-          categoryId,
-          period,
-        );
-        const amount = Math.max(0, budget.monthlyLimit - spent - recurringReserved);
-        if (amount <= 0) return null;
-
-        return {
-          categoryId,
-          title: getCategoryLabel(categoryId, ctx.categories, ctx.locale),
-          amount,
+        const existingDay = dailyEvents.get(allocation.date) ?? {
+          amount: 0,
+          items: new Map<string, { title: string; amount: number }>(),
+          budgetPeriodFrom: period.from,
+          budgetPeriodTo: period.to,
         };
-      })
-      .filter((item): item is { categoryId: string; title: string; amount: number } => item != null);
+        existingDay.amount += allocation.amount;
 
-    const amount = items.reduce((sum, item) => sum + item.amount, 0);
-    if (amount <= 0) continue;
+        const existingItem = existingDay.items.get(categoryId);
+        existingDay.items.set(categoryId, {
+          title: categoryTitle,
+          amount: (existingItem?.amount ?? 0) + allocation.amount,
+        });
+        dailyEvents.set(allocation.date, existingDay);
+      }
+    }
+  }
 
-    events.push({
-      id: `essential-budget-${period.from}-${period.to}`,
-      title: ctx.locale === "ru" ? "Базовые траты периода" : "Essential spending plan",
-      amount: -amount,
-      date: period.from,
+  return [...dailyEvents.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, entry]) => ({
+      id: `essential-budget-${date}`,
+      title:
+        ctx.locale === "ru"
+          ? "Плановые повседневные траты"
+          : "Planned everyday spending",
+      amount: -entry.amount,
+      date,
       balanceAfter: 0,
-      source: "essential_budget",
+      source: "essential_budget" as const,
       incomeSourceId: null,
       incomeOccurrenceId: null,
       incomeOccurrenceDate: null,
       plannedIncomeStatus: null,
       plannedDate: null,
-      budgetPeriodFrom: period.from,
-      budgetPeriodTo: period.to,
-      budgetReserveItems: items,
-    });
-  }
-
-  return events;
+      budgetPeriodFrom: entry.budgetPeriodFrom,
+      budgetPeriodTo: entry.budgetPeriodTo,
+      budgetReserveItems: [...entry.items.entries()].map(([categoryId, item]) => ({
+        categoryId,
+        title: item.title,
+        amount: item.amount,
+      })),
+    }));
 }
 
 function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): ForecastEvent[] {

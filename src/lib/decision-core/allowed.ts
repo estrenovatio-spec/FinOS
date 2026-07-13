@@ -1,6 +1,6 @@
 import { formatMoney } from "@/lib/format-money";
 import { getForecastConfidence } from "@/lib/decision-core/forecast-confidence";
-import { getConstraintDate } from "@/lib/decision-core/constraint-point";
+import { getConstraintDate, getRequiredFloor } from "@/lib/decision-core/constraint-point";
 import type {
   DecisionAllowed,
   DecisionCoreContext,
@@ -18,10 +18,10 @@ export function buildAllowed(
   const horizonDate = getConstraintDate(ctx) ?? ctx.forecast.horizonEndDate;
   const confidence = getForecastConfidence(ctx, horizonDate);
   const hasKnownIncomeHorizon = Boolean(horizonDate);
-  const essentialReserve = ctx.essentialBudgetReserve.totalRemaining;
+  const requiredFloor = getRequiredFloor(ctx);
   const discretionaryAmount = Math.max(
     0,
-    Math.round(ctx.forecast.minBalance - essentialReserve),
+    Math.round(ctx.forecast.minBalance - requiredFloor),
   );
 
   switch (decision.type) {
@@ -137,12 +137,12 @@ export function buildAllowed(
         confidenceNote: confidence.note,
         reason:
           ctx.locale === "ru"
-            ? essentialReserve > 0
-              ? "Это сумма сверх обязательных платежей и оставшихся обязательных лимитов до конца текущего горизонта прогноза."
-              : "Это сумма необязательных расходов сверх обязательств и минимального резерва до конца текущего горизонта прогноза."
-            : essentialReserve > 0
-              ? "This is the amount above required payments and the remaining essential category limits until the end of the current forecast horizon."
-              : "This is discretionary spending above obligations and the minimum reserve until the end of the current forecast horizon.",
+            ? requiredFloor > 0
+              ? "Это сумма сверх обязательных платежей и обязательного остатка до конца текущего горизонта прогноза."
+              : "Это сумма необязательных расходов сверх обязательств до конца текущего горизонта прогноза."
+            : requiredFloor > 0
+              ? "This is the amount above required payments and the required floor until the end of the current forecast horizon."
+              : "This is discretionary spending above obligations until the end of the current forecast horizon.",
       };
   }
 }

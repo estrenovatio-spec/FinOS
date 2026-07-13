@@ -73,6 +73,18 @@ function buildSingleEventSummary(
   kind: "deficit" | "reserve",
   locale: DecisionCoreContext["locale"],
 ): string {
+  if (event.source === "essential_budget") {
+    if (kind === "deficit") {
+      return locale === "ru"
+        ? `К этой дате плановые повседневные траты на ${absoluteRub(event.amount, locale)} могут снизить баланс до ${rub(balanceAfter, locale)}.`
+        : `By this date, planned everyday spending of ${absoluteRub(event.amount, locale)} can reduce the balance to ${rub(balanceAfter, locale)}.`;
+    }
+
+    return locale === "ru"
+      ? `К этой дате на плановые повседневные траты потребуется ${absoluteRub(event.amount, locale)}, и останется ${rub(balanceAfter, locale)}.`
+      : `By this date, ${absoluteRub(event.amount, locale)} is needed for planned everyday spending, leaving ${rub(balanceAfter, locale)}.`;
+  }
+
   const base =
     locale === "ru"
       ? `После ${eventVerb(event, locale)} «${event.title}» на ${absoluteRub(event.amount, locale)}`
@@ -179,7 +191,7 @@ export function buildConstraintExplanation(
   const detail =
     point.kind === "deficit"
       ? confidence.note
-      : [ctx.locale === "ru" ? "Эти деньги уже нужны на базовые расходы." : "That money is already needed for essentials.", confidence.note]
+      : [ctx.locale === "ru" ? "Эти деньги уже распределены на будущие базовые траты." : "That money is already spread across future essential spending.", confidence.note]
           .filter(Boolean)
           .join(" ");
 

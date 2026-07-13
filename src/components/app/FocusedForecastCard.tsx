@@ -36,7 +36,7 @@ function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
     case "confirmed_transaction":
       return locale === "ru" ? "Полученный доход" : "Received income";
     case "essential_budget":
-      return locale === "ru" ? "Базовые траты" : "Essential spending";
+      return locale === "ru" ? "Повседневные траты" : "Everyday spending";
   }
 }
 
