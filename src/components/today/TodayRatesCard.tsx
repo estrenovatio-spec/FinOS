@@ -69,7 +69,7 @@ export function TodayRatesCard({
         </div>
 
         {view.rows.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {view.rows.map((row) => (
               <div
                 key={row.code}

@@ -15,6 +15,12 @@ function formatRate(value: number, locale: "ru" | "en"): string {
   });
 }
 
+function formatCompact(value: number, locale: "ru" | "en"): string {
+  return value.toLocaleString(locale === "ru" ? "ru-RU" : "en-US", {
+    maximumFractionDigits: 0,
+  });
+}
+
 export function LiveRatesBar() {
   const locale = useStore((s) => s.locale);
   const [rates, setRates] = useState<MarketRates | null>(null);
@@ -52,22 +58,29 @@ export function LiveRatesBar() {
   const items = [
     { code: "USD", value: rates.usdRub },
     { code: "EUR", value: rates.eurRub },
-    { code: "CNY", value: rates.cnyRub },
-  ] as const;
+    { code: "IMOEX", value: rates.moexIndex },
+    { code: "BTC", value: rates.btcUsd },
+  ].filter((item): item is { code: string; value: number } => {
+    return Number.isFinite(item.value) && Number(item.value) > 0;
+  });
+
+  if (items.length === 0) return null;
 
   return (
-    <div className="grid w-full grid-cols-3 gap-1.5 leading-none sm:gap-2" aria-live="polite">
+    <div className="grid w-full grid-cols-4 gap-1.5 leading-none sm:gap-2" aria-live="polite">
       {items.map((item) => (
         <div
           key={item.code}
-          title={`${item.code}/RUB`}
+          title={item.code === "BTC" ? "BTC/USD" : item.code === "IMOEX" ? "MOEX index" : `${item.code}/RUB`}
           className="inline-flex w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1 py-0.5"
         >
           <span className="text-[10px] font-semibold leading-none text-muted-foreground sm:text-[11px]">
             {item.code}
           </span>
           <span className="text-[10px] font-semibold leading-none tabular-nums sm:text-[11px]">
-            {formatRate(item.value, locale)}
+            {item.code === "USD" || item.code === "EUR"
+              ? formatRate(item.value, locale)
+              : formatCompact(item.value, locale)}
           </span>
         </div>
       ))}

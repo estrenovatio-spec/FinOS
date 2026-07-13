@@ -1,7 +1,7 @@
 import type { MarketRates } from "@/lib/market-rates";
 
 export type TodayRatesRow = {
-  code: "USD" | "EUR" | "CNY";
+  code: "USD" | "EUR" | "MOEX" | "BTC";
   label: string;
   value: string;
 };
@@ -15,10 +15,14 @@ export type TodayRatesView = {
   isError: boolean;
 };
 
-function formatRate(value: number, locale: "ru" | "en"): string {
+function formatNumber(
+  value: number,
+  locale: "ru" | "en",
+  digits: { minimumFractionDigits?: number; maximumFractionDigits?: number } = {},
+): string {
   return value.toLocaleString(locale === "ru" ? "ru-RU" : "en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: digits.minimumFractionDigits ?? 0,
+    maximumFractionDigits: digits.maximumFractionDigits ?? 2,
   });
 }
 
@@ -31,8 +35,8 @@ function formatUpdatedAt(value: string, locale: "ru" | "en"): string | null {
   });
 }
 
-export function isValidMarketRate(value: number): boolean {
-  return Number.isFinite(value) && value > 0;
+export function isValidMarketRate(value: number | undefined): value is number {
+  return Number.isFinite(value) && Number(value) > 0;
 }
 
 export function buildTodayRatesView(input: {
@@ -43,24 +47,46 @@ export function buildTodayRatesView(input: {
 }): TodayRatesView {
   const { locale, rates, loading, hasError } = input;
 
-  const rows: TodayRatesRow[] = rates
-    ? ([
-        { code: "USD", rate: rates.usdRub },
-        { code: "EUR", rate: rates.eurRub },
-        { code: "CNY", rate: rates.cnyRub },
-      ] as const)
-        .filter((item) => isValidMarketRate(item.rate))
-        .map((item) => ({
-          code: item.code,
-          label: `1 ${item.code}`,
-          value: `${formatRate(item.rate, locale)} ${locale === "ru" ? "₽" : "RUB"}`,
-        }))
-    : [];
+  const rows: TodayRatesRow[] = [];
+  if (rates && isValidMarketRate(rates.usdRub)) {
+    rows.push({
+      code: "USD",
+      label: "USD/RUB",
+      value: `${formatNumber(rates.usdRub, locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} ${locale === "ru" ? "₽" : "RUB"}`,
+    });
+  }
+  if (rates && isValidMarketRate(rates.eurRub)) {
+    rows.push({
+      code: "EUR",
+      label: "EUR/RUB",
+      value: `${formatNumber(rates.eurRub, locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} ${locale === "ru" ? "₽" : "RUB"}`,
+    });
+  }
+  if (rates && isValidMarketRate(rates.moexIndex)) {
+    rows.push({
+      code: "MOEX",
+      label: locale === "ru" ? "Мосбиржа" : "MOEX",
+      value: formatNumber(rates.moexIndex, locale, { maximumFractionDigits: 0 }),
+    });
+  }
+  if (rates && isValidMarketRate(rates.btcUsd)) {
+    rows.push({
+      code: "BTC",
+      label: "Bitcoin",
+      value: `$${formatNumber(rates.btcUsd, locale, { maximumFractionDigits: 0 })}`,
+    });
+  }
 
   const updatedTime = rates ? formatUpdatedAt(rates.updatedAt, locale) : null;
 
   return {
-    title: locale === "ru" ? "Курсы валют" : "Exchange rates",
+    title: locale === "ru" ? "Рынки" : "Markets",
     rows,
     updatedLabel:
       updatedTime == null
@@ -71,12 +97,12 @@ export function buildTodayRatesView(input: {
     note:
       hasError && rows.length === 0
         ? locale === "ru"
-          ? "Курсы временно недоступны."
-          : "Rates are temporarily unavailable."
+          ? "Рыночные данные временно недоступны."
+          : "Market data is temporarily unavailable."
         : rates?.stale
           ? locale === "ru"
-            ? "Курсы временно не обновляются. Показаны последние сохранённые значения."
-            : "Rates are temporarily not updating. Showing the last saved values."
+            ? "Данные могут быть устаревшими. Показаны последние сохранённые значения."
+            : "Data may be stale. Showing the last saved values."
           : null,
     isLoading: loading && rows.length === 0,
     isError: hasError && rows.length === 0,
