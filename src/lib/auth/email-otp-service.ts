@@ -17,6 +17,20 @@ const IP_REQUEST_LIMIT_PER_15_MIN = 10;
 const IP_WINDOW_MINUTES = 15;
 const EMAIL_REQUEST_WINDOW_MINUTES = 60;
 
+type EmailOtpRequestDeps = {
+  countRecentForEmail: (email: string, from: Date) => Promise<number>;
+  countRecentForIp: (ipHash: string | null, from: Date) => Promise<number>;
+  findLatestForCooldown: (email: string, from: Date) => Promise<{ createdAt: Date } | null>;
+  consumeActiveOtps: (email: string, now: Date) => Promise<void>;
+  createOtp: (params: {
+    email: string;
+    codeHash: string;
+    ipHash: string | null;
+    expiresAt: Date;
+  }) => Promise<void>;
+  sendEmail: (params: { email: string; code: string }) => Promise<void>;
+};
+
 type EnsureEmailUserOptions = {
   currentUserId?: string | null;
 };
@@ -49,16 +63,80 @@ export async function sendEmailOtpCode(params: {
     await sendOtpEmail(params);
   } catch (error) {
     if (error instanceof EmailSenderError) {
+      console.error("[auth/email/request] delivery_failed", {
+        provider: error.provider,
+        failureKind: error.kind,
+        responseCode: error.responseCode,
+        host: error.diagnostics.host,
+        port: error.diagnostics.port,
+        secure: error.diagnostics.secure,
+        hasUser: error.diagnostics.hasUser,
+        hasPassword: error.diagnostics.hasPassword,
+      });
       throw new EmailOtpError("provider_unavailable");
     }
     throw new EmailOtpError("provider_unavailable");
   }
 }
 
-export async function requestEmailOtp(params: {
-  email: string;
-  ip?: string | null;
-}): Promise<{ ok: true; maskedEmail: string; cooldownSeconds: number }> {
+function defaultEmailOtpRequestDeps(): EmailOtpRequestDeps {
+  return {
+    countRecentForEmail: (email, from) =>
+      prisma.emailOtp.count({
+        where: {
+          email,
+          createdAt: { gte: from },
+        },
+      }),
+    countRecentForIp: (ipHash, from) =>
+      ipHash
+        ? prisma.emailOtp.count({
+            where: {
+              requestedIpHash: ipHash,
+              createdAt: { gte: from },
+            },
+          })
+        : Promise.resolve(0),
+    findLatestForCooldown: (email, from) =>
+      prisma.emailOtp.findFirst({
+        where: {
+          email,
+          createdAt: { gte: from },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
+    consumeActiveOtps: async (email, now) => {
+      await prisma.emailOtp.updateMany({
+        where: {
+          email,
+          consumedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { consumedAt: now },
+      });
+    },
+    createOtp: async ({ email, codeHash, ipHash, expiresAt }) => {
+      await prisma.emailOtp.create({
+        data: {
+          email,
+          codeHash,
+          requestedIpHash: ipHash,
+          expiresAt,
+        },
+      });
+    },
+    sendEmail: sendEmailOtpCode,
+  };
+}
+
+export async function requestEmailOtpWithDeps(
+  params: {
+    email: string;
+    ip?: string | null;
+  },
+  deps: EmailOtpRequestDeps,
+): Promise<{ ok: true; maskedEmail: string; cooldownSeconds: number }> {
   const email = normalizeEmail(params.email);
   if (!isEmailLike(email)) {
     throw new EmailOtpError("invalid_email");
@@ -71,28 +149,9 @@ export async function requestEmailOtp(params: {
   const cooldownEdge = new Date(now.getTime() - getEmailOtpResendCooldownSeconds() * 1000);
 
   const [recentForEmail, recentForIp, lastActive] = await Promise.all([
-    prisma.emailOtp.count({
-      where: {
-        email,
-        createdAt: { gte: emailWindow },
-      },
-    }),
-    ipHash
-      ? prisma.emailOtp.count({
-          where: {
-            requestedIpHash: ipHash,
-            createdAt: { gte: ipWindow },
-          },
-        })
-      : Promise.resolve(0),
-    prisma.emailOtp.findFirst({
-      where: {
-        email,
-        createdAt: { gte: cooldownEdge },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    }),
+    deps.countRecentForEmail(email, emailWindow),
+    deps.countRecentForIp(ipHash, ipWindow),
+    deps.findLatestForCooldown(email, cooldownEdge),
   ]);
 
   if (recentForEmail >= EMAIL_REQUEST_LIMIT_PER_HOUR || recentForIp >= IP_REQUEST_LIMIT_PER_15_MIN) {
@@ -104,39 +163,27 @@ export async function requestEmailOtp(params: {
 
   const code = generateEmailOtpCode();
   const codeHash = hashEmailOtp(email, code);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.emailOtp.updateMany({
-      where: {
-        email,
-        consumedAt: null,
-        expiresAt: { gt: now },
-      },
-      data: { consumedAt: now },
-    });
-    await tx.emailOtp.create({
-      data: {
-        email,
-        codeHash,
-        requestedIpHash: ipHash,
-        expiresAt: emailOtpExpiryDate(now),
-      },
-    });
+  await deps.sendEmail({ email, code });
+  await deps.consumeActiveOtps(email, now);
+  await deps.createOtp({
+    email,
+    codeHash,
+    ipHash,
+    expiresAt: emailOtpExpiryDate(now),
   });
-
-  try {
-    await sendEmailOtpCode({ email, code });
-  } catch (error) {
-    throw error instanceof EmailOtpError
-      ? error
-      : new EmailOtpError("provider_unavailable");
-  }
 
   return {
     ok: true,
     maskedEmail: maskEmail(email),
     cooldownSeconds: getEmailOtpResendCooldownSeconds(),
   };
+}
+
+export async function requestEmailOtp(params: {
+  email: string;
+  ip?: string | null;
+}): Promise<{ ok: true; maskedEmail: string; cooldownSeconds: number }> {
+  return requestEmailOtpWithDeps(params, defaultEmailOtpRequestDeps());
 }
 
 async function ensureEmailUser(

@@ -111,6 +111,7 @@ test("otp email body is human-readable and contains no technical details", () =>
 
 test("smtp sender passes the target email to the configured transport", async (t) => {
   const sent: Array<{ to: string; subject: string; text: string }> = [];
+  let verifyCalled = false;
 
   setSmtpTransportFactoryForTests((config) => {
     assert.deepEqual(config, {
@@ -122,6 +123,9 @@ test("smtp sender passes the target email to the configured transport", async (t
     });
 
     return {
+      verify: async () => {
+        verifyCalled = true;
+      },
       sendMail: async (message) => {
         sent.push({
           to: String(message.to ?? ""),
@@ -152,6 +156,7 @@ test("smtp sender passes the target email to the configured transport", async (t
   );
 
   assert.equal(sent.length, 1);
+  assert.equal(verifyCalled, true);
   assert.equal(sent[0]?.to, "alexey@example.com");
   assert.equal(sent[0]?.subject, "Код для входа в FIN OS");
   assert.match(sent[0]?.text ?? "", /123456/);
@@ -160,7 +165,9 @@ test("smtp sender passes the target email to the configured transport", async (t
 test("smtp transport errors become controlled provider errors", async (t) => {
   setSmtpTransportFactoryForTests(() => ({
     sendMail: async () => {
-      throw new Error("smtp failed");
+      const error = new Error("smtp failed") as Error & { code?: string };
+      error.code = "EAUTH";
+      throw error;
     },
   }));
 
@@ -181,7 +188,10 @@ test("smtp transport errors become controlled provider errors", async (t) => {
     async () => {
       await assert.rejects(
         () => sendOtpEmailViaSmtp({ email: "alexey@example.com", code: "123456" }),
-        (error: unknown) => error instanceof EmailSenderError && error.message === "send_failed",
+        (error: unknown) =>
+          error instanceof EmailSenderError &&
+          error.message === "send_failed" &&
+          error.kind === "smtp_auth_failed",
       );
     },
   );
