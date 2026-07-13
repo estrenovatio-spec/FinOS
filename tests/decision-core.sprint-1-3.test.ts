@@ -2316,3 +2316,65 @@ test("monthly income uses the last available day for shorter months", () => {
     ["2026-01-31", "2026-02-28", "2026-03-31"],
   );
 });
+
+test("recurring expense stops generating forecast events after endDate", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-10",
+      forecastHorizonMonths: 3,
+      balances: { all: 50000, me: 50000, partner: 0 },
+      recurringTransactions: [
+        {
+          id: "zoom",
+          amount: 1500,
+          type: "expense",
+          categoryId: "subscriptions",
+          note: "Zoom",
+          owner: "me",
+          frequency: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 11,
+          nextRunDate: "2026-07-11",
+          endDate: "2026-09-11",
+          enabled: true,
+        },
+      ],
+    }),
+  );
+
+  const zoomEvents = ctx.forecast.events.filter((event) => event.source === "recurring");
+  assert.deepEqual(
+    zoomEvents.map((event) => event.date),
+    ["2026-07-11", "2026-08-11", "2026-09-11"],
+  );
+});
+
+test("recurring expense includes the occurrence that lands exactly on endDate", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-09-11",
+      forecastHorizonMonths: 1,
+      balances: { all: 20000, me: 20000, partner: 0 },
+      recurringTransactions: [
+        {
+          id: "course",
+          amount: 9300,
+          type: "expense",
+          categoryId: "education",
+          note: "Курс",
+          owner: "me",
+          frequency: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 11,
+          nextRunDate: "2026-09-11",
+          endDate: "2026-09-11",
+          enabled: true,
+        },
+      ],
+    }),
+  );
+
+  const courseEvents = ctx.forecast.events.filter((event) => event.source === "recurring");
+  assert.equal(courseEvents.length, 1);
+  assert.equal(courseEvents[0]?.date, "2026-09-11");
+});

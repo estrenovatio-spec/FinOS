@@ -78,6 +78,7 @@ export function dbRecurringToApp(row: DbRecurring): RecurringTransaction {
         : null,
     dayOfMonth: row.dayOfMonth,
     nextRunDate: row.nextRunDate,
+    endDate: row.endDate,
     enabled: row.enabled,
     skippedDates: row.skippedDates ?? [],
     updatedAt: row.updatedAt.toISOString(),
@@ -103,6 +104,7 @@ export function appRecurringToDb(
         : null,
     dayOfMonth: item.dayOfMonth,
     nextRunDate: item.nextRunDate,
+    endDate: item.endDate ?? null,
     enabled: item.enabled,
     skippedDates: item.skippedDates ?? [],
   };

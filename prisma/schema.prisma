@@ -359,6 +359,7 @@ model RecurringTransaction {
   intervalMonths Int?
   dayOfMonth  Int?
   nextRunDate String
+  endDate     String?
   enabled     Boolean            @default(true)
   skippedDates String[]          @default([])
   createdAt   DateTime           @default(now())

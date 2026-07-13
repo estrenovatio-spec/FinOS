@@ -32,6 +32,7 @@ import { formatBudgetPeriodLabel, getCurrentBudgetPeriod, isDateInBudgetPeriod }
 import { formatMoney } from "@/lib/format-money";
 import { formatPlanningDeadline, formatTransactionDate } from "@/lib/format-date";
 import {
+  advanceRecurringDate,
   avgMonthlyExpenses,
   budgetUsagePercent,
   emergencyTargetAmount,
@@ -123,6 +124,21 @@ function ProgressBar({ percent, over }: { percent: number; over?: boolean }) {
 
 function numInput(value: string): number {
   return Number(value.replace(/\s/g, "").replace(",", ".")) || 0;
+}
+
+function recurringEndDateFromMonths(
+  startDate: string,
+  intervalMonths: number,
+  durationMonths: number,
+): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return null;
+  const total = Math.max(1, Math.min(120, Math.round(durationMonths)));
+  let runDate = startDate;
+  const dayOfMonth = new Date(`${startDate}T12:00:00`).getDate();
+  for (let index = 1; index < total; index += 1) {
+    runDate = advanceRecurringDate(runDate, "monthly", dayOfMonth, intervalMonths);
+  }
+  return runDate;
 }
 
 function debtOwnerLabel(owner: DebtItem["owner"], locale: Locale): string {
@@ -277,6 +293,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
   const [recFrequency, setRecFrequency] = useState<RecurringFrequency>("monthly");
   const [recIntervalMonths, setRecIntervalMonths] = useState(1);
   const [recStartDate, setRecStartDate] = useState(() => todayIso());
+  const [recEndMode, setRecEndMode] = useState<"never" | "date" | "months">("never");
+  const [recEndDate, setRecEndDate] = useState("");
+  const [recDurationMonths, setRecDurationMonths] = useState("12");
   const [debtName, setDebtName] = useState("");
   const [debtBalance, setDebtBalance] = useState("");
   const [debtMinPayment, setDebtMinPayment] = useState("");
@@ -467,6 +486,16 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
     const dayOfMonth = recFrequency === "monthly" ? start.getDate() : null;
     const intervalMonths =
       recFrequency === "monthly" ? Math.max(1, Math.min(60, Math.round(recIntervalMonths))) : null;
+    const endDate =
+      recEndMode === "date"
+        ? recEndDate || null
+        : recEndMode === "months" && recFrequency === "monthly"
+          ? recurringEndDateFromMonths(
+              recStartDate,
+              intervalMonths ?? 1,
+              Number(recDurationMonths) || 1,
+            )
+          : null;
     addRecurring({
       amount,
       type: "expense",
@@ -477,9 +506,13 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
       intervalMonths,
       dayOfMonth,
       nextRunDate: recStartDate,
+      endDate,
     });
     setRecAmount("");
     setRecNote("");
+    setRecEndMode("never");
+    setRecEndDate("");
+    setRecDurationMonths("12");
   };
 
   const handleAddDebt = () => {
@@ -557,6 +590,23 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
       dayOfMonth: item.frequency === "monthly" ? d.getDate() : item.dayOfMonth,
     });
   };
+
+  const handleRecurringEndDateChange = (id: string, date: string) => {
+    const item = recurringTransactions.find((r) => r.id === id);
+    if (!item) return;
+    updateRecurring(id, {
+      endDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+    });
+  };
+
+  const recurringEndPreview = useMemo(() => {
+    if (recEndMode !== "months" || recFrequency !== "monthly") return null;
+    return recurringEndDateFromMonths(
+      recStartDate,
+      Math.max(1, Math.min(60, Math.round(recIntervalMonths))),
+      Number(recDurationMonths) || 1,
+    );
+  }, [recDurationMonths, recEndMode, recFrequency, recIntervalMonths, recStartDate]);
 
   const recurringPeriod = useMemo(
     () => getCurrentBudgetPeriod(budgetMonthStartDay),
@@ -1628,6 +1678,13 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                               date: formatTransactionDate(item.nextRunDate, locale),
                             })}
                           </p>
+                          {item.endDate ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {locale === "ru"
+                                ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
+                                : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
+                            </p>
+                          ) : null}
                           {lastPaidDate ? (
                             <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
                               {replaceTokens(t(locale, "planningRecurringPaidOn"), {
@@ -1649,6 +1706,17 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                               className="h-8 w-auto max-w-[10.5rem] text-xs"
                               value={item.nextRunDate}
                               onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
+                            />
+                          </label>
+                          <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="shrink-0">
+                              {locale === "ru" ? "До даты" : "Until"}
+                            </span>
+                            <Input
+                              type="date"
+                              className="h-8 w-auto max-w-[10.5rem] text-xs"
+                              value={item.endDate ?? ""}
+                              onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
                             />
                           </label>
                         </div>
@@ -1767,15 +1835,74 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                       </option>
                     </select>
                   ) : null}
-                  <Input
-                    type="date"
-                    className="w-full sm:w-auto"
-                    value={recStartDate}
-                    onChange={(e) => setRecStartDate(e.target.value)}
-                    aria-label={t(locale, "planningRecurringDate")}
-                  />
-                  <Button onClick={handleAddRecurring}>{t(locale, "planningRecurringAdd")}</Button>
-                </div>
+	                  <Input
+	                    type="date"
+	                    className="w-full sm:w-auto"
+	                    value={recStartDate}
+	                    onChange={(e) => setRecStartDate(e.target.value)}
+	                    aria-label={t(locale, "planningRecurringDate")}
+	                  />
+	                  <div className="w-full space-y-2 rounded-md border border-border/70 p-3 sm:max-w-xs">
+	                    <p className="text-xs font-medium text-foreground">
+	                      {locale === "ru" ? "Когда закончится?" : "When should it end?"}
+	                    </p>
+	                    <div className="grid grid-cols-1 gap-2">
+	                      <Button
+	                        type="button"
+	                        variant={recEndMode === "never" ? "default" : "outline"}
+	                        className="justify-start"
+	                        onClick={() => setRecEndMode("never")}
+	                      >
+	                        {locale === "ru" ? "Без срока" : "No end date"}
+	                      </Button>
+	                      <Button
+	                        type="button"
+	                        variant={recEndMode === "date" ? "default" : "outline"}
+	                        className="justify-start"
+	                        onClick={() => setRecEndMode("date")}
+	                      >
+	                        {locale === "ru" ? "До даты" : "Until date"}
+	                      </Button>
+	                      {recFrequency === "monthly" ? (
+	                        <Button
+	                          type="button"
+	                          variant={recEndMode === "months" ? "default" : "outline"}
+	                          className="justify-start"
+	                          onClick={() => setRecEndMode("months")}
+	                        >
+	                          {locale === "ru" ? "Через несколько месяцев" : "After several months"}
+	                        </Button>
+	                      ) : null}
+	                    </div>
+	                    {recEndMode === "date" ? (
+	                      <Input
+	                        type="date"
+	                        value={recEndDate}
+	                        onChange={(e) => setRecEndDate(e.target.value)}
+	                      />
+	                    ) : null}
+	                    {recEndMode === "months" && recFrequency === "monthly" ? (
+	                      <>
+	                        <Input
+	                          type="number"
+	                          min="1"
+	                          max="120"
+	                          value={recDurationMonths}
+	                          onChange={(e) => setRecDurationMonths(e.target.value)}
+	                          placeholder={locale === "ru" ? "Количество месяцев" : "Months count"}
+	                        />
+	                        {recurringEndPreview ? (
+	                          <p className="text-xs text-muted-foreground">
+	                            {locale === "ru"
+	                              ? `Последний платёж: ${formatTransactionDate(recurringEndPreview, locale)}`
+	                              : `Last payment: ${formatTransactionDate(recurringEndPreview, locale)}`}
+	                          </p>
+	                        ) : null}
+	                      </>
+	                    ) : null}
+	                  </div>
+	                  <Button onClick={handleAddRecurring}>{t(locale, "planningRecurringAdd")}</Button>
+	                </div>
               </div>
             </TabsContent>
 

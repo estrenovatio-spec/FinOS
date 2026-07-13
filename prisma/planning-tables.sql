@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS "RecurringTransaction" (
     "intervalMonths" INTEGER,
     "dayOfMonth" INTEGER,
     "nextRunDate" TEXT NOT NULL,
+    "endDate" TEXT,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "skippedDates" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -76,6 +77,7 @@ END $$;
 ALTER TABLE "SavingsGoal" ADD COLUMN IF NOT EXISTS "monthlyContribution" DOUBLE PRECISION;
 ALTER TABLE "Household" ADD COLUMN IF NOT EXISTS "balanceOffsets" JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE "RecurringTransaction" ADD COLUMN IF NOT EXISTS "intervalMonths" INTEGER;
+ALTER TABLE "RecurringTransaction" ADD COLUMN IF NOT EXISTS "endDate" TEXT;
 
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "goalId" TEXT;
 ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "goalAmount" DOUBLE PRECISION;

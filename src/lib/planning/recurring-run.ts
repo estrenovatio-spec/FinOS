@@ -5,7 +5,9 @@ import type { RecurringTransaction } from "@/types/planning";
 
 export function getDueRecurringItems(items: RecurringTransaction[]): RecurringTransaction[] {
   const today = todayIso();
-  return items.filter((r) => r.enabled && r.nextRunDate <= today);
+  return items.filter(
+    (r) => r.enabled && r.nextRunDate <= today && (!r.endDate || r.nextRunDate <= r.endDate),
+  );
 }
 
 export function recurringToParsedTransaction(
@@ -27,7 +29,7 @@ export function recurringToParsedTransaction(
 
 export function nextRunAfterProcessing(item: RecurringTransaction, today: string): string {
   let next = item.nextRunDate;
-  while (next <= today) {
+  while (next <= today && (!item.endDate || next <= item.endDate)) {
     next = advanceRecurringDate(
       next,
       item.frequency,

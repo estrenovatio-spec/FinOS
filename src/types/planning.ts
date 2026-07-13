@@ -39,6 +39,7 @@ export interface RecurringTransaction {
   intervalMonths?: number | null;
   dayOfMonth: number | null;
   nextRunDate: string;
+  endDate?: string | null;
   enabled: boolean;
   updatedAt?: string;
 }

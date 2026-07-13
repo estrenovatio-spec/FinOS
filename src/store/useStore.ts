@@ -1660,9 +1660,13 @@ export const useStore = create<StoreState>()(
         const state = get();
         const today = todayIso();
         for (const item of state.recurringTransactions) {
-          if (!item.enabled || item.nextRunDate > today) continue;
+          if (
+            !item.enabled ||
+            item.nextRunDate > today ||
+            (item.endDate && item.nextRunDate > item.endDate)
+          ) continue;
           let runDate = item.nextRunDate;
-          while (runDate <= today) {
+          while (runDate <= today && (!item.endDate || runDate <= item.endDate)) {
             const transactions = get().transactions;
             const exists =
               transactions.some(
@@ -1899,17 +1903,21 @@ export const useStore = create<StoreState>()(
                   skippedDates: Array.isArray(r.skippedDates)
                     ? r.skippedDates
                     : [],
-                  intervalMonths:
-                    r.frequency === "monthly"
-                      ? Math.max(
+	                  intervalMonths:
+	                    r.frequency === "monthly"
+	                      ? Math.max(
                           1,
                           Math.min(
                             60,
-                            Math.round(Number(r.intervalMonths) || 1),
-                          ),
-                        )
-                      : null,
-                }),
+	                            Math.round(Number(r.intervalMonths) || 1),
+	                          ),
+	                        )
+	                      : null,
+	                  endDate:
+	                    typeof r.endDate === "string" && r.endDate.trim()
+	                      ? r.endDate
+	                      : null,
+	                }),
               )
             : [],
           debts: Array.isArray(raw.debts)
