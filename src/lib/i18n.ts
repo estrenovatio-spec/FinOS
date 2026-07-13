@@ -228,7 +228,7 @@ export const DICT = {
     moreServiceFormFail: "Не удалось отправить — попробуйте позже",
     moreServiceFormTelegramOnly:
       "Откройте приложение из Telegram, чтобы отправить заявку",
-    settingsBizQuestionBusiness: "Есть бизнес или фриланс?",
+    settingsBizQuestionBusiness: "Есть бизнес?",
     projectsHistoryYear: "{year}",
     projectsHistoryMonthSummary: "{count} × {total}",
     moreOsago: "Оформить ОСАГО",
@@ -298,13 +298,13 @@ export const DICT = {
     bizAvgBurn: "≈ {amount} ₽ расходов в месяц",
     bizToCushion: "В резерв",
     bizToFamily: "Себе в семью",
-    bizAssetsTitle: "Проекты и источники",
+    bizAssetsTitle: "Бизнес и активы",
     bizAssetAdd: "Добавить",
     bizAssetsEmpty:
       "Добавьте клиента, разовый проект, актив или аренду. Сумму можно указать сразу или оставить пустой.",
     bizAssetInvestment: "Актив",
     bizAssetRental: "Аренда / инвестиция",
-    bizAssetFreelance: "Клиент / проект",
+    bizAssetFreelance: "Бизнес",
     bizAssetCapital: "Капитал",
     bizPerMonth: "мес",
     bizPerYear: "годовых",
@@ -701,9 +701,9 @@ export const DICT = {
     settingsFinancialMemory: "Финансовая память",
     settingsFinancialMemoryHint:
       "Что приложение выучило по вашим словам, категориям и исправлениям.",
-    cloudTitle: "Сохранение и семья",
+    cloudTitle: "Аккаунт и синхронизация",
     cloudHint:
-      "Сохранение, партнёр и запуск заново — всё в одном месте.",
+      "Вход по email, статус синхронизации и очистка этого устройства находятся здесь.",
     cloudDeviceResetTitle: "Начать с чистого листа",
     cloudDeviceResetHint:
       "Очистит данные на телефоне. Если облако подключено, сразу заменит облако чистым состоянием, чтобы старая история не вернулась.",
@@ -1386,7 +1386,7 @@ export const DICT = {
     moreServiceFormSending: "Sending…",
     moreServiceFormFail: "Could not send — try again later",
     moreServiceFormTelegramOnly: "Open the app from Telegram to submit",
-    settingsBizQuestionBusiness: "Do you have a business or freelance work?",
+    settingsBizQuestionBusiness: "Do you have a business?",
     projectsHistoryYear: "{year}",
     projectsHistoryMonthSummary: "{count} × {total}",
     moreOsago: "Get OSAGO",
@@ -1452,13 +1452,13 @@ export const DICT = {
     bizAvgBurn: "≈ {amount}/month burn",
     bizToCushion: "To reserve",
     bizToFamily: "To family",
-    bizAssetsTitle: "Projects & sources",
+    bizAssetsTitle: "Business & assets",
     bizAssetAdd: "Add",
     bizAssetsEmpty:
       "Add a client, one-off project, asset, or rental. Amount can be filled now or left empty.",
     bizAssetInvestment: "Asset",
     bizAssetRental: "Rental / investment",
-    bizAssetFreelance: "Client / project",
+    bizAssetFreelance: "Business",
     bizAssetCapital: "Capital",
     bizPerMonth: "mo",
     bizPerYear: "p.a.",
@@ -1850,8 +1850,8 @@ export const DICT = {
     settingsFinancialMemory: "Financial memory",
     settingsFinancialMemoryHint:
       "What the app learned from your words, categories, and corrections.",
-    cloudTitle: "Save & household",
-    cloudHint: "Saving, partner setup and fresh start are in one place.",
+    cloudTitle: "Account and sync",
+    cloudHint: "Email sign-in, sync status, and device reset live here.",
     cloudDeviceResetTitle: "Start fresh",
     cloudDeviceResetHint:
       "Clears this phone. If cloud is connected, it also replaces the cloud with a clean state so old history does not return.",

@@ -220,27 +220,26 @@ export function MoneySetupDialog({
                 ? "Аванс"
                 : kind === "rent"
                   ? "Аренда"
-                  : kind === "freelance"
-                    ? "Подработка"
-                    : kind === "business"
-                      ? "Бизнес"
-                      : kind === "passive"
-                        ? "Пассивный доход"
-                        : "Другое"
+                  : kind === "freelance" || kind === "business"
+                    ? "Бизнес"
+                    : kind === "passive"
+                      ? "Пассивный доход"
+                      : "Другое"
             : kind === "salary"
               ? "Salary"
               : kind === "advance"
                 ? "Advance"
                 : kind === "rent"
                   ? "Rent"
-                  : kind === "freelance"
-                    ? "Freelance"
-                    : kind === "business"
-                      ? "Business"
-                      : kind === "passive"
-                        ? "Passive income"
-                        : "Other",
-      })),
+                  : kind === "freelance" || kind === "business"
+                    ? "Business"
+                    : kind === "passive"
+                      ? "Passive income"
+                      : "Other",
+      })).filter((option, index, options) => {
+        if (option.value !== "freelance") return true;
+        return !options.some((candidate) => candidate.value === "business");
+      }),
     [locale],
   );
   const incomeRecurrenceOptions = useMemo(

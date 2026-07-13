@@ -11,21 +11,12 @@ import { HouseholdCloudPanel } from "@/components/HouseholdCloudPanel";
 import { SettingsMenuRow } from "@/components/SettingsMenuRow";
 import { SettingsSection } from "@/components/SettingsSection";
 import { UpdateAppButton } from "@/components/UpdateAppButton";
-import { OwnerChipColorPicker } from "@/components/OwnerChipColorPicker";
 import { VehicleSettingsPanel } from "@/components/VehicleSettingsPanel";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { cloudPushPartnerLabel, isCloudSyncActive } from "@/lib/cloud/push";
-import { parsePartnerKeywordsInput } from "@/lib/detect-owner";
+import { isCloudSyncActive } from "@/lib/cloud/push";
 import { defaultBusinessUnit } from "@/lib/business/types";
-import {
-  DEFAULT_MY_CHIP_COLOR,
-  DEFAULT_PARTNER_CHIP_COLOR,
-} from "@/lib/owner-chip-colors";
-import { myDisplayName, partnerDisplayName, partnerTabLabel } from "@/lib/owner-labels";
 import { t } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 import { setCloudPaused } from "@/lib/cloud/cloud-pause";
 import { clearAppStorage } from "@/lib/storage-reset";
 import type { Locale } from "@/types";
@@ -40,8 +31,7 @@ type SettingsScreen =
   | "memory"
   | "categories"
   | "vehicle"
-  | "cloud"
-  | "household";
+  | "cloud";
 
 type MenuItem = {
   id: Exclude<SettingsScreen, "menu">;
@@ -51,10 +41,8 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "cloud", titleKey: "cloudTitle", descriptionKey: "cloudHint" },
   { id: "categories", titleKey: "categoriesTitle", descriptionKey: "categoriesHint" },
   { id: "memory", titleKey: "settingsFinancialMemory", descriptionKey: "settingsFinancialMemoryHint" },
-  { id: "household", titleKey: "householdTitle", descriptionKey: "householdHint" },
   { id: "vehicle", titleKey: "vehicleGarageTitle", descriptionKey: "vehicleHintMulti" },
   { id: "help", titleKey: "helpTitle" },
   { id: "language", titleKey: "settingsLanguage", descriptionKey: "settingsLanguageHint" },
@@ -71,28 +59,14 @@ export function SettingsDialogNav({
   const forecastHorizonMonths = useStore((s) => s.forecastHorizonMonths);
   const setForecastHorizonMonths = useStore((s) => s.setForecastHorizonMonths);
   const setLocale = useStore((s) => s.setLocale);
-  const userName = useStore((s) => s.userName);
-  const partnerName = useStore((s) => s.partnerName);
-  const partnerKeywords = useStore((s) => s.partnerKeywords);
   const businessModeEnabled = useStore((s) => s.businessModeEnabled);
   const liveRatesEnabled = useStore((s) => s.liveRatesEnabled);
-  const setUserName = useStore((s) => s.setUserName);
-  const setPartnerName = useStore((s) => s.setPartnerName);
-  const setPartnerKeywords = useStore((s) => s.setPartnerKeywords);
   const setBusinessModeEnabled = useStore((s) => s.setBusinessModeEnabled);
   const setPassiveIncomeEnabled = useStore((s) => s.setPassiveIncomeEnabled);
   const setLiveRatesEnabled = useStore((s) => s.setLiveRatesEnabled);
-  const myChipColor = useStore((s) => s.myChipColor);
-  const partnerChipColor = useStore((s) => s.partnerChipColor);
-  const setMyChipColor = useStore((s) => s.setMyChipColor);
-  const setPartnerChipColor = useStore((s) => s.setPartnerChipColor);
   const { toast } = useToast();
   const [screen, setScreen] = useState<SettingsScreen>("menu");
-  const [myNameInput, setMyNameInput] = useState(userName ?? "");
-  const [partnerInput, setPartnerInput] = useState(partnerName ?? "");
-  const [keywordsInput, setKeywordsInput] = useState(partnerKeywords.join(", "));
   const [confirmClear, setConfirmClear] = useState(false);
-  const [savedFlash, setSavedFlash] = useState<"my" | "partner" | "keywords" | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -100,10 +74,7 @@ export function SettingsDialogNav({
       setConfirmClear(false);
       return;
     }
-    setMyNameInput(userName ?? "");
-    setPartnerInput(partnerName ?? "");
-    setKeywordsInput(partnerKeywords.join(", "));
-  }, [open, userName, partnerName, partnerKeywords]);
+  }, [open]);
 
   useEffect(() => {
     if (!confirmClear) return;
@@ -123,30 +94,6 @@ export function SettingsDialogNav({
   }, [open, screen, onOpenChange]);
 
   useTelegramBackHandler(handleTelegramBack, open);
-
-  const flashSaved = (which: "my" | "partner" | "keywords") => {
-    setSavedFlash(which);
-    window.setTimeout(() => {
-      setSavedFlash((current) => (current === which ? null : current));
-    }, 2000);
-  };
-
-  const saveMyName = () => {
-    setUserName(myNameInput.trim() || null);
-    flashSaved("my");
-  };
-
-  const savePartner = () => {
-    const trimmed = partnerInput.trim() || null;
-    setPartnerName(trimmed);
-    if (isCloudSyncActive()) void cloudPushPartnerLabel(trimmed);
-    flashSaved("partner");
-  };
-
-  const saveKeywords = () => {
-    setPartnerKeywords(parsePartnerKeywordsInput(keywordsInput));
-    flashSaved("keywords");
-  };
 
   const resetLocalData = () => {
     useStore.getState().clearAll();
@@ -268,80 +215,6 @@ export function SettingsDialogNav({
         <UpdateAppButton />
       </div>
     ),
-    household: (
-      <div className="space-y-3">
-        <Input
-          value={myNameInput}
-          onChange={(e) => setMyNameInput(e.target.value)}
-          placeholder={t(locale, "myNamePlaceholder")}
-        />
-        <Button type="button" variant="secondary" className="w-full" onClick={saveMyName}>
-          {t(locale, "myNameSave")}
-        </Button>
-        {savedFlash === "my" ? (
-          <p className="flex justify-center" role="status" aria-live="polite">
-            <span className="inline-flex rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm">
-              {t(locale, "settingsSaved")}
-            </span>
-          </p>
-        ) : null}
-        <OwnerChipColorPicker
-          label={t(locale, "ownerChipColorMy")}
-          value={myChipColor}
-          fallback={DEFAULT_MY_CHIP_COLOR}
-          previewLabel={myDisplayName(locale, myNameInput || userName)}
-          onChange={setMyChipColor}
-        />
-        <Input
-          value={partnerInput}
-          onChange={(e) => setPartnerInput(e.target.value)}
-          placeholder={t(locale, "partnerNamePlaceholder")}
-        />
-        <Button type="button" variant="secondary" className="w-full" onClick={savePartner}>
-          {t(locale, "partnerSave")}
-        </Button>
-        {savedFlash === "partner" ? (
-          <p className="flex justify-center" role="status" aria-live="polite">
-            <span className="inline-flex rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm">
-              {t(locale, "settingsSaved")}
-            </span>
-          </p>
-        ) : null}
-        <OwnerChipColorPicker
-          label={t(locale, "ownerChipColorPartner")}
-          value={partnerChipColor}
-          fallback={DEFAULT_PARTNER_CHIP_COLOR}
-          previewLabel={
-            partnerDisplayName(partnerInput || partnerName) ||
-            partnerTabLabel(locale, partnerInput || partnerName, partnerKeywords)
-          }
-          onChange={setPartnerChipColor}
-        />
-        <p className="text-xs text-muted-foreground">{t(locale, "ownerChipColorHint")}</p>
-        <p className="text-sm font-medium">{t(locale, "partnerKeywordsTitle")}</p>
-        <textarea
-          value={keywordsInput}
-          onChange={(e) => setKeywordsInput(e.target.value)}
-          placeholder={t(locale, "partnerKeywordsPlaceholder")}
-          rows={3}
-          className={cn(
-            "flex min-h-[5rem] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-          )}
-        />
-        <Button type="button" variant="secondary" className="w-full" onClick={saveKeywords}>
-          {t(locale, "partnerKeywordsSave")}
-        </Button>
-        {savedFlash === "keywords" ? (
-          <p className="flex justify-center" role="status" aria-live="polite">
-            <span className="inline-flex rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm">
-              {t(locale, "settingsSaved")}
-            </span>
-          </p>
-        ) : null}
-        <p className="text-xs text-muted-foreground">{t(locale, "partnerKeywordsHint")}</p>
-        <UpdateAppButton />
-      </div>
-    ),
   };
 
   return (
@@ -428,13 +301,11 @@ export function SettingsDialogNav({
           {MENU_ITEMS.map((item) => (
             <SettingsMenuRow
               key={item.id}
-              title={item.id === "cloud" ? cloudSectionTitle : t(locale, item.titleKey)}
+              title={t(locale, item.titleKey)}
               description={
-                item.id === "cloud"
-                  ? cloudSectionDescription
-                  : item.descriptionKey
-                    ? t(locale, item.descriptionKey)
-                    : undefined
+                item.descriptionKey
+                  ? t(locale, item.descriptionKey)
+                  : undefined
               }
               danger={item.danger}
               onClick={() => setScreen(item.id)}

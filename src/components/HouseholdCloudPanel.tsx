@@ -1,23 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArchiveRestorePanel } from "@/components/ArchiveRestorePanel";
+import { useEffect, useState } from "react";
 import { CloudSyncActions } from "@/components/CloudSyncActions";
 import { PaywallPanel } from "@/components/PaywallPanel";
-import { PromoCodeRedeem } from "@/components/PromoCodeRedeem";
-import { ReferralWalletPaywall } from "@/components/ReferralWalletPaywall";
-import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/toast";
-import { runHouseholdBootstrap } from "@/lib/cloud/bootstrap";
-import { hasCloudAuth } from "@/lib/cloud/auth-payload";
 import { isCloudPaused } from "@/lib/cloud/cloud-pause";
 import { useHouseholdCloud } from "@/hooks/useHouseholdCloud";
 import { t } from "@/lib/i18n";
-import { useStore } from "@/store/useStore";
-
-const TG_BOT = process.env.NEXT_PUBLIC_TG_BOT_NAME?.replace(/^@/, "") ?? "";
+import { useCloudStore } from "@/store/useCloudStore";
 
 function mapCloudError(locale: "ru" | "en", error: string): string {
   if (error === "invalid_email") {
@@ -88,41 +79,24 @@ function shellClass(embedded: boolean, base: string, embeddedClass = "space-y-3"
 const responsiveShell = "min-w-0 max-w-full overflow-hidden";
 
 export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelProps) {
-  const locale = useStore((s) => s.locale);
-  const partnerName = useStore((s) => s.partnerName);
-  const txCount = useStore((s) => s.transactions.length);
-  const { toast } = useToast();
+  const locale = useCloudStore.persist?.hasHydrated?.() ? useCloudStore.getState().authMethod === "email" ? "ru" : "ru" : "ru";
   const {
     loading,
     error,
     household,
-    serverConfigured,
-    createHousehold,
-    joinHousehold,
-    replaceCloudWithThisDevice,
-    loginWithTelegramWeb,
-    attachExistingCloud,
     requestEmailCode,
     verifyEmailCode,
     logoutCloudSession,
     authEmail,
-    authMethod,
-    isTelegram,
     isActive,
     subscription,
     subscriptionRequired,
   } = useHouseholdCloud();
-
-  const [mode, setMode] = useState<"solo" | "shared">("solo");
-  const [joinCode, setJoinCode] = useState("");
-  const [partnerLabel, setPartnerLabel] = useState(partnerName ?? "");
-  const [showNewHousehold, setShowNewHousehold] = useState(false);
-  const [authStep, setAuthStep] = useState<"intro" | "email" | "code">("intro");
+  const [authStep, setAuthStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [otpCooldown, setOtpCooldown] = useState(0);
-  const autoAttachStarted = useRef(false);
 
   useEffect(() => {
     if (otpCooldown <= 0) return;
@@ -131,20 +105,6 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [otpCooldown]);
-
-  const handleReplaceCloud = async () => {
-    if (!window.confirm(t(locale, "cloudSyncReplaceConfirm"))) return;
-    const ok = await replaceCloudWithThisDevice();
-    toast(ok ? t(locale, "cloudSyncSuccessReplace") : t(locale, "cloudSyncFailed"), ok ? "success" : "error");
-  };
-
-  const loggedInWeb = !isTelegram && hasCloudAuth() && !isActive;
-
-  useEffect(() => {
-    if (!loggedInWeb || isActive || autoAttachStarted.current) return;
-    autoAttachStarted.current = true;
-    void attachExistingCloud();
-  }, [loggedInWeb, isActive, attachExistingCloud]);
 
   const cloudAuthEnabled = process.env.NEXT_PUBLIC_CLOUD_SYNC_ENABLED !== "false";
 
@@ -169,17 +129,15 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
     return (
       <div className={`${responsiveShell} ${shellClass(embedded, "space-y-3")}`}>
         <PaywallPanel subscription={subscription} />
-        {household && (
-          <p className="text-xs text-muted-foreground">{t(locale, "paywallHouseholdPaused")}</p>
-        )}
         {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
       </div>
     );
   }
 
   const cloudPaused = isCloudPaused();
+  const activeSession = Boolean(isActive && household);
 
-  if (!isTelegram && !isActive && !hasCloudAuth()) {
+  if (!activeSession) {
     return (
       <div
         className={shellClass(
@@ -187,7 +145,7 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
           "space-y-3 rounded-lg border border-dashed border-border/70 p-3",
         )}
       >
-        {authStep === "intro" ? (
+        {authStep === "email" ? (
           <>
             <div className="min-w-0 space-y-1">
               <p className="text-sm font-medium">
@@ -195,24 +153,8 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
               </p>
               <p className="break-words text-xs text-muted-foreground">
                 {locale === "ru"
-                  ? "Ваши данные хранятся только на этом устройстве."
-                  : "Your data is stored only on this device."}
-              </p>
-            </div>
-            <Button type="button" className="w-full" onClick={() => setAuthStep("email")}>
-              {locale === "ru" ? "Включить синхронизацию" : "Enable sync"}
-            </Button>
-          </>
-        ) : authStep === "email" ? (
-          <>
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium">
-                {locale === "ru" ? "Войти в FIN OS" : "Sign in to FIN OS"}
-              </p>
-              <p className="break-words text-xs text-muted-foreground">
-                {locale === "ru"
-                  ? "Введите email и получите одноразовый код."
-                  : "Enter your email to receive a one-time code."}
+                  ? "Войдите, чтобы использовать FIN OS на телефоне и компьютере."
+                  : "Sign in to use FIN OS on both your phone and computer."}
               </p>
             </div>
             <Input
@@ -265,7 +207,7 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
               onClick={async () => {
                 const ok = await verifyEmailCode(email, otpCode);
                 if (!ok) return;
-                setAuthStep("intro");
+                setAuthStep("email");
               }}
             >
               {locale === "ru" ? "Войти" : "Sign in"}
@@ -287,65 +229,49 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
                   : `Resend code in ${otpCooldown}s`
                 : locale === "ru"
                   ? "Отправить код повторно"
-                  : "Resend code"}
+                : "Resend code"}
             </button>
           </>
         )}
-        <div className="border-t border-border/60 pt-3">
-          <p className="mb-2 text-xs text-muted-foreground">
-            {locale === "ru" ? "Или войдите через Telegram" : "Or sign in with Telegram"}
-          </p>
-          <TelegramLoginButton
-            botUsername={TG_BOT}
-            onAuth={(user) => void loginWithTelegramWeb(user)}
-          />
-        </div>
         {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
       </div>
     );
   }
 
-  if (isActive && household) {
-    const expiresLabel =
-      subscription?.expiresAt &&
-      new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-GB", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }).format(new Date(subscription.expiresAt));
-
+  if (activeSession && household) {
     return (
       <div className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-lg border bg-muted/30 p-3">
         <div className="min-w-0 space-y-1">
-          <p className="break-words text-sm font-medium">{t(locale, "cloudActiveTitle")}</p>
-          {authEmail ? <p className="break-words text-xs text-muted-foreground">{authEmail}</p> : null}
-          <p className="break-words text-xs text-muted-foreground">
-            {household.mode === "solo"
-              ? t(locale, "cloudModeSolo")
-              : t(locale, "cloudModeShared")}
-            {" · "}
-            {t(locale, "cloudMembers", { count: String(household.memberCount) })}
+          <p className="break-words text-sm font-medium">
+            {locale === "ru" ? "Аккаунт и синхронизация" : "Account and sync"}
           </p>
-          {subscription?.enforced && expiresLabel && (
-            <p className="break-words text-xs text-muted-foreground">
-              {t(locale, "paywallActiveUntil", { date: expiresLabel })}
-            </p>
-          )}
+          {authEmail ? (
+            <p className="break-words text-xs text-muted-foreground">{authEmail}</p>
+          ) : null}
+          <p className="break-words text-xs text-muted-foreground">
+            {locale === "ru"
+              ? cloudPaused
+                ? "Нет соединения — изменения сохранятся автоматически."
+                : "Синхронизация включена"
+              : cloudPaused
+                ? "No connection — changes will sync automatically."
+                : "Sync is enabled"}
+          </p>
+          <p className="break-words text-xs text-muted-foreground">
+            {locale === "ru"
+              ? cloudPaused
+                ? "Повторим автоматически после подключения."
+                : "Все данные сохранены"
+              : cloudPaused
+                ? "We will retry automatically when the connection returns."
+                : "All data is saved"}
+          </p>
         </div>
-
-        {household.mode === "shared" || household.memberCount < 2 ? (
-          <div className="min-w-0 space-y-1">
-            <p className="text-xs text-muted-foreground">{t(locale, "cloudInviteHint")}</p>
-            <p className="max-w-full break-all font-mono text-lg font-semibold tracking-widest">
-              {household.inviteCode}
-            </p>
-          </div>
-        ) : null}
 
         {cloudPaused ? (
           <div className="space-y-1 rounded-lg border border-amber-400/30 bg-amber-50 p-3 dark:bg-amber-950/20">
             <p className="text-sm font-medium text-amber-950 dark:text-amber-50">
-              {t(locale, "cloudPausedTitle")}
+              {locale === "ru" ? "Синхронизация на паузе" : "Sync is paused"}
             </p>
             <p className="text-xs leading-snug text-amber-900/80 dark:text-amber-100/80">
               {locale === "ru"
@@ -355,195 +281,20 @@ export function HouseholdCloudPanel({ embedded = false }: HouseholdCloudPanelPro
           </div>
         ) : null}
 
-        <CloudSyncActions embedded showReplace />
-        {(authMethod === "email" || authEmail) && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={loading}
-            onClick={() => void logoutCloudSession()}
-          >
-            {locale === "ru" ? "Выйти" : "Log out"}
-          </Button>
-        )}
-        <ArchiveRestorePanel />
-
-        {subscription?.enforced && subscription.active && (
-          <>
-            <ReferralWalletPaywall
-              priceRub={subscription.priceRub}
-              onPaid={() => void runHouseholdBootstrap()}
-            />
-            <PromoCodeRedeem compact onRedeemed={() => void runHouseholdBootstrap()} />
-          </>
-        )}
-
-        {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
-      </div>
-    );
-  }
-
-  if (loggedInWeb && !showNewHousehold) {
-    return (
-      <div
-        className={shellClass(
-          embedded,
-          "space-y-3 rounded-lg border border-dashed border-border/70 p-3",
-        )}
-      >
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium">{t(locale, "cloudWebAttachTitle")}</p>
-          <p className="break-words text-xs text-muted-foreground">{t(locale, "cloudWebAttachHint")}</p>
-        </div>
-        <Button
-          type="button"
-          className="w-full"
-          disabled={loading}
-          onClick={() => void attachExistingCloud()}
-        >
-          {loading ? t(locale, "cloudWebAttachLoading") : t(locale, "cloudWebAttachBtn")}
-        </Button>
-        <button
-          type="button"
-          className="w-full text-xs text-muted-foreground underline"
-          onClick={() => setShowNewHousehold(true)}
-        >
-          {t(locale, "cloudWebCreateAnyway")}
-        </button>
-        {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={shellClass(
-        embedded,
-        "space-y-3 rounded-lg border border-dashed border-border/70 p-3",
-      )}
-    >
-      {serverConfigured === false && (
-        <p className="rounded-md border border-amber-400/40 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-          {t(locale, "cloudNotConfigured")}
-        </p>
-      )}
-      {!embedded ? (
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium">{t(locale, "cloudTitle")}</p>
-          <p className="break-words text-xs text-muted-foreground">
-            {loggedInWeb ? t(locale, "cloudHintNewHousehold") : t(locale, "cloudHint")}
-          </p>
-        </div>
-      ) : (
-        <p className="break-words text-xs text-muted-foreground">
-          {loggedInWeb ? t(locale, "cloudHintNewHousehold") : t(locale, "cloudHint")}
-        </p>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={mode === "solo" ? "default" : "outline"}
-          className="min-w-0 whitespace-normal px-2"
-          onClick={() => setMode("solo")}
-        >
-          {t(locale, "cloudSolo")}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={mode === "shared" ? "default" : "outline"}
-          className="min-w-0 whitespace-normal px-2"
-          onClick={() => setMode("shared")}
-        >
-          {t(locale, "cloudShared")}
-        </Button>
-      </div>
-
-      {mode === "solo" && (
-        <div className="space-y-2">
-          <p className="break-words text-xs text-muted-foreground">{t(locale, "cloudSoloHint")}</p>
-          <Input
-            value={partnerLabel}
-            onChange={(e) => setPartnerLabel(e.target.value)}
-            placeholder={t(locale, "partnerNamePlaceholder")}
-          />
-        </div>
-      )}
-
-      {mode === "shared" && (
-        <p className="break-words text-xs text-muted-foreground">{t(locale, "cloudSharedHint")}</p>
-      )}
-
-      <Button
-        type="button"
-        className="w-full"
-        disabled={loading}
-        onClick={() =>
-          void createHousehold({
-            mode,
-            partnerLabel: mode === "solo" ? partnerLabel.trim() || null : null,
-          })
-        }
-      >
-        {t(locale, "cloudCreate")}
-      </Button>
-
-      <div className="space-y-2 rounded-md border border-amber-400/40 bg-amber-50/80 p-2.5 dark:bg-amber-950/20">
-        <p className="break-words text-xs text-amber-950 dark:text-amber-100">
-          {t(locale, "cloudFreshStartHint", { count: String(txCount) })}
-        </p>
+        <CloudSyncActions embedded showReplace={false} />
         <Button
           type="button"
           variant="outline"
-          className="h-auto min-h-9 w-full whitespace-normal text-xs"
-          disabled={loading}
-          onClick={() => void handleReplaceCloud()}
-        >
-          {t(locale, "cloudFreshStart")}
-        </Button>
-      </div>
-
-      <div className="space-y-2 border-t border-border/60 pt-3">
-        <p className="text-xs font-medium">{t(locale, "cloudJoinTitle")}</p>
-        <p className="break-words text-[11px] text-muted-foreground">{t(locale, "cloudJoinHint")}</p>
-        <Input
-          value={joinCode}
-          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-          placeholder={t(locale, "cloudJoinPlaceholder")}
-          className="font-mono uppercase"
-        />
-        <Button
-          type="button"
-          variant="secondary"
           className="w-full"
-          disabled={loading || joinCode.trim().length < 4}
-          onClick={() => void joinHousehold(joinCode)}
+          disabled={loading}
+          onClick={() => void logoutCloudSession()}
         >
-          {t(locale, "cloudJoin")}
+          {locale === "ru" ? "Выйти" : "Log out"}
         </Button>
+
+        {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
       </div>
-
-      {loggedInWeb && (
-        <button
-          type="button"
-          className="w-full text-xs text-muted-foreground underline"
-          onClick={() => {
-            setShowNewHousehold(false);
-            void attachExistingCloud();
-          }}
-        >
-          {t(locale, "cloudWebBackToAttach")}
-        </button>
-      )}
-
-      {error && <p className="text-xs text-destructive">{mapCloudError(locale, error)}</p>}
-
-      {subscription?.enforced && subscription.active && (
-        <PromoCodeRedeem compact onRedeemed={() => void runHouseholdBootstrap()} />
-      )}
-    </div>
-  );
+    );
+  }
+  return null;
 }

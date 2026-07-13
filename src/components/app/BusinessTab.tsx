@@ -64,7 +64,6 @@ const BUSINESS_ADVISOR_AI_CACHE_KEY = "voicebudget-business-advisor-ai-v2";
 const BUSINESS_DEBT_STRATEGY_KEY = "voicebudget-business-debt-strategy";
 const BUSINESS_SECTION_KEY = "voicebudget-business-section";
 type BusinessSection = "operations" | "reserve" | "tax" | "debts" | "stats";
-type BusinessTopTab = "business" | "projects";
 type DebtRepaymentStrategy = "avalanche" | "snowball";
 type BusinessAdvisorTone = "ok" | "warn" | "risk";
 type BusinessAdvisorSignal = {
@@ -1368,7 +1367,6 @@ export function BusinessTab({ headerControls }: { headerControls?: ReactNode }) 
     useState<BusinessTaxPeriod>("quarter");
   const [businessSection, setBusinessSection] =
     useState<BusinessSection>("operations");
-  const [businessTopTab, setBusinessTopTab] = useState<BusinessTopTab>("business");
   const [businessAdvisorOpen, setBusinessAdvisorOpen] = useState(true);
   const [businessPeriodOpen, setBusinessPeriodOpen] = useState(true);
   const [businessSectionReady, setBusinessSectionReady] = useState(false);
@@ -1747,27 +1745,6 @@ export function BusinessTab({ headerControls }: { headerControls?: ReactNode }) 
       {headerControls ? (
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            {businessTopTab === "projects" ? (
-              <BusinessSourcesBalance assets={assets} locale={locale} />
-            ) : (
-              <BusinessTotalBalance
-                income={totalMetrics.income}
-                expense={totalMetrics.expense}
-                profit={totalMetrics.profit}
-                safeWithdraw={totalMetrics.safeWithdraw}
-                locale={locale}
-              />
-            )}
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            {headerControls}
-          </div>
-        </div>
-      ) : (
-        <>
-          {businessTopTab === "projects" ? (
-            <BusinessSourcesBalance assets={assets} locale={locale} />
-          ) : (
             <BusinessTotalBalance
               income={totalMetrics.income}
               expense={totalMetrics.expense}
@@ -1775,67 +1752,34 @@ export function BusinessTab({ headerControls }: { headerControls?: ReactNode }) 
               safeWithdraw={totalMetrics.safeWithdraw}
               locale={locale}
             />
-          )}
-        </>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {headerControls}
+          </div>
+        </div>
+      ) : (
+        <BusinessTotalBalance
+          income={totalMetrics.income}
+          expense={totalMetrics.expense}
+          profit={totalMetrics.profit}
+          safeWithdraw={totalMetrics.safeWithdraw}
+          locale={locale}
+        />
       )}
 
       <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1 shadow-sm">
-          <button
-            type="button"
-            className={cn(
-              "min-h-10 rounded-md px-2 py-1.5 text-sm font-semibold leading-tight transition-colors",
-              businessTopTab === "business"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-foreground/70 hover:bg-background/70 hover:text-foreground",
-            )}
-            onClick={() => {
-              setBusinessTopTab("business");
-              setBusinessSection(lastBusinessSectionRef.current);
-            }}
-          >
-            {t(locale, "bizTitle")}
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "min-h-10 rounded-md border px-2 py-1.5 text-sm font-semibold leading-tight transition-colors",
-              businessTopTab === "projects"
-                ? "border-amber-300/80 bg-amber-50 text-amber-950 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-50"
-                : "border-amber-200/50 bg-background/70 text-amber-800 hover:bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/10 dark:text-amber-200 dark:hover:bg-amber-950/20",
-            )}
-            onClick={() => setBusinessTopTab("projects")}
-          >
-            <span className="block break-words leading-tight">
-              {t(locale, "bizSectionProjects")}
-            </span>
-            <span
-              className={cn(
-                "mt-0.5 block text-[10px] font-semibold leading-tight",
-                businessTopTab === "projects"
-                  ? "text-amber-800/80 dark:text-amber-100/80"
-                  : "text-amber-700/70 dark:text-amber-200/70",
-              )}
-            >
-              {t(locale, "bizProjectsTopHint")}
-            </span>
-          </button>
-        </div>
-
-        {businessTopTab === "business" ? (
-          <BusinessUnitTabs
-            units={visibleUnits}
-            activeUnitId={activeUnitId}
-            metricsMap={unitMetricsMap}
-            locale={locale}
-            onSelect={(unitId) => {
-              setSelectedUnitId(unitId);
-              setBusinessTopTab("business");
-            }}
-            onEdit={openEditUnit}
-            onAdd={() => setUnitDialogOpen(true)}
-          />
-        ) : null}
+        <BusinessUnitTabs
+          units={visibleUnits}
+          activeUnitId={activeUnitId}
+          metricsMap={unitMetricsMap}
+          locale={locale}
+          onSelect={(unitId) => {
+            setSelectedUnitId(unitId);
+            setBusinessSection(lastBusinessSectionRef.current);
+          }}
+          onEdit={openEditUnit}
+          onAdd={() => setUnitDialogOpen(true)}
+        />
         {showBusinessHow ? (
           <div className="relative rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 pr-9 text-[11px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground">
@@ -1854,9 +1798,7 @@ export function BusinessTab({ headerControls }: { headerControls?: ReactNode }) 
         ) : null}
       </div>
 
-      {businessTopTab === "projects" ? (
-        <BusinessProjectsSection />
-      ) : activeUnit && activeMetrics && safeWithdrawPlan ? (
+      {activeUnit && activeMetrics && safeWithdrawPlan ? (
         <>
           <BusinessQuickEntry
             locale={locale}
@@ -2590,6 +2532,7 @@ export function BusinessTab({ headerControls }: { headerControls?: ReactNode }) 
             ) : null}
 
           </div>
+          <BusinessProjectsSection />
         </>
       ) : null}
 

@@ -53,7 +53,7 @@ function AssetIcon({
 
 function assetTypeLabel(type: BusinessAssetType, locale: "ru" | "en"): string {
   if (type === "rental") return t(locale, "bizAssetRental");
-  if (type === "freelance") return t(locale, "bizAssetFreelance");
+  if (type === "freelance") return locale === "ru" ? "Бизнес" : "Business";
   return t(locale, "bizAssetInvestment");
 }
 
