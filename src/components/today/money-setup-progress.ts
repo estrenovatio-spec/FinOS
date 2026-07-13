@@ -2,7 +2,7 @@ import type { MoneySetup } from "@/lib/money-setup";
 import type { Locale } from "@/types";
 
 export type MoneySetupProgressItem = {
-  id: "balance" | "income" | "required_expenses" | "essential_categories";
+  id: "balance" | "income" | "essential_categories";
   label: string;
   done: boolean;
 };
@@ -44,13 +44,6 @@ export function buildMoneySetupProgress(
         moneySetup.nextIncomeDate ||
           moneySetup.incomeSources.some((source) => source.expectedDate),
       ),
-    },
-    {
-      id: "required_expenses",
-      label: locale === "ru" ? "Обязательные платежи" : "Required payments",
-      done:
-        moneySetup.hasNoRequiredFixedExpenses ||
-        moneySetup.requiredRecurringIds.length > 0,
     },
     {
       id: "essential_categories",

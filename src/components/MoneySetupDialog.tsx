@@ -61,13 +61,7 @@ const ESSENTIAL_PRIORITY_IDS = [
   "shopping",
 ];
 
-const ESSENTIAL_EXCLUDED_KEYWORDS = [
-  "recurring",
-  "regular",
-  "subscription",
-  "subscriptions",
-  "регуляр",
-] as const;
+const ESSENTIAL_EXCLUDED_KEYWORDS = ["recurring", "regular", "subscription", "subscriptions", "регуляр"] as const;
 
 function toggleId(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
@@ -101,8 +95,9 @@ function isServiceEssentialCategory(
 
 function normalizeMoneySetupInitialSection(
   section: MoneySetupInitialSection | null | undefined,
-): "balance" | "income" | "required_expenses" | "essential_budgets" | null {
+): "balance" | "income" | "essential_budgets" | null {
   if (section === "current_balance") return "balance";
+  if (section === "required_expenses") return "essential_budgets";
   return section ?? null;
 }
 
@@ -142,22 +137,11 @@ export function MoneySetupDialog({
 }: MoneySetupDialogProps) {
   const locale = useStore((s) => s.locale);
   const moneySetup = useStore((s) => s.moneySetup);
-  const recurringTransactions = useStore((s) => s.recurringTransactions);
   const categories = useStore((s) => s.categories);
   const updateMoneySetup = useStore((s) => s.updateMoneySetup);
   const setActualCash = useStore((s) => s.setActualCash);
   const balances = useHouseholdBalances();
   const { toast } = useToast();
-
-  const recurringOptions = useMemo(
-    () =>
-      recurringTransactions
-        .filter((item) => item.type === "expense" && item.enabled)
-        .sort((a, b) =>
-          a.note.localeCompare(b.note, locale === "ru" ? "ru" : "en"),
-        ),
-    [locale, recurringTransactions],
-  );
 
   const categoryOptions = useMemo(() => {
     const expenseCategories = sortCategoriesByLabel(
@@ -191,11 +175,6 @@ export function MoneySetupDialog({
   const [incomeSources, setIncomeSources] = useState<IncomeSourceDraft[]>([]);
   const [confirmResetIncomeSources, setConfirmResetIncomeSources] =
     useState(false);
-  const [requiredRecurringIds, setRequiredRecurringIds] = useState<string[]>(
-    [],
-  );
-  const [hasNoRequiredFixedExpenses, setHasNoRequiredFixedExpenses] =
-    useState(false);
   const [essentialCategoryIds, setEssentialCategoryIds] = useState<string[]>(
     [],
   );
@@ -203,7 +182,6 @@ export function MoneySetupDialog({
   const [currentBalanceInput, setCurrentBalanceInput] = useState("");
   const incomeSectionRef = useRef<HTMLDivElement | null>(null);
   const balanceSectionRef = useRef<HTMLDivElement | null>(null);
-  const requiredExpensesSectionRef = useRef<HTMLDivElement | null>(null);
   const essentialCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
   const currentBalanceInputRef = useRef<HTMLInputElement | null>(null);
   const incomeDateInputRef = useRef<HTMLInputElement | null>(null);
@@ -286,8 +264,6 @@ export function MoneySetupDialog({
     setShowIncomeSources(moneySetup.incomeSources.length > 0);
     setIncomeSources(moneySetup.incomeSources.map(toIncomeSourceDraft));
     setConfirmResetIncomeSources(false);
-    setRequiredRecurringIds(moneySetup.requiredRecurringIds);
-    setHasNoRequiredFixedExpenses(moneySetup.hasNoRequiredFixedExpenses);
     setEssentialCategoryIds(moneySetup.essentialCategoryIds);
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
     setCurrentBalanceInput(String(moneySetup.useHouseholdBalance ? balances.all : balances.me));
@@ -336,9 +312,7 @@ export function MoneySetupDialog({
         ? balanceSectionRef.current
         : normalizedInitialSection === "income"
         ? incomeSectionRef.current
-        : normalizedInitialSection === "required_expenses"
-          ? requiredExpensesSectionRef.current
-          : essentialCategoriesSectionRef.current;
+        : essentialCategoriesSectionRef.current;
 
     const frame = window.requestAnimationFrame(() => {
       target?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -424,10 +398,8 @@ export function MoneySetupDialog({
 
     updateMoneySetup({
       ...incomePayload,
-      requiredRecurringIds: hasNoRequiredFixedExpenses
-        ? []
-        : requiredRecurringIds,
-      hasNoRequiredFixedExpenses,
+      requiredRecurringIds: moneySetup.requiredRecurringIds,
+      hasNoRequiredFixedExpenses: moneySetup.hasNoRequiredFixedExpenses,
       essentialCategoryIds,
       useHouseholdBalance: showHouseholdToggle ? useHouseholdBalance : false,
     });
@@ -869,88 +841,6 @@ export function MoneySetupDialog({
 
               </div>
             ) : null}
-          </div>
-
-          <div ref={requiredExpensesSectionRef} className="space-y-2.5">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">
-                {locale === "ru"
-                  ? "Обязательные регулярные платежи"
-                  : "Required recurring payments"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {locale === "ru"
-                  ? "Выберите траты, которые точно нужно закрыть."
-                  : "Choose expenses that must be covered."}
-              </p>
-            </div>
-
-            <label className="flex items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={hasNoRequiredFixedExpenses}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  setHasNoRequiredFixedExpenses(checked);
-                  if (checked) {
-                    setRequiredRecurringIds([]);
-                  }
-                }}
-              />
-              <span>
-                <span className="block font-medium text-foreground">
-                  {locale === "ru"
-                    ? "У меня нет обязательных регулярных платежей"
-                    : "I do not have required recurring payments"}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {locale === "ru"
-                    ? "Если аренды, ипотеки, кредитов и других обязательных списаний нет, можно подтвердить это здесь."
-                    : "If you do not have rent, loans, or other must-pay recurring charges, confirm it here."}
-                </span>
-              </span>
-            </label>
-
-            {recurringOptions.length > 0 ? (
-              <div
-                className={`space-y-2 ${hasNoRequiredFixedExpenses ? "opacity-60" : ""}`}
-              >
-                {recurringOptions.map((item) => (
-                  <label
-                    key={item.id}
-                    className="flex items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      disabled={hasNoRequiredFixedExpenses}
-                      checked={requiredRecurringIds.includes(item.id)}
-                      onChange={() => {
-                        setHasNoRequiredFixedExpenses(false);
-                        setRequiredRecurringIds((prev) =>
-                          toggleId(prev, item.id),
-                        );
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block font-medium text-foreground">
-                        {item.note}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {getCategoryLabel(item.categoryId, categories, locale)}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                {locale === "ru"
-                  ? "Регулярных платежей пока нет. Можно добавить позже."
-                  : "No recurring payments yet. You can add them later."}
-              </p>
-            )}
           </div>
 
           <div ref={essentialCategoriesSectionRef} className="space-y-2.5">

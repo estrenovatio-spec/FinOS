@@ -6,6 +6,8 @@ import type { ResolvedMoneySetupIncomeSource } from "@/lib/money-setup";
 
 export type FreeMoneyBreakdown = {
   currentActualBalance: number;
+  recurringPayments: number;
+  otherMandatoryPayments: number;
   mandatoryPayments: number;
   essentialPlannedSpending: number;
   otherRequiredExpenses: number;
@@ -16,6 +18,8 @@ export type FreeMoneyBreakdown = {
 export type PlannedFreeMoneyBreakdown = {
   currentActualBalance: number;
   expectedRecurringIncome: number;
+  recurringPayments: number;
+  otherMandatoryPayments: number;
   mandatoryPayments: number;
   essentialPlannedSpending: number;
   otherRequiredExpenses: number;
@@ -71,11 +75,9 @@ function collectRequiredSpending(
   state: DecisionCoreState,
   snapshot: DecisionCoreSnapshot,
   periodEndDate: string,
-  options?: {
-    includeAllRecurringExpenses?: boolean;
-  },
 ) {
-  const requiredRecurringIds = new Set(state.moneySetup.requiredRecurringIds ?? []);
+  let recurringPayments = 0;
+  let otherMandatoryPayments = 0;
   let mandatoryPayments = 0;
   let essentialPlannedSpending = 0;
   let otherRequiredExpenses = 0;
@@ -89,26 +91,26 @@ function collectRequiredSpending(
     }
 
     if (event.source === "debt_payment") {
+      otherMandatoryPayments += -event.amount;
       mandatoryPayments += -event.amount;
       continue;
     }
 
     if (event.source === "recurring") {
-      if (
-        options?.includeAllRecurringExpenses ||
-        (event.recurringId && requiredRecurringIds.has(event.recurringId))
-      ) {
-        mandatoryPayments += -event.amount;
-      }
+      recurringPayments += -event.amount;
+      mandatoryPayments += -event.amount;
       continue;
     }
 
     if (event.source === "confirmed_transaction" || event.source === "pending_transaction") {
+      otherMandatoryPayments += -event.amount;
       mandatoryPayments += -event.amount;
     }
   }
 
   return {
+    recurringPayments,
+    otherMandatoryPayments,
     mandatoryPayments,
     essentialPlannedSpending,
     otherRequiredExpenses,
@@ -167,7 +169,13 @@ export function calculateFreeMoneyUntilPeriodEnd(
   const currentActualBalance = roundAmount(
     state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
   );
-  const { mandatoryPayments, essentialPlannedSpending, otherRequiredExpenses } =
+  const {
+    recurringPayments,
+    otherMandatoryPayments,
+    mandatoryPayments,
+    essentialPlannedSpending,
+    otherRequiredExpenses,
+  } =
     collectRequiredSpending(state, snapshot, period.to);
 
   const freeMoney = Math.max(
@@ -177,6 +185,8 @@ export function calculateFreeMoneyUntilPeriodEnd(
 
   const breakdown: FreeMoneyBreakdown = {
     currentActualBalance,
+    recurringPayments: roundAmount(recurringPayments),
+    otherMandatoryPayments: roundAmount(otherMandatoryPayments),
     mandatoryPayments: roundAmount(mandatoryPayments),
     essentialPlannedSpending: roundAmount(essentialPlannedSpending),
     otherRequiredExpenses: roundAmount(otherRequiredExpenses),
@@ -211,10 +221,13 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
   const currentActualBalance = roundAmount(
     state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
   );
-  const { mandatoryPayments, essentialPlannedSpending, otherRequiredExpenses } =
-    collectRequiredSpending(state, snapshot, period.to, {
-      includeAllRecurringExpenses: true,
-    });
+  const {
+    recurringPayments,
+    otherMandatoryPayments,
+    mandatoryPayments,
+    essentialPlannedSpending,
+    otherRequiredExpenses,
+  } = collectRequiredSpending(state, snapshot, period.to);
   const { expectedRecurringIncome, includesUnconfirmedIncome } = sumExpectedRecurringIncome(
     state,
     snapshot,
@@ -234,6 +247,8 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
   const breakdown: PlannedFreeMoneyBreakdown = {
     currentActualBalance,
     expectedRecurringIncome: roundAmount(expectedRecurringIncome),
+    recurringPayments: roundAmount(recurringPayments),
+    otherMandatoryPayments: roundAmount(otherMandatoryPayments),
     mandatoryPayments: roundAmount(mandatoryPayments),
     essentialPlannedSpending: roundAmount(essentialPlannedSpending),
     otherRequiredExpenses: roundAmount(otherRequiredExpenses),

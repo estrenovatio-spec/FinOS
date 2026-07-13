@@ -682,7 +682,7 @@ test("Without a separate reserve floor, essential budgets no longer create a fak
   assert.ok((scenario.result.allowed.amount ?? 0) >= 0);
 });
 
-test("Missing required expenses returns a targeted setup command", () => {
+test("Recurring expenses no longer require a separate setup confirmation", () => {
   const scenario = evaluate(
     buildState({
       balances: { all: 15000, me: 15000, partner: 0 },
@@ -694,8 +694,8 @@ test("Missing required expenses returns a targeted setup command", () => {
     }),
   );
 
-  assert.equal(scenario.primaryDecision.type, "missing_data");
-  assert.deepEqual(scenario.result.mainAction.command, {
+  assert.notEqual(scenario.primaryDecision.type, "missing_data");
+  assert.notDeepEqual(scenario.result.mainAction.command, {
     type: "open_money_setup",
     scope: "required_expenses",
   });

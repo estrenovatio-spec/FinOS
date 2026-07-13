@@ -20,7 +20,7 @@ function makeState(overrides: Partial<DecisionCoreState> = {}): DecisionCoreStat
       nextIncomeDate: null,
       expectedIncomeAmount: null,
       useHouseholdBalance: false,
-      requiredRecurringIds: ["rent"],
+      requiredRecurringIds: [],
       hasNoRequiredFixedExpenses: false,
       essentialCategoryIds: ["groceries"],
       updatedAt: null,
@@ -167,7 +167,7 @@ test("free money becomes zero after spending the whole free amount", () => {
   assert.equal(after.amount, 0);
 });
 
-test("optional recurring expense does not reduce free money, required recurring does", () => {
+test("free money treats active recurring expenses as planned by default", () => {
   const state = makeState({
     recurringTransactions: [
       {
@@ -183,24 +183,7 @@ test("optional recurring expense does not reduce free money, required recurring 
         intervalMonths: 1,
         enabled: true,
       },
-      {
-        id: "fun",
-        amount: 5000,
-        type: "expense",
-        categoryId: "fun",
-        note: "Развлечения",
-        owner: "me",
-        frequency: "monthly",
-        nextRunDate: "2026-07-22",
-        dayOfMonth: 22,
-        intervalMonths: 1,
-        enabled: true,
-      },
     ],
-    moneySetup: {
-      ...makeState().moneySetup,
-      requiredRecurringIds: ["rent"],
-    },
   });
   const snapshot = makeSnapshot([
     {
@@ -212,20 +195,36 @@ test("optional recurring expense does not reduce free money, required recurring 
       source: "recurring",
       recurringId: "rent",
     },
-    {
-      id: "recurring-fun-2026-07-22",
-      title: "Развлечения",
-      amount: -5000,
-      date: "2026-07-22",
-      balanceAfter: 25754,
-      source: "recurring",
-      recurringId: "fun",
-    },
   ]);
 
   const result = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
   assert.equal(result.breakdown?.mandatoryPayments, 15000);
   assert.equal(result.amount, 30754);
+});
+
+test("legacy required recurring selection does not double count recurring expenses", () => {
+  const state = makeState({
+    moneySetup: {
+      ...makeState().moneySetup,
+      requiredRecurringIds: ["rent-series"],
+    },
+  });
+  const snapshot = makeSnapshot([
+    {
+      id: "recurring-rent-2026-07-20",
+      title: "Аренда квартиры",
+      amount: -10000,
+      date: "2026-07-20",
+      balanceAfter: 35754,
+      source: "recurring",
+      recurringId: "rent-series",
+    },
+  ]);
+
+  const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.recurringPayments, 10000);
+  assert.equal(result.breakdown?.mandatoryPayments, 10000);
+  assert.equal(result.amount, 35754);
 });
 
 test("last day of the budget period rolls free-money horizon to the next period", () => {
@@ -501,6 +500,7 @@ test("planned free money subtracts recurring expense occurrence inside the curre
   ]);
 
   const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.recurringPayments, 10000);
   assert.equal(result.breakdown?.mandatoryPayments, 10000);
   assert.equal(result.amount, 35754);
 });
@@ -520,6 +520,7 @@ test("planned free money ignores recurring expense outside the current period", 
   ]);
 
   const result = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.recurringPayments, 0);
   assert.equal(result.breakdown?.mandatoryPayments, 0);
 });
 

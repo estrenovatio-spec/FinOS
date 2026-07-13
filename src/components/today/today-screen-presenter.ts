@@ -94,8 +94,6 @@ function hasAnyMoneySetup(setup: MoneySetup): boolean {
     setup.nextIncomeDate ||
       setup.expectedIncomeAmount ||
       setup.incomeSources.length > 0 ||
-      setup.requiredRecurringIds.length > 0 ||
-      setup.hasNoRequiredFixedExpenses ||
       setup.essentialCategoryIds.length > 0,
   );
 }
@@ -427,8 +425,16 @@ function buildPlannedFreeMoneyItem(
             tone: "positive",
           },
           {
-            label: locale === "ru" ? "Обязательные платежи" : "Required payments",
-            value: `-${moneyValue(plannedFreeMoney.breakdown.mandatoryPayments, locale) ?? ""}`,
+            label: locale === "ru" ? "Регулярные платежи" : "Recurring payments",
+            value: `-${moneyValue(plannedFreeMoney.breakdown.recurringPayments, locale) ?? ""}`,
+            tone: "negative",
+          },
+          {
+            label:
+              locale === "ru"
+                ? "Другие обязательные платежи"
+                : "Other required payments",
+            value: `-${moneyValue(plannedFreeMoney.breakdown.otherMandatoryPayments, locale) ?? ""}`,
             tone: "negative",
           },
           {

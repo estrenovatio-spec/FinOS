@@ -34,8 +34,6 @@ export function buildEssentialBudgetReserve(
   const budgetsByCategory = new Map(
     ctx.categoryBudgets.map((item) => [item.categoryId, item] as const),
   );
-  const requiredRecurringIds = new Set(ctx.moneySetup.requiredRecurringIds);
-
   const items = essentialIds
     .map((categoryId) => {
       const budget = budgetsByCategory.get(categoryId);
@@ -55,7 +53,6 @@ export function buildEssentialBudgetReserve(
       const recurringReserved = ctx.recurringTransactions
         .filter(
           (item) =>
-            requiredRecurringIds.has(item.id) &&
             item.enabled &&
             item.type === "expense" &&
             item.categoryId === categoryId &&

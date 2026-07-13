@@ -298,12 +298,9 @@ function requiredRecurringReservedForCategoryInPeriod(
   categoryId: string,
   period: BudgetPeriod,
 ): number {
-  const requiredRecurringIds = new Set(ctx.moneySetup.requiredRecurringIds);
-
   return ctx.recurringTransactions
     .filter(
       (item) =>
-        requiredRecurringIds.has(item.id) &&
         item.enabled &&
         item.type === "expense" &&
         item.categoryId === categoryId,

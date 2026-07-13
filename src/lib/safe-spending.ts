@@ -155,8 +155,7 @@ export function calculateSafeSpending(
   const debug: Record<string, unknown> = {
     today,
     availableNow: input.availableNow,
-    requiredRecurringIds: input.moneySetup.requiredRecurringIds,
-    hasNoRequiredFixedExpenses: input.moneySetup.hasNoRequiredFixedExpenses,
+    recurringExpenseMode: "all_active_expenses",
     essentialCategoryIds: input.moneySetup.essentialCategoryIds,
   };
 
@@ -216,41 +215,15 @@ export function calculateSafeSpending(
     return buildResult(base, "missing_balance");
   }
 
-  const requiredIds = new Set(input.moneySetup.requiredRecurringIds);
-  if (
-    requiredIds.size === 0 &&
-    input.moneySetup.hasNoRequiredFixedExpenses !== true
-  ) {
-    reasons.push("required_recurring_ids_not_configured");
-    return buildResult(base, "missing_required_expenses");
-  }
-
   let requiredFixedUntilIncome = 0;
-  const recurringById = new Map(
-    input.recurringTransactions.map((item) => [item.id, item] as const),
-  );
-
-  for (const recurringId of requiredIds) {
-    const item = recurringById.get(recurringId);
-    if (!item) {
-      reasons.push(`required_recurring_missing:${recurringId}`);
-      continue;
-    }
-    if (!item.enabled) {
-      reasons.push(`required_recurring_disabled:${recurringId}`);
-      continue;
-    }
-    if (item.type !== "expense") {
-      reasons.push(`required_recurring_not_expense:${recurringId}`);
-      continue;
-    }
+  for (const item of input.recurringTransactions) {
+    if (!item.enabled) continue;
+    if (item.type !== "expense") continue;
     if (!item.nextRunDate || startOfDayMs(item.nextRunDate) == null) {
-      reasons.push(`required_recurring_missing_next_run_date:${recurringId}`);
+      reasons.push(`recurring_expense_missing_next_run_date:${item.id}`);
       continue;
     }
-    if (!isIsoWithinInclusive(item.nextRunDate, today, nextIncomeDate)) {
-      continue;
-    }
+    if (!isIsoWithinInclusive(item.nextRunDate, today, nextIncomeDate)) continue;
     requiredFixedUntilIncome += item.amount;
   }
 

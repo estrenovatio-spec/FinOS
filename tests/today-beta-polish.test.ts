@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import { APP_BOTTOM_NAV_TABS } from "@/components/app/AppBottomNav";
 import { buildMoneySetupBalanceSectionView } from "@/components/MoneySetupDialog";
@@ -339,6 +341,8 @@ test("Today overview shows only current balance and planned free money", () => {
       periodEndDate: "2026-08-13",
       breakdown: {
         currentActualBalance: 40000,
+        recurringPayments: 0,
+        otherMandatoryPayments: 12000,
         mandatoryPayments: 12000,
         essentialPlannedSpending: 24500,
         otherRequiredExpenses: 0,
@@ -357,6 +361,8 @@ test("Today overview shows only current balance and planned free money", () => {
       breakdown: {
         currentActualBalance: 40000,
         expectedRecurringIncome: 24000,
+        recurringPayments: 12000,
+        otherMandatoryPayments: 0,
         mandatoryPayments: 12000,
         essentialPlannedSpending: 40408,
         otherRequiredExpenses: 0,
@@ -409,6 +415,8 @@ test("planned free money card uses digital dates and keeps breakdown details", (
       breakdown: {
         currentActualBalance: 40000,
         expectedRecurringIncome: 5000,
+        recurringPayments: 12000,
+        otherMandatoryPayments: 0,
         mandatoryPayments: 12000,
         essentialPlannedSpending: 29680,
         otherRequiredExpenses: 0,
@@ -424,6 +432,7 @@ test("planned free money card uses digital dates and keeps breakdown details", (
   assert.equal(planned?.subtitle, "до 13.08.2026");
   assert.equal(planned?.details?.[0]?.label, "Сейчас в кошельке");
   assert.equal(planned?.details?.[1]?.value, "+5 000 ₽");
+  assert.equal(planned?.details?.[2]?.label, "Регулярные платежи");
 });
 
 test("planned free money copy explains recurring-income plan without using narrow card text", () => {
@@ -442,6 +451,8 @@ test("planned free money copy explains recurring-income plan without using narro
       periodEndDate: "2026-07-31",
       breakdown: {
         currentActualBalance: 69071,
+        recurringPayments: 0,
+        otherMandatoryPayments: 53000,
         mandatoryPayments: 53000,
         essentialPlannedSpending: 16071,
         otherRequiredExpenses: 0,
@@ -460,6 +471,8 @@ test("planned free money copy explains recurring-income plan without using narro
       breakdown: {
         currentActualBalance: 69071,
         expectedRecurringIncome: 24000,
+        recurringPayments: 53000,
+        otherMandatoryPayments: 0,
         mandatoryPayments: 53000,
         essentialPlannedSpending: 28479,
         otherRequiredExpenses: 0,
@@ -504,6 +517,8 @@ test("planned free money breakdown arithmetic stays explicit", () => {
       breakdown: {
         currentActualBalance: 10000,
         expectedRecurringIncome: 5000,
+        recurringPayments: 5000,
+        otherMandatoryPayments: 3000,
         mandatoryPayments: 8000,
         essentialPlannedSpending: 4500,
         otherRequiredExpenses: 0,
@@ -521,7 +536,8 @@ test("planned free money breakdown arithmetic stays explicit", () => {
     [
       "Сейчас в кошельке",
       "Регулярные доходы",
-      "Обязательные платежи",
+      "Регулярные платежи",
+      "Другие обязательные платежи",
       "Плановые базовые траты",
       "Другие обязательные расходы",
       "По плану свободно",
@@ -995,30 +1011,27 @@ test("money setup progress is based on filled data", () => {
     moneySetup: {
       ...emptyMoneySetup(),
       nextIncomeDate: "2026-07-25",
-      requiredRecurringIds: ["rent"],
       essentialCategoryIds: ["groceries"],
     },
     balances: { all: 15000, me: 15000, partner: 0 },
   });
 
-  assert.equal(progress.completed, 4);
-  assert.equal(progress.summary, "4 из 4 заполнено");
+  assert.equal(progress.completed, 3);
+  assert.equal(progress.summary, "3 из 3 заполнено");
 });
 
-test("optional recurring absence can still count as completed setup", () => {
+test("money setup progress no longer asks to mark recurring payments separately", () => {
   const progress = buildMoneySetupProgress({
     locale: "ru",
     moneySetup: {
       ...emptyMoneySetup(),
       nextIncomeDate: "2026-07-25",
-      hasNoRequiredFixedExpenses: true,
       essentialCategoryIds: ["groceries"],
     },
     balances: { all: 15000, me: 15000, partner: 0 },
   });
 
-  const requiredExpenses = progress.items.find((item) => item.id === "required_expenses");
-  assert.equal(requiredExpenses?.done, true);
+  assert.equal(progress.items.some((item) => item.label === "Обязательные платежи"), false);
 });
 
 test("essential-only missing data no longer asks to add required payments", () => {
@@ -1047,6 +1060,17 @@ test("essential-only missing data no longer asks to add required payments", () =
   assert.equal(view.hero.title, "Настройте базовые траты");
   assert.equal(view.hero.ctaLabel, "Настроить важные траты");
   assert.match(view.hero.reason ?? "", /базовых тратах периода/i);
+});
+
+test("money setup dialog no longer renders required recurring payment checkboxes", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/MoneySetupDialog.tsx"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /Обязательные регулярные платежи/);
+  assert.doesNotMatch(source, /required recurring payments/i);
+  assert.doesNotMatch(source, /У меня нет обязательных регулярных платежей/);
 });
 
 test("money setup progress updates when another section is filled", () => {
