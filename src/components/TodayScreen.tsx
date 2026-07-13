@@ -20,11 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { AppTabId } from "@/lib/app-bottom-nav";
-import { decisionCore } from "@/lib/decision-core";
-import { resolveDailySafeSpending } from "@/lib/daily-safe-spending";
+import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
+import { calculateFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import { hasPartnerBudget } from "@/lib/owner-labels";
 import { useViewerMappedTransactions, useHouseholdBalances, useStore } from "@/store/useStore";
 
@@ -45,8 +45,6 @@ export function TodayScreen({
   const debts = useStore((s) => s.debts);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
   const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
-  const dailySafeSpendingSnapshot = useStore((s) => s.dailySafeSpendingSnapshot);
-  const setDailySafeSpendingSnapshot = useStore((s) => s.setDailySafeSpendingSnapshot);
   const householdFilter = useStore((s) => s.householdFilter);
   const partnerName = useStore((s) => s.partnerName);
   const partnerKeywords = useStore((s) => s.partnerKeywords);
@@ -68,9 +66,9 @@ export function TodayScreen({
   const showHouseholdToggle = hasPartnerBudget(partnerName, partnerKeywords);
   const today = getLocalTodayIsoDate();
 
-  const decision = useMemo(
+  const decisionSnapshot = useMemo(
     () =>
-      decisionCore({
+      decisionCoreSnapshot({
         locale,
         today,
         forecastHorizonMonths,
@@ -99,73 +97,40 @@ export function TodayScreen({
       transactions,
     ],
   );
-  const dailySafeSpending = useMemo(() => {
-    const currentBalance = moneySetup.useHouseholdBalance ? balances.all : balances.me;
-    const categoryBudgetsFingerprint = JSON.stringify(
-      categoryBudgets.map((budget) => [
-        budget.categoryId,
-        budget.monthlyLimit,
-        budget.updatedAt ?? "",
-      ]),
+  const { forecast: _forecast, resolvedIncomeSources: _incomeSources, ...decision } = decisionSnapshot;
+  const freeMoney = useMemo(() => {
+    return calculateFreeMoneyUntilPeriodEnd(
+      {
+        locale,
+        today,
+        forecastHorizonMonths,
+        categories,
+        transactions,
+        householdFilter,
+        recurringTransactions,
+        debts,
+        moneySetup,
+        categoryBudgets,
+        budgetMonthStartDay,
+        balances,
+      },
+      decisionSnapshot,
     );
-    const recurringFingerprint = JSON.stringify(
-      recurringTransactions.map((item) => [
-        item.id,
-        item.amount,
-        item.type,
-        item.categoryId,
-        item.note,
-        item.nextRunDate,
-        item.frequency,
-        item.intervalMonths ?? null,
-        item.dayOfMonth ?? null,
-        item.enabled !== false,
-        item.updatedAt ?? "",
-      ]),
-    );
-    const debtsFingerprint = JSON.stringify(
-      debts.map((debt) => [
-        debt.id,
-        debt.balance,
-        debt.minPayment,
-        debt.nextPaymentDate ?? null,
-        debt.owner,
-        debt.priority,
-        debt.updatedAt ?? "",
-      ]),
-    );
-    return resolveDailySafeSpending({
-      today,
-      allowed: decision.allowed,
-      transactions,
-      currentBalance,
-      forecastHorizonMonths,
-      moneySetup,
-      budgetMonthStartDay,
-      categoryBudgetsFingerprint,
-      recurringFingerprint,
-      debtsFingerprint,
-      snapshot: dailySafeSpendingSnapshot,
-    });
   }, [
-    balances.all,
-    balances.me,
+    balances,
     budgetMonthStartDay,
+    categories,
     categoryBudgets,
-    dailySafeSpendingSnapshot,
+    decisionSnapshot,
     debts,
-    decision.allowed,
     forecastHorizonMonths,
+    householdFilter,
+    locale,
     moneySetup,
     recurringTransactions,
     today,
     transactions,
   ]);
-
-  useEffect(() => {
-    if (!dailySafeSpending.shouldPersist) return;
-    setDailySafeSpendingSnapshot(dailySafeSpending.nextSnapshot);
-  }, [dailySafeSpending.nextSnapshot, dailySafeSpending.shouldPersist, setDailySafeSpendingSnapshot]);
 
   const view = useMemo(
     () =>
@@ -175,9 +140,9 @@ export function TodayScreen({
         transactionCount: transactions.length,
         moneySetup,
         balances,
-        dailySafeSpending: dailySafeSpending.view,
+        freeMoney,
       }),
-    [balances, dailySafeSpending.view, decision, locale, moneySetup, transactions.length],
+    [balances, decision, freeMoney, locale, moneySetup, transactions.length],
   );
   const zeroState = isTodayZeroState({
     decision,

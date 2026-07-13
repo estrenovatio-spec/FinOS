@@ -1,161 +1,237 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  getCountableDailySafeSpent,
-  isCountableDailySafeExpense,
-  resolveDailySafeSpending,
-  type DailySafeSpendingSnapshot,
-} from "@/lib/daily-safe-spending";
-import type { DecisionAllowed } from "@/lib/decision-core/types";
-import type { Transaction } from "@/types";
+import { calculateFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
+import type { DecisionCoreSnapshot, DecisionCoreState } from "@/lib/decision-core";
 
-function makeAllowed(partial?: Partial<DecisionAllowed>): DecisionAllowed {
+function makeState(overrides: Partial<DecisionCoreState> = {}): DecisionCoreState {
   return {
-    text: "Можно потратить сегодня до 34 418 ₽ без риска для прогноза.",
-    hasRestPermission: true,
-    status: "available",
-    amount: 34418,
-    horizonDate: "2026-08-03",
-    reason: "Это сумма сверх обязательств и резерва.",
-    confidence: "confirmed",
-    ...partial,
-  };
-}
-
-function makeTx(partial?: Partial<Transaction>): Transaction {
-  return {
-    id: "tx-1",
-    amount: 10000,
-    type: "expense",
-    categoryId: "food",
-    currency: "RUB",
-    note: "",
-    date: "2026-07-13",
-    owner: "me",
-    confirmed: true,
-    updatedAt: "2026-07-13T10:00:00.000Z",
-    ...partial,
-  };
-}
-
-function resolve(
-  transactions: Transaction[],
-  snapshot: DailySafeSpendingSnapshot | null = null,
-  allowed?: DecisionAllowed,
-  currentBalance = 50000,
-) {
-  return resolveDailySafeSpending({
+    locale: "ru",
     today: "2026-07-13",
-    allowed: allowed ?? makeAllowed(),
-    transactions,
-    currentBalance,
     forecastHorizonMonths: 3,
-    moneySetup: {
-      useHouseholdBalance: false,
-      updatedAt: "2026-07-13T09:00:00.000Z",
-    },
-    budgetMonthStartDay: 1,
-    categoryBudgetsFingerprint: "budgets-v1",
-    recurringFingerprint: "recurring-v1",
-    debtsFingerprint: "debts-v1",
-    snapshot,
-  });
-}
-
-test("countable safe-spend expenses include only confirmed same-day discretionary expenses", () => {
-  assert.equal(isCountableDailySafeExpense(makeTx(), "2026-07-13"), true);
-  assert.equal(
-    isCountableDailySafeExpense(makeTx({ confirmed: false }), "2026-07-13"),
-    false,
-  );
-  assert.equal(
-    isCountableDailySafeExpense(makeTx({ recurringId: "rent" }), "2026-07-13"),
-    false,
-  );
-  assert.equal(
-    isCountableDailySafeExpense(makeTx({ transferPairId: "pair-1" }), "2026-07-13"),
-    false,
-  );
-  assert.equal(
-    isCountableDailySafeExpense(makeTx({ type: "income" }), "2026-07-13"),
-    false,
-  );
-});
-
-test("daily safe-spend snapshot starts from the raw allowed amount", () => {
-  const result = resolve([]);
-  assert.equal(result.view.status, "available");
-  assert.equal(result.view.baseAmount, 34418);
-  assert.equal(result.view.spentToday, 0);
-  assert.equal(result.view.remainingAmount, 34418);
-  assert.equal(result.nextSnapshot?.baselineCountableSpent, 0);
-});
-
-test("remaining safe amount decreases cumulatively after today's expense", () => {
-  const initial = resolve([]);
-  const afterExpense = resolve(
-    [makeTx({ amount: 31098, id: "expense-1" })],
-    initial.nextSnapshot,
-    undefined,
-    18902,
-  );
-
-  assert.equal(afterExpense.view.baseAmount, 34418);
-  assert.equal(afterExpense.view.spentToday, 31098);
-  assert.equal(afterExpense.view.remainingAmount, 3320);
-});
-
-test("income, transfer and recurring payment do not reduce remaining safe amount", () => {
-  const initial = resolve([]);
-  const transactions = [
-    makeTx({ id: "income", type: "income", amount: 20000 }),
-    makeTx({ id: "transfer", transferPairId: "pair-1", amount: 12000 }),
-    makeTx({ id: "recurring", recurringId: "rent", amount: 15000 }),
-  ];
-  const result = resolve(
-    transactions,
-    initial.nextSnapshot,
-  );
-
-  assert.equal(getCountableDailySafeSpent(transactions, "2026-07-13"), 0);
-  assert.equal(result.view.spentToday, 0);
-  assert.equal(result.view.remainingAmount, 34418);
-});
-
-test("restricted and unknown raw states clear the daily snapshot instead of showing stale budget", () => {
-  const initial = resolve([]);
-  const restricted = resolve(
-    [],
-    initial.nextSnapshot,
-    makeAllowed({ status: "restricted", amount: 0, hasRestPermission: false }),
-  );
-
-  assert.equal(restricted.view.status, "restricted");
-  assert.equal(restricted.view.remainingAmount, null);
-  assert.equal(restricted.nextSnapshot, null);
-  assert.equal(restricted.shouldPersist, true);
-});
-
-test("non-spending financial changes reset the daily snapshot to a new base", () => {
-  const initial = resolve([]);
-  const changed = resolveDailySafeSpending({
-    today: "2026-07-13",
-    allowed: makeAllowed({ amount: 12000 }),
+    categories: [],
     transactions: [],
-    currentBalance: 65000,
-    forecastHorizonMonths: 3,
+    householdFilter: "me",
+    recurringTransactions: [],
+    debts: [],
     moneySetup: {
+      nextIncomeDate: null,
+      expectedIncomeAmount: null,
       useHouseholdBalance: false,
-      updatedAt: "2026-07-13T12:00:00.000Z",
+      requiredRecurringIds: ["rent"],
+      hasNoRequiredFixedExpenses: false,
+      essentialCategoryIds: ["groceries"],
+      updatedAt: null,
+      incomeSources: [],
     },
+    categoryBudgets: [],
     budgetMonthStartDay: 1,
-    categoryBudgetsFingerprint: "budgets-v2",
-    recurringFingerprint: "recurring-v1",
-    debtsFingerprint: "debts-v1",
-    snapshot: initial.nextSnapshot,
-  });
+    balances: { all: 45754, me: 45754, partner: 0 },
+    ...overrides,
+  };
+}
 
-  assert.equal(changed.view.baseAmount, 12000);
-  assert.equal(changed.view.remainingAmount, 12000);
-  assert.equal(changed.shouldPersist, true);
+function makeSnapshot(events: DecisionCoreSnapshot["forecast"]["events"]): DecisionCoreSnapshot {
+  return {
+    status: {
+      key: "calm",
+      title: "ok",
+      toneClassName: "",
+    },
+    safeUntil: {
+      status: "no_risk_in_horizon",
+      title: "",
+      note: null,
+      isReady: true,
+      needsSetup: false,
+      rawStatus: "ready",
+      safeToday: 0,
+      nextIncomeDate: null,
+      nextIncomeTitle: null,
+      nextIncomeAmount: null,
+      horizonEndDate: "2026-10-13",
+      horizonMonths: 3,
+      confidence: "confirmed",
+      confidenceNote: null,
+    },
+    todayPayments: [],
+    nextRisk: null,
+    mainAction: {
+      type: "hold",
+      title: "",
+      text: "",
+      dueDate: null,
+      amount: null,
+      relatedEntityId: null,
+      priority: "low",
+      command: { type: "none" },
+    },
+    avoid: {
+      text: null,
+      reason: null,
+    },
+    allowed: {
+      text: "",
+      hasRestPermission: true,
+      status: "available",
+      amount: 0,
+      horizonDate: null,
+      reason: "",
+      confidence: "confirmed",
+      confidenceNote: null,
+    },
+    constraintExplanation: null,
+    peaceIndex: { value: 0, note: "" },
+    hasHistory: true,
+    resolvedIncomeSources: [],
+    forecast: {
+      startBalance: 45754,
+      minBalance: 0,
+      minBalanceDate: null,
+      firstDeficitDate: null,
+      nextIncomeDate: "2026-07-14",
+      horizonEndDate: "2026-10-13",
+      horizonMonths: 3,
+      events,
+    },
+  };
+}
+
+test("free money uses current actual balance and excludes future planned income", () => {
+  const state = makeState();
+  const snapshot = makeSnapshot([
+    {
+      id: "income-1",
+      title: "Зарплата",
+      amount: 24000,
+      date: "2026-07-14",
+      balanceAfter: 69754,
+      source: "income_source",
+    },
+    {
+      id: "rent-1",
+      title: "Аренда",
+      amount: -21000,
+      date: "2026-07-20",
+      balanceAfter: 24754,
+      source: "pending_transaction",
+    },
+    {
+      id: "essential-budget-2026-07-18",
+      title: "Плановые повседневные траты",
+      amount: -20432,
+      date: "2026-07-18",
+      balanceAfter: 43122,
+      source: "essential_budget",
+    },
+  ]);
+
+  const result = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.amount, 4322);
+  assert.equal(result.breakdown?.mandatoryPayments, 21000);
+  assert.equal(result.breakdown?.essentialPlannedSpending, 20432);
+});
+
+test("free money becomes zero after spending the whole free amount", () => {
+  const baseState = makeState();
+  const snapshot = makeSnapshot([
+    {
+      id: "rent-1",
+      title: "Аренда",
+      amount: -21000,
+      date: "2026-07-20",
+      balanceAfter: 24754,
+      source: "pending_transaction",
+    },
+    {
+      id: "essential-budget-2026-07-18",
+      title: "Плановые повседневные траты",
+      amount: -20432,
+      date: "2026-07-18",
+      balanceAfter: 43122,
+      source: "essential_budget",
+    },
+  ]);
+
+  const before = calculateFreeMoneyUntilPeriodEnd(baseState, snapshot);
+  const after = calculateFreeMoneyUntilPeriodEnd(
+    makeState({
+      balances: { all: 41432, me: 41432, partner: 0 },
+    }),
+    snapshot,
+  );
+
+  assert.equal(before.amount, 4322);
+  assert.equal(after.amount, 0);
+});
+
+test("optional recurring expense does not reduce free money, required recurring does", () => {
+  const state = makeState({
+    recurringTransactions: [
+      {
+        id: "rent",
+        amount: 15000,
+        type: "expense",
+        categoryId: "home",
+        note: "Аренда",
+        owner: "me",
+        frequency: "monthly",
+        nextRunDate: "2026-07-20",
+        dayOfMonth: 20,
+        intervalMonths: 1,
+        enabled: true,
+      },
+      {
+        id: "fun",
+        amount: 5000,
+        type: "expense",
+        categoryId: "fun",
+        note: "Развлечения",
+        owner: "me",
+        frequency: "monthly",
+        nextRunDate: "2026-07-22",
+        dayOfMonth: 22,
+        intervalMonths: 1,
+        enabled: true,
+      },
+    ],
+    moneySetup: {
+      ...makeState().moneySetup,
+      requiredRecurringIds: ["rent"],
+    },
+  });
+  const snapshot = makeSnapshot([
+    {
+      id: "recurring-rent-2026-07-20",
+      title: "Аренда",
+      amount: -15000,
+      date: "2026-07-20",
+      balanceAfter: 30754,
+      source: "recurring",
+      recurringId: "rent",
+    },
+    {
+      id: "recurring-fun-2026-07-22",
+      title: "Развлечения",
+      amount: -5000,
+      date: "2026-07-22",
+      balanceAfter: 25754,
+      source: "recurring",
+      recurringId: "fun",
+    },
+  ]);
+
+  const result = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.breakdown?.mandatoryPayments, 15000);
+  assert.equal(result.amount, 30754);
+});
+
+test("last day of the budget period rolls free-money horizon to the next period", () => {
+  const state = makeState({
+    today: "2026-07-13",
+    budgetMonthStartDay: 14,
+  });
+  const snapshot = makeSnapshot([]);
+
+  const result = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
+  assert.equal(result.periodEndDate, "2026-08-13");
 });

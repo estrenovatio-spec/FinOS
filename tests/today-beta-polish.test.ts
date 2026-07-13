@@ -339,18 +339,26 @@ test("allowed available shows amount instead of prose", () => {
       nextIncomeDate: "2026-07-25",
     },
     balances: { all: 40000, me: 40000, partner: 0 },
-    dailySafeSpending: {
+    freeMoney: {
       status: "available",
-      remainingAmount: 3500,
-      baseAmount: 3500,
-      spentToday: 0,
+      amount: 3500,
+      periodEndDate: "2026-08-13",
+      breakdown: {
+        currentActualBalance: 40000,
+        mandatoryPayments: 12000,
+        essentialPlannedSpending: 24500,
+        otherRequiredExpenses: 0,
+        freeMoney: 3500,
+        periodEndDate: "2026-08-13",
+      },
+      note: null,
     },
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Можно потратить ещё");
+  assert.equal(allowed?.label, "Свободные деньги");
   assert.match(allowed?.value ?? "", /3[\s\u00A0]500 ₽/);
-  assert.match(allowed?.caption ?? "", /Из 3[\s\u00A0]500 ₽ на сегодня/);
+  assert.match(allowed?.caption ?? "", /до 13 августа/);
 });
 
 test("allowed available shows remaining amount after today's spending", () => {
@@ -373,19 +381,26 @@ test("allowed available shows remaining amount after today's spending", () => {
       nextIncomeDate: "2026-07-25",
     },
     balances: { all: 40000, me: 40000, partner: 0 },
-    dailySafeSpending: {
+    freeMoney: {
       status: "available",
-      remainingAmount: 3320,
-      baseAmount: 34418,
-      spentToday: 31098,
+      amount: 3320,
+      periodEndDate: "2026-08-13",
+      breakdown: {
+        currentActualBalance: 40000,
+        mandatoryPayments: 12000,
+        essentialPlannedSpending: 24680,
+        otherRequiredExpenses: 0,
+        freeMoney: 3320,
+        periodEndDate: "2026-08-13",
+      },
+      note: null,
     },
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Можно потратить ещё");
+  assert.equal(allowed?.label, "Свободные деньги");
   assert.match(allowed?.value ?? "", /3[\s\u00A0]320 ₽/);
-  assert.match(allowed?.caption ?? "", /Из 34[\s\u00A0]418 ₽ на сегодня/);
-  assert.match(allowed?.caption ?? "", /31[\s\u00A0]098 ₽/);
+  assert.match(allowed?.caption ?? "", /до 13 августа/);
 });
 
 test("allowed restricted does not show false amount", () => {
@@ -410,8 +425,8 @@ test("allowed restricted does not show false amount", () => {
   });
 
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
-  assert.equal(allowed?.label, "Сегодня лучше не тратить лишнее");
-  assert.equal(allowed?.value, "Свободные покупки лучше отложить");
+  assert.equal(allowed?.label, "Свободные деньги");
+  assert.equal(allowed?.value, "пока неизвестно");
 });
 
 test("allowed unknown shows uncertainty instead of zero", () => {

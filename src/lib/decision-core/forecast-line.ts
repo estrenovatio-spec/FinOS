@@ -73,6 +73,10 @@ function hasMatchingActualTransaction(
   });
 }
 
+function isWithinRecurringEndDate(item: RecurringTransaction, runDate: string): boolean {
+  return !item.endDate || runDate <= item.endDate;
+}
+
 function buildIncomeEvents(ctx: DecisionCoreContext): ForecastEvent[] {
   return ctx.resolvedIncomeSources
     .filter(
@@ -161,7 +165,7 @@ function buildRecurringForecastEvents(
     if (!item.enabled || !item.nextRunDate) continue;
 
     let runDate = item.nextRunDate.slice(0, 10);
-    while (runDate <= horizonEndDate) {
+    while (runDate <= horizonEndDate && isWithinRecurringEndDate(item, runDate)) {
       const skipped = (item.skippedDates ?? []).includes(runDate);
       const hasActual = hasMatchingActualTransaction(ctx.transactions, item, runDate);
 
@@ -173,6 +177,7 @@ function buildRecurringForecastEvents(
           date: runDate,
           balanceAfter: 0,
           source: "recurring",
+          recurringId: item.id,
           incomeSourceId: null,
           incomeOccurrenceId: null,
           incomeOccurrenceDate: null,
@@ -255,7 +260,7 @@ function recurringOccurrencesInPeriod(
   if (!item.enabled || !item.nextRunDate) return dates;
 
   let runDate = item.nextRunDate.slice(0, 10);
-  while (runDate <= period.to) {
+  while (runDate <= period.to && isWithinRecurringEndDate(item, runDate)) {
     if (runDate >= period.from && !(item.skippedDates ?? []).includes(runDate)) {
       dates.push(runDate);
     }
@@ -391,18 +396,19 @@ function buildFutureEssentialBudgetEvents(
   return [...dailyEvents.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([date, entry]) => ({
-      id: `essential-budget-${date}`,
-      title:
-        ctx.locale === "ru"
-          ? "Плановые повседневные траты"
-          : "Planned everyday spending",
-      amount: -entry.amount,
-      date,
-      balanceAfter: 0,
-      source: "essential_budget" as const,
-      incomeSourceId: null,
-      incomeOccurrenceId: null,
-      incomeOccurrenceDate: null,
+        id: `essential-budget-${date}`,
+        title:
+          ctx.locale === "ru"
+            ? "Плановые повседневные траты"
+            : "Planned everyday spending",
+        amount: -entry.amount,
+        date,
+        balanceAfter: 0,
+        source: "essential_budget" as const,
+        recurringId: null,
+        incomeSourceId: null,
+        incomeOccurrenceId: null,
+        incomeOccurrenceDate: null,
       plannedIncomeStatus: null,
       plannedDate: null,
       budgetPeriodFrom: entry.budgetPeriodFrom,
@@ -427,6 +433,7 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
       date: item.nextPaymentDate!.slice(0, 10),
       balanceAfter: 0,
       source: "debt_payment" as const,
+      recurringId: null,
       incomeSourceId: null,
       incomeOccurrenceId: null,
       incomeOccurrenceDate: null,

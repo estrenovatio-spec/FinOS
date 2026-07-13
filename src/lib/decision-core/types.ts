@@ -288,6 +288,7 @@ export type ForecastEvent = {
   date: string;
   balanceAfter: number;
   source: ForecastEventSource;
+  recurringId?: string | null;
   incomeSourceId?: string | null;
   incomeOccurrenceId?: string | null;
   incomeOccurrenceDate?: string | null;

@@ -1,13 +1,12 @@
 import { getMainActionButtonLabel } from "@/components/today/main-action-resolver";
 import type { MoneySetup } from "@/lib/money-setup";
-import type { DailySafeSpendingView } from "@/lib/daily-safe-spending";
 import type {
-  DecisionAllowed,
   DecisionCoreResult,
   DecisionMainAction,
   DecisionTodayPayment,
 } from "@/lib/decision-core/types";
 import { formatMoney } from "@/lib/format-money";
+import type { FreeMoneyView } from "@/lib/free-money";
 import type { Locale } from "@/types";
 
 type TodayStatusTone = "calm" | "risk" | "action" | "setup";
@@ -64,7 +63,7 @@ type TodayPresentationInput = {
     me: number;
     partner: number;
   };
-  dailySafeSpending?: DailySafeSpendingView;
+  freeMoney?: FreeMoneyView;
 };
 
 const MONTHS_RU = [
@@ -420,79 +419,45 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
 }
 
 function buildAllowedItem(
-  allowed: DecisionAllowed,
   locale: Locale,
-  dailySafeSpending?: DailySafeSpendingView,
+  freeMoney?: FreeMoneyView,
 ): TodayOverviewItem {
-  if (allowed.status === "available" && allowed.amount != null) {
-    const remainingAmount =
-      dailySafeSpending?.status === "available" &&
-      dailySafeSpending.remainingAmount != null
-        ? dailySafeSpending.remainingAmount
-        : allowed.amount;
-    const baseAmount =
-      dailySafeSpending?.status === "available" && dailySafeSpending.baseAmount != null
-        ? dailySafeSpending.baseAmount
-        : allowed.amount;
-    const spentToday =
-      dailySafeSpending?.status === "available" && dailySafeSpending.spentToday != null
-        ? dailySafeSpending.spentToday
-        : 0;
-    const remainingValue = rub(remainingAmount, locale) ?? "";
-    const baseValue = rub(baseAmount, locale) ?? remainingValue;
-    const spentCaption =
-      spentToday > 0
-        ? locale === "ru"
-          ? `Из ${baseValue} на сегодня. Уже учтено расходов: ${rub(spentToday, locale)}.`
-          : `From ${baseValue} for today. Already spent: ${rub(spentToday, locale)}.`
-        : locale === "ru"
-          ? `Из ${baseValue} на сегодня.`
-          : `From ${baseValue} for today.`;
+  if (freeMoney?.status === "available" && freeMoney.amount != null) {
     return {
       id: "allowed",
-      label: locale === "ru" ? "Можно потратить ещё" : "You can still spend",
-      value: remainingValue,
+      label: locale === "ru" ? "Свободные деньги" : "Free money",
+      value: rub(freeMoney.amount, locale) ?? "",
       caption:
         locale === "ru"
-          ? allowed.horizonDate
-            ? `${spentCaption} ${allowed.confidence === "confirmed" ? "Остаток пересчитан" : "Остаток пока пересчитан по плану"} с учётом всех платежей до ${formatDayMonth(allowed.horizonDate, locale)}.${allowed.confidenceNote ? ` ${allowed.confidenceNote}` : ""}`
-            : `${spentCaption} Сумма рассчитана с учётом известных обязательств.`
-          : allowed.horizonDate
-            ? `${spentCaption} Calculated with all payments until ${formatDayMonth(allowed.horizonDate, locale)}.`
-            : `${spentCaption} Calculated with the known obligations.`,
+          ? `После обязательных платежей и плановых базовых расходов до ${formatDayMonth(freeMoney.periodEndDate, locale)}.`
+          : `After required payments and planned essentials until ${formatDayMonth(freeMoney.periodEndDate, locale)}.`,
     };
   }
 
-  if (allowed.status === "restricted") {
+  if (freeMoney?.status === "restricted") {
     return {
       id: "allowed",
-      label:
-        locale === "ru"
-          ? "Сегодня лучше не тратить лишнее"
-          : "Better not to spend extra today",
-      value:
-        locale === "ru"
-          ? "Свободные покупки лучше отложить"
-          : "Free spending is better postponed",
+      label: locale === "ru" ? "Свободных денег пока нет" : "No free money right now",
+      value: locale === "ru" ? "0 ₽" : "0 RUB",
       caption:
         locale === "ru"
-          ? allowed.horizonDate
-            ? `Эти деньги понадобятся до ${formatDayMonth(allowed.horizonDate, locale)}.${allowed.confidenceNote ? ` ${allowed.confidenceNote}` : ""}`
-            : "Сначала разберитесь с обязательными платежами."
-          : allowed.horizonDate
-            ? `This money is needed until ${formatDayMonth(allowed.horizonDate, locale)}.`
-            : "Handle the required payments first.",
+          ? freeMoney.periodEndDate
+            ? `Часть обязательных или плановых расходов до ${formatDayMonth(freeMoney.periodEndDate, locale)} пока не покрыта.`
+            : "Часть обязательных или плановых расходов пока не покрыта."
+          : freeMoney?.periodEndDate
+            ? `Some required or planned spending until ${formatDayMonth(freeMoney.periodEndDate, locale)} is not covered yet.`
+            : "Some required or planned spending is not covered yet.",
     };
   }
 
   return {
     id: "allowed",
-    label: locale === "ru" ? "Сколько можно потратить" : "Safe spending today",
+    label: locale === "ru" ? "Свободные деньги" : "Free money",
     value: locale === "ru" ? "пока неизвестно" : "unknown for now",
     caption:
       locale === "ru"
-        ? "Не хватает данных о ближайшем доходе или обязательных тратах."
-        : "Key data about the next income or required spending is missing.",
+        ? "Нужны актуальный остаток и обязательные расходы текущего периода."
+        : "Current balance and required spending for this period are needed.",
   };
 }
 
@@ -644,7 +609,7 @@ function buildOverview(input: TodayPresentationInput): {
     items.push(reserveItem);
   }
 
-  items.push(buildAllowedItem(decision.allowed, locale, input.dailySafeSpending));
+  items.push(buildAllowedItem(locale, input.freeMoney));
 
   const nextIncomeItem = buildNextIncomeItem(decision, locale);
   if (nextIncomeItem) {
