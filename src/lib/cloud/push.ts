@@ -272,6 +272,7 @@ export async function cloudPushCategoryDelete(id: string): Promise<void> {
 export async function cloudPushGoal(goal: SavingsGoal): Promise<void> {
   const t = await resolveWritableToken();
   if (!t) return;
+  useCloudStore.getState().markGoalPending(goal.id);
   try {
     await apiUpsertGoal(t, goal);
     await pullCloudAfterWrite();
@@ -283,6 +284,7 @@ export async function cloudPushGoal(goal: SavingsGoal): Promise<void> {
 export async function cloudPushGoalDelete(id: string): Promise<void> {
   const t = await resolveWritableToken();
   if (!t) return;
+  useCloudStore.getState().clearGoalPending(id);
   try {
     await apiDeleteGoal(t, id);
   } catch {

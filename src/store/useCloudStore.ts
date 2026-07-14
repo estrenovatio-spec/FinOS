@@ -38,6 +38,7 @@ interface CloudState {
   deletedTransactionIds: string[];
   /** Локальные правки операций, которые ещё нельзя перетирать pull'ом из облака */
   pendingTransactionUpdateIds: Record<string, string>;
+  pendingGoalIds: string[];
   /** Последняя ошибка записи в облако (операция остаётся локально) */
   lastWriteError: string | null;
   setServerConfigured: (value: boolean) => void;
@@ -75,6 +76,9 @@ interface CloudState {
   markTransactionUpdatePending: (id: string, updatedAt?: string) => void;
   clearTransactionUpdatePending: (id: string) => void;
   setPendingTransactionUpdateIds: (ids: Record<string, string>) => void;
+  markGoalPending: (id: string) => void;
+  clearGoalPending: (id: string) => void;
+  setPendingGoalIds: (ids: string[]) => void;
   setLastWriteError: (error: string | null) => void;
   clearSession: () => void;
   /** Drop household token/sync only — keep subscription from latest bootstrap. */
@@ -107,6 +111,7 @@ export const useCloudStore = create<CloudState>()(
       deletedDebtIds: [],
       deletedTransactionIds: [],
       pendingTransactionUpdateIds: {},
+      pendingGoalIds: [],
       lastWriteError: null,
       setServerConfigured: (serverConfigured) => set({ serverConfigured }),
       setAuthIdentity: ({ email, authMethod }) =>
@@ -134,6 +139,7 @@ export const useCloudStore = create<CloudState>()(
             deletedDebtIds: sameSession ? state.deletedDebtIds : [],
             deletedTransactionIds: sameSession ? state.deletedTransactionIds : [],
             pendingTransactionUpdateIds: sameSession ? state.pendingTransactionUpdateIds : {},
+            pendingGoalIds: sameSession ? state.pendingGoalIds : [],
             lastWriteError: null,
           };
         }),
@@ -211,6 +217,17 @@ export const useCloudStore = create<CloudState>()(
         }),
       setPendingTransactionUpdateIds: (pendingTransactionUpdateIds) =>
         set({ pendingTransactionUpdateIds }),
+      markGoalPending: (id) =>
+        set((s) => ({
+          pendingGoalIds: s.pendingGoalIds.includes(id)
+            ? s.pendingGoalIds
+            : [...s.pendingGoalIds, id],
+        })),
+      clearGoalPending: (id) =>
+        set((s) => ({
+          pendingGoalIds: s.pendingGoalIds.filter((item) => item !== id),
+        })),
+      setPendingGoalIds: (pendingGoalIds) => set({ pendingGoalIds }),
       clearSession: () =>
         set({
           token: null,
@@ -235,6 +252,7 @@ export const useCloudStore = create<CloudState>()(
           deletedDebtIds: [],
           deletedTransactionIds: [],
           pendingTransactionUpdateIds: {},
+          pendingGoalIds: [],
           lastWriteError: null,
         }),
       clearHouseholdSession: () =>
@@ -256,6 +274,7 @@ export const useCloudStore = create<CloudState>()(
           deletedDebtIds: [],
           deletedTransactionIds: [],
           pendingTransactionUpdateIds: {},
+          pendingGoalIds: [],
           lastWriteError: null,
         }),
     }),

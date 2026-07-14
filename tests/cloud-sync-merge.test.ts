@@ -194,3 +194,58 @@ test("applyHouseholdSync replaces local current-balance offsets from cloud balan
   useStore.setState(previousStore);
   useCloudStore.setState(previousCloud);
 });
+
+test("applyHouseholdSync keeps a pending local goal when remote sync is still behind", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    transactions: [],
+    categories: getDefaultCategories(),
+    savingsGoals: [
+      {
+        id: "goal-browser",
+        name: "Новая цель",
+        targetAmount: 100000,
+        savedAmount: 0,
+        deadline: "2026-09-01",
+        monthlyContribution: null,
+        kind: "custom",
+        emergencyMonths: null,
+        updatedAt: "2026-07-14T08:00:00.000Z",
+      },
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-14T08:05:00.000Z",
+    pendingGoalIds: ["goal-browser"],
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      savingsGoals: [],
+    }),
+    "token-1",
+  );
+
+  assert.equal(useStore.getState().savingsGoals.length, 1);
+  assert.equal(useStore.getState().savingsGoals[0]?.id, "goal-browser");
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});

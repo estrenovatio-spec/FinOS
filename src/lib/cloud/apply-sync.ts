@@ -45,7 +45,9 @@ export function applyHouseholdSync(
   const deletedDebts = new Set(cloud.deletedDebtIds ?? []);
   const deletedTransactions = new Set(cloud.deletedTransactionIds ?? []);
   const pendingTransactionUpdates = new Set(Object.keys(cloud.pendingTransactionUpdateIds ?? {}));
+  const pendingGoalIds = new Set(cloud.pendingGoalIds ?? []);
   const remoteTxIds = new Set(remote.transactions.map((t) => t.id));
+  const remoteGoalIds = new Set((remote.savingsGoals ?? []).map((g) => g.id));
 
   useCloudStore.getState().setSession(token, remote.household);
   useCloudStore.getState().setLastWriteError(null);
@@ -91,6 +93,7 @@ export function applyHouseholdSync(
     useCloudStore.getState().setDeletedDebtIds([]);
     useCloudStore.getState().setDeletedTransactionIds([]);
     useCloudStore.getState().setPendingTransactionUpdateIds({});
+    useCloudStore.getState().setPendingGoalIds([]);
     useCloudStore.getState().touchSync();
     useStore.setState({
       transactions: remote.transactions,
@@ -128,12 +131,18 @@ export function applyHouseholdSync(
     deletedTransactions,
     deletedDebts,
     pendingTransactionUpdates,
+    pendingGoalIds,
   );
 
   const savingsGoals = merged.savingsGoals.map((g) => applyGoalMonthlyToGoal(g));
   for (const id of pendingTransactionUpdates) {
     if (remoteTxIds.has(id)) {
       useCloudStore.getState().clearTransactionUpdatePending(id);
+    }
+  }
+  for (const id of pendingGoalIds) {
+    if (remoteGoalIds.has(id)) {
+      useCloudStore.getState().clearGoalPending(id);
     }
   }
 

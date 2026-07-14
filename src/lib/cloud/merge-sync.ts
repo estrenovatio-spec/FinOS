@@ -152,6 +152,7 @@ function mergePlanningByKey<T extends { updatedAt?: string }>(
   remote: T[],
   getKey: (item: T) => string,
   lastSyncedAt?: string | null,
+  pendingIds?: ReadonlySet<string>,
 ): T[] {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   const map = new Map<string, T>();
@@ -164,6 +165,10 @@ function mergePlanningByKey<T extends { updatedAt?: string }>(
     const key = getKey(item);
     const existing = map.get(key);
     if (!existing) {
+      if (pendingIds?.has(key)) {
+        map.set(key, item);
+        continue;
+      }
       if (!Number.isNaN(lastSyncedMs) && itemTime(item) <= lastSyncedMs) continue;
       map.set(key, item);
       continue;
@@ -214,8 +219,9 @@ export function mergeSavingsGoals(
   local: SavingsGoal[],
   remote: SavingsGoal[],
   lastSyncedAt?: string | null,
+  pendingIds?: ReadonlySet<string>,
 ): SavingsGoal[] {
-  return mergePlanningByKey(local, remote, (g) => g.id, lastSyncedAt);
+  return mergePlanningByKey(local, remote, (g) => g.id, lastSyncedAt, pendingIds);
 }
 
 export function mergeCategoryBudgets(
@@ -300,6 +306,7 @@ export function mergeSyncPayload(
   deletedTransactionIds?: ReadonlySet<string>,
   deletedDebtIds?: ReadonlySet<string>,
   pendingTransactionUpdateIds?: ReadonlySet<string>,
+  pendingGoalIds?: ReadonlySet<string>,
 ): MergedSyncResult {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   const remoteTxIds = new Set(remote.transactions.map((t) => t.id));
@@ -321,6 +328,7 @@ export function mergeSyncPayload(
     localPlanning.savingsGoals,
     remote.savingsGoals ?? [],
     lastSyncedAt,
+    pendingGoalIds,
   );
   const categoryBudgets = mergeCategoryBudgets(
     localPlanning.categoryBudgets,
@@ -352,7 +360,10 @@ export function mergeSyncPayload(
     return true;
   });
   const localOnlyGoalIds = localPlanning.savingsGoals
-    .filter((g) => Number.isNaN(lastSyncedMs) || itemTime(g) > lastSyncedMs)
+    .filter((g) => {
+      if (pendingGoalIds?.has(g.id)) return true;
+      return Number.isNaN(lastSyncedMs) || itemTime(g) > lastSyncedMs;
+    })
     .map((g) => g.id)
     .filter((id) => !remoteGoalIds.has(id));
   const localOnlyBudgetCategoryIds = localPlanning.categoryBudgets
