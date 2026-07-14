@@ -30,6 +30,7 @@ function emptyPlanningDefaults(sync: SyncPayload): SyncPayload {
 
 type ApplyHouseholdSyncOptions = {
   replace?: boolean;
+  pushLocalOnly?: boolean;
 };
 
 /** Слияние с локальными данными — обновление приложения не затирает операции */
@@ -38,6 +39,7 @@ export function applyHouseholdSync(
   token: string,
   opts?: ApplyHouseholdSyncOptions,
 ) {
+  const pushLocalOnly = opts?.pushLocalOnly !== false;
   const remote = emptyPlanningDefaults(sync);
   const local = useStore.getState();
   const cloud = useCloudStore.getState();
@@ -176,28 +178,30 @@ export function applyHouseholdSync(
   );
   useCloudStore.getState().setLastSyncedRemoteDebtIds((remote.debts ?? []).map((d) => d.id));
 
-  for (const id of merged.localOnlyTransactionIds) {
-    const tx = merged.transactions.find((t) => t.id === id);
-    if (tx) void cloudPushTransaction(tx);
-  }
-  for (const cat of merged.localOnlyCategories) {
-    void cloudPushCategory(cat);
-  }
-  for (const id of merged.localOnlyGoalIds) {
-    const goal = savingsGoals.find((g) => g.id === id);
-    if (goal) void cloudPushGoal(goal);
-  }
-  for (const categoryId of merged.localOnlyBudgetCategoryIds) {
-    const budget = merged.categoryBudgets.find((b) => b.categoryId === categoryId);
-    if (budget) void cloudPushCategoryBudget(budget);
-  }
-  for (const id of merged.localOnlyRecurringIds) {
-    if (deletedRecurring.has(id)) continue;
-    const item = merged.recurringTransactions.find((r) => r.id === id);
-    if (item) void cloudPushRecurring(item);
-  }
-  for (const id of merged.localOnlyDebtIds) {
-    const item = merged.debts.find((d) => d.id === id);
-    if (item) void cloudPushDebt(item);
+  if (pushLocalOnly) {
+    for (const id of merged.localOnlyTransactionIds) {
+      const tx = merged.transactions.find((t) => t.id === id);
+      if (tx) void cloudPushTransaction(tx);
+    }
+    for (const cat of merged.localOnlyCategories) {
+      void cloudPushCategory(cat);
+    }
+    for (const id of merged.localOnlyGoalIds) {
+      const goal = savingsGoals.find((g) => g.id === id);
+      if (goal) void cloudPushGoal(goal);
+    }
+    for (const categoryId of merged.localOnlyBudgetCategoryIds) {
+      const budget = merged.categoryBudgets.find((b) => b.categoryId === categoryId);
+      if (budget) void cloudPushCategoryBudget(budget);
+    }
+    for (const id of merged.localOnlyRecurringIds) {
+      if (deletedRecurring.has(id)) continue;
+      const item = merged.recurringTransactions.find((r) => r.id === id);
+      if (item) void cloudPushRecurring(item);
+    }
+    for (const id of merged.localOnlyDebtIds) {
+      const item = merged.debts.find((d) => d.id === id);
+      if (item) void cloudPushDebt(item);
+    }
   }
 }

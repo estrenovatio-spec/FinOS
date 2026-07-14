@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { applyHouseholdSync } from "@/lib/cloud/apply-sync";
 import { getCloudAuthBody, hasCloudAuth } from "@/lib/cloud/auth-payload";
-import { runHouseholdBootstrap } from "@/lib/cloud/bootstrap";
+import { applyBootstrapSyncPayload, runHouseholdBootstrap } from "@/lib/cloud/bootstrap";
 import { setCloudPaused } from "@/lib/cloud/cloud-pause";
 import {
   apiCreateHousehold,
@@ -311,9 +311,10 @@ export function useHouseholdCloud() {
       }
       setCloudPaused(false);
       if (result.sync && result.token) {
-        applyHouseholdSync(result.sync, result.token);
+        applyBootstrapSyncPayload(result.sync, result.token);
       } else if (result.token && result.household) {
         useCloudStore.getState().setSession(result.token, result.household);
+        useCloudStore.getState().setSyncBootstrapStatus("ready");
       }
       useCloudStore.getState().touchSync();
       return Boolean(result.token && result.household);

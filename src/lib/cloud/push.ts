@@ -44,6 +44,8 @@ function token(): string | null {
 }
 
 async function resolveWritableToken(): Promise<string | null> {
+  const bootstrapStatus = useCloudStore.getState().syncBootstrapStatus;
+  if (bootstrapStatus === "checking") return null;
   const current = token();
   if (current) return current;
   if (isCloudPaused() || isCloudRestoreInProgress()) return null;

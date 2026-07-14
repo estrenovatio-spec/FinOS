@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { canRunCloudBootstrap, runHouseholdBootstrap } from "@/lib/cloud/bootstrap";
+import {
+  applyBootstrapSyncPayload,
+  canRunCloudBootstrap,
+  runHouseholdBootstrap,
+} from "@/lib/cloud/bootstrap";
 import { apiConsumeWebLoginToken } from "@/lib/cloud/client";
 import { hasCloudAuth } from "@/lib/cloud/auth-payload";
 import { isCloudPaused, setCloudPaused } from "@/lib/cloud/cloud-pause";
-import { applyHouseholdSync } from "@/lib/cloud/apply-sync";
 import { waitForTelegramInitData, shouldWaitForTelegramInitData } from "@/lib/cloud/wait-telegram-init";
 import { hasTelegramWebApp } from "@/lib/cloud/telegram";
 import { useCloudAutoSync } from "@/hooks/useCloudAutoSync";
@@ -39,8 +42,11 @@ export function HouseholdCloudBootstrap() {
               authMethod: res.user.authMethod ?? "telegram",
             });
           }
-          if (res.sync) applyHouseholdSync(res.sync, res.token);
-          else useCloudStore.getState().setSession(res.token, res.household);
+          if (res.sync) applyBootstrapSyncPayload(res.sync, res.token);
+          else {
+            useCloudStore.getState().setSession(res.token, res.household);
+            useCloudStore.getState().setSyncBootstrapStatus("ready");
+          }
           useCloudStore.getState().touchSync();
           return;
         }

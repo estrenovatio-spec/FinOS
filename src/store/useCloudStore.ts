@@ -5,6 +5,7 @@ import type { HouseholdPublic } from "@/lib/household/types";
 import type { AccessSummaryPublic, SubscriptionPublic } from "@/lib/payments/types";
 import type { ReferralProfilePublic } from "@/lib/referrals/service";
 import { isValidSubscriptionPublic } from "@/lib/billing/subscription-shape";
+import type { InitialSyncDecision, SyncBootstrapStatus } from "@/lib/cloud/initial-sync";
 
 interface CloudState {
   token: string | null;
@@ -41,7 +42,11 @@ interface CloudState {
   pendingGoalIds: string[];
   /** Последняя ошибка записи в облако (операция остаётся локально) */
   lastWriteError: string | null;
+  syncBootstrapStatus: SyncBootstrapStatus;
+  lastInitialSyncDecision: InitialSyncDecision | null;
   setServerConfigured: (value: boolean) => void;
+  setSyncBootstrapStatus: (status: SyncBootstrapStatus) => void;
+  setLastInitialSyncDecision: (decision: InitialSyncDecision | null) => void;
   setAuthIdentity: (identity: {
     email?: string | null;
     authMethod?: "telegram" | "email" | null;
@@ -113,7 +118,11 @@ export const useCloudStore = create<CloudState>()(
       pendingTransactionUpdateIds: {},
       pendingGoalIds: [],
       lastWriteError: null,
+      syncBootstrapStatus: "idle",
+      lastInitialSyncDecision: null,
       setServerConfigured: (serverConfigured) => set({ serverConfigured }),
+      setSyncBootstrapStatus: (syncBootstrapStatus) => set({ syncBootstrapStatus }),
+      setLastInitialSyncDecision: (lastInitialSyncDecision) => set({ lastInitialSyncDecision }),
       setAuthIdentity: ({ email, authMethod }) =>
         set({
           authEmail: email ?? null,
@@ -141,6 +150,8 @@ export const useCloudStore = create<CloudState>()(
             pendingTransactionUpdateIds: sameSession ? state.pendingTransactionUpdateIds : {},
             pendingGoalIds: sameSession ? state.pendingGoalIds : [],
             lastWriteError: null,
+            syncBootstrapStatus: sameSession ? state.syncBootstrapStatus : "idle",
+            lastInitialSyncDecision: sameSession ? state.lastInitialSyncDecision : null,
           };
         }),
       setCloudUserId: (cloudUserId) => set({ cloudUserId }),
@@ -254,6 +265,8 @@ export const useCloudStore = create<CloudState>()(
           pendingTransactionUpdateIds: {},
           pendingGoalIds: [],
           lastWriteError: null,
+          syncBootstrapStatus: "idle",
+          lastInitialSyncDecision: null,
         }),
       clearHouseholdSession: () =>
         set({
@@ -276,11 +289,13 @@ export const useCloudStore = create<CloudState>()(
           pendingTransactionUpdateIds: {},
           pendingGoalIds: [],
           lastWriteError: null,
+          syncBootstrapStatus: "idle",
+          lastInitialSyncDecision: null,
         }),
     }),
     {
       name: "voicebudget-cloud",
-      version: 8,
+      version: 9,
       migrate: (persisted, version) => {
         const state = persisted as CloudState;
         let next = state;
@@ -339,12 +354,21 @@ export const useCloudStore = create<CloudState>()(
             authMethod: next.token ? "telegram" : null,
           };
         }
+        if (version < 9) {
+          next = {
+            ...next,
+            syncBootstrapStatus: "idle",
+            lastInitialSyncDecision: null,
+          };
+        }
         next = {
           ...next,
           authEmail: next.authEmail ?? null,
-          authMethod: next.authMethod ?? null,
-          pendingTransactionUpdateIds: next.pendingTransactionUpdateIds ?? {},
-        };
+            authMethod: next.authMethod ?? null,
+            pendingTransactionUpdateIds: next.pendingTransactionUpdateIds ?? {},
+            syncBootstrapStatus: next.syncBootstrapStatus ?? "idle",
+            lastInitialSyncDecision: next.lastInitialSyncDecision ?? null,
+          };
         return next;
       },
       onRehydrateStorage: () => () => {

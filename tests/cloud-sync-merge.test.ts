@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyHouseholdSync } from "@/lib/cloud/apply-sync";
+import {
+  isMeaningfullyEmptyLocalState,
+  resolveInitialSyncDecision,
+} from "@/lib/cloud/initial-sync";
 import { mergeMoneySetup } from "@/lib/cloud/merge-sync";
 import type { HouseholdPublic, SyncPayload } from "@/lib/household/types";
 import { emptyMoneySetup, type MoneySetup } from "@/lib/money-setup";
@@ -245,6 +249,163 @@ test("applyHouseholdSync keeps a pending local goal when remote sync is still be
 
   assert.equal(useStore.getState().savingsGoals.length, 1);
   assert.equal(useStore.getState().savingsGoals[0]?.id, "goal-browser");
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("default local state with only system categories is meaningfully empty", () => {
+  assert.equal(
+    isMeaningfullyEmptyLocalState({
+      transactions: [],
+      categories: getDefaultCategories(),
+      savingsGoals: [],
+      categoryBudgets: [],
+      recurringTransactions: [],
+      debts: [],
+      moneySetup: emptyMoneySetup(),
+      cashOffsetMe: 0,
+      cashOffsetPartner: 0,
+    }),
+    true,
+  );
+});
+
+test("initial sync downloads cloud when local device is empty", () => {
+  const decision = resolveInitialSyncDecision({
+    localState: {
+      transactions: [],
+      categories: getDefaultCategories(),
+      savingsGoals: [],
+      categoryBudgets: [],
+      recurringTransactions: [],
+      debts: [],
+      moneySetup: emptyMoneySetup(),
+      cashOffsetMe: 0,
+      cashOffsetPartner: 0,
+    },
+    cloudSync: makeSyncPayload({
+      transactions: [
+        {
+          id: "tx-1",
+          amount: 500,
+          type: "expense",
+          categoryId: "groceries",
+          currency: "RUB",
+          note: "Продукты",
+          date: "2026-07-14",
+          owner: "me",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(decision, "download_cloud");
+});
+
+test("initial sync merges when both local and cloud already have meaningful data", () => {
+  const decision = resolveInitialSyncDecision({
+    localState: {
+      transactions: [],
+      categories: [
+        ...getDefaultCategories(),
+        {
+          id: "custom-cat",
+          type: "expense",
+          labels: { ru: "Свое", en: "Custom" },
+          keywords: [],
+          isSystem: false,
+        },
+      ],
+      savingsGoals: [],
+      categoryBudgets: [],
+      recurringTransactions: [],
+      debts: [],
+      moneySetup: emptyMoneySetup(),
+      cashOffsetMe: 0,
+      cashOffsetPartner: 0,
+    },
+    cloudSync: makeSyncPayload({
+      savingsGoals: [
+        {
+          id: "goal-1",
+          name: "Подушка",
+          targetAmount: 100000,
+          savedAmount: 0,
+          deadline: "2026-12-31",
+          monthlyContribution: null,
+          kind: "custom",
+          emergencyMonths: null,
+          updatedAt: "2026-07-14T08:00:00.000Z",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(decision, "merge");
+});
+
+test("applyHouseholdSync updates goal deadline from newer remote goal", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    transactions: [],
+    categories: getDefaultCategories(),
+    savingsGoals: [
+      {
+        id: "goal-browser",
+        name: "Отпуск",
+        targetAmount: 80000,
+        savedAmount: 0,
+        deadline: null,
+        monthlyContribution: null,
+        kind: "custom",
+        emergencyMonths: null,
+        updatedAt: "2026-07-14T08:00:00.000Z",
+      },
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-14T08:05:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      savingsGoals: [
+        {
+          id: "goal-browser",
+          name: "Отпуск",
+          targetAmount: 80000,
+          savedAmount: 0,
+          deadline: "2026-12-31",
+          monthlyContribution: null,
+          kind: "custom",
+          emergencyMonths: null,
+          updatedAt: "2026-07-14T09:00:00.000Z",
+        },
+      ],
+    }),
+    "token-1",
+  );
+
+  assert.equal(useStore.getState().savingsGoals[0]?.deadline, "2026-12-31");
 
   useStore.setState(previousStore);
   useCloudStore.setState(previousCloud);
