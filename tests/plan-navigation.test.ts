@@ -67,5 +67,7 @@ test("page wires Plan tab state separately from Forecast focus", () => {
 test("legacy tab state migrates recurring and regulars into plan recurring", () => {
   assert.match(tabStorageSource, /raw === "business" \|\| raw === "recurring" \|\| raw === "regulars"/);
   assert.match(planStorageSource, /case "regulars":/);
+  assert.match(planStorageSource, /search\.get\("tab"\)/);
+  assert.match(planStorageSource, /LEGACY_TAB_STORAGE_KEY/);
   assert.match(planStorageSource, /return "recurring"/);
 });

@@ -53,7 +53,7 @@ export function AppBottomNav({
               type="button"
               onClick={() => onChange(id)}
               className={[
-                "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium leading-tight transition-colors",
+                "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[9px] font-medium leading-tight transition-colors sm:px-1 sm:text-[10px]",
                 selected
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",
