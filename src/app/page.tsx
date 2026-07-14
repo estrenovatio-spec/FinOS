@@ -12,7 +12,7 @@ import { TodayScreen } from "@/components/TodayScreen";
 import { EmailSyncOnboardingDialog } from "@/components/EmailSyncOnboardingDialog";
 import { ForecastTab } from "@/components/app/ForecastTab";
 import { OperationsTab } from "@/components/app/OperationsTab";
-import { RecurringTab } from "@/components/app/RecurringTab";
+import { PlanTab } from "@/components/app/PlanTab";
 import { SettingsTab } from "@/components/app/SettingsTab";
 import {
   bottomNavEnabled,
@@ -20,6 +20,11 @@ import {
   writeStoredAppTab,
   type AppTabId,
 } from "@/lib/app-bottom-nav";
+import {
+  readStoredPlanSection,
+  writeStoredPlanSection,
+  type PlanSection,
+} from "@/lib/plan-navigation";
 import { FamilyOnboarding } from "@/components/FamilyOnboarding";
 import { detectLocale } from "@/lib/i18n";
 import type { ForecastFocus } from "@/lib/forecast-focus";
@@ -33,7 +38,11 @@ function TodayTabContent({
 }: {
   onNavigateToTab: (
     tab: AppTabId,
-    options?: { forecastFocus?: ForecastFocus | null },
+    options?: {
+      forecastFocus?: ForecastFocus | null;
+      planSection?: PlanSection;
+      entityId?: string | null;
+    },
   ) => void;
 }) {
   return <TodayScreen onNavigateToTab={onNavigateToTab} />;
@@ -45,14 +54,24 @@ function OperationsTabContent() {
 
 function ForecastTabContent({
   focus,
+  onOpenPlan,
 }: {
   focus: ForecastFocus | null;
+  onOpenPlan: (params: { section: PlanSection; entityId?: string | null }) => void;
 }) {
-  return <ForecastTab focus={focus} />;
+  return <ForecastTab focus={focus} onOpenPlan={onOpenPlan} />;
 }
 
-function RecurringTabContent() {
-  return <RecurringTab />;
+function PlanTabContent({
+  section,
+  entityId,
+  onSectionChange,
+}: {
+  section: PlanSection;
+  entityId: string | null;
+  onSectionChange: (section: PlanSection) => void;
+}) {
+  return <PlanTab section={section} entityId={entityId} onSectionChange={onSectionChange} />;
 }
 
 function SettingsTabContent() {
@@ -65,18 +84,27 @@ export default function HomePage() {
   const previewMode = bottomNavEnabled();
   const [appView, setAppView] = useState<AppTabId>("today");
   const [forecastFocus, setForecastFocus] = useState<ForecastFocus | null>(null);
+  const [planSection, setPlanSection] = useState<PlanSection>("recurring");
+  const [planEntityId, setPlanEntityId] = useState<string | null>(null);
 
   useEffect(() => {
     clearDismissibleHintKeys();
   }, []);
 
   useEffect(() => {
-    if (previewMode) setAppView(readStoredAppTab());
+    if (previewMode) {
+      setAppView(readStoredAppTab());
+      setPlanSection(readStoredPlanSection());
+    }
   }, [previewMode]);
 
   const onAppViewChange = useCallback((
     tab: AppTabId,
-    options?: { forecastFocus?: ForecastFocus | null },
+    options?: {
+      forecastFocus?: ForecastFocus | null;
+      planSection?: PlanSection;
+      entityId?: string | null;
+    },
   ) => {
     setForecastFocus((current) => {
       if (tab !== "forecast") return null;
@@ -85,8 +113,18 @@ export default function HomePage() {
       }
       return current;
     });
+    setPlanEntityId(tab === "plan" ? options?.entityId ?? null : null);
+    if (tab === "plan" && options?.planSection) {
+      setPlanSection(options.planSection);
+      writeStoredPlanSection(options.planSection);
+    }
     setAppView(tab);
     writeStoredAppTab(tab);
+  }, []);
+
+  const onPlanSectionChange = useCallback((section: PlanSection) => {
+    setPlanSection(section);
+    writeStoredPlanSection(section);
   }, []);
 
   useEffect(() => {
@@ -106,8 +144,21 @@ export default function HomePage() {
 
   const today = <TodayTabContent onNavigateToTab={onAppViewChange} />;
   const operations = <OperationsTabContent />;
-  const forecast = <ForecastTabContent focus={forecastFocus} />;
-  const recurring = <RecurringTabContent />;
+  const forecast = (
+    <ForecastTabContent
+      focus={forecastFocus}
+      onOpenPlan={({ section, entityId }) =>
+        onAppViewChange("plan", { planSection: section, entityId: entityId ?? null })
+      }
+    />
+  );
+  const plan = (
+    <PlanTabContent
+      section={planSection}
+      entityId={planEntityId}
+      onSectionChange={onPlanSectionChange}
+    />
+  );
   const settings = <SettingsTabContent />;
 
   return (
@@ -131,7 +182,7 @@ export default function HomePage() {
           todayContent={today}
           operationsContent={operations}
           forecastContent={forecast}
-          recurringContent={recurring}
+          planContent={plan}
           settingsContent={settings}
           previewNav={{ active: appView, onChange: onAppViewChange }}
         />

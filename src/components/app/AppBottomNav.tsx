@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  CalendarSync,
+  Target,
   ChartColumn,
   House,
   ReceiptText,
@@ -25,7 +25,7 @@ export const APP_BOTTOM_NAV_TABS: {
   { id: "today", icon: House, labelKey: "appTabHome" },
   { id: "operations", icon: ReceiptText, labelKey: "appTabSummary" },
   { id: "forecast", icon: ChartColumn, labelKey: "appTabAdvisor" },
-  { id: "recurring", icon: CalendarSync, labelKey: "appTabBusiness" },
+  { id: "plan", icon: Target, labelKey: "appTabBusiness" },
   { id: "settings", icon: Settings, labelKey: "appTabMore" },
 ];
 
@@ -53,7 +53,7 @@ export function AppBottomNav({
               type="button"
               onClick={() => onChange(id)}
               className={[
-                "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition-colors",
+                "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium leading-tight transition-colors",
                 selected
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",
@@ -61,7 +61,7 @@ export function AppBottomNav({
               aria-current={selected ? "page" : undefined}
             >
               <Icon className="h-5 w-5 shrink-0" aria-hidden />
-              <span className="max-w-full truncate">{t(locale, labelKey)}</span>
+              <span className="max-w-full text-center whitespace-normal">{t(locale, labelKey)}</span>
             </button>
           );
         })}

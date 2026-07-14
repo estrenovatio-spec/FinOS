@@ -9,14 +9,14 @@ export function PreviewAppShell({
   todayContent,
   operationsContent,
   forecastContent,
-  recurringContent,
+  planContent,
   settingsContent,
   previewNav,
 }: {
   todayContent: ReactNode;
   operationsContent: ReactNode;
   forecastContent: ReactNode;
-  recurringContent: ReactNode;
+  planContent: ReactNode;
   settingsContent: ReactNode;
   previewNav: { active: AppTabId; onChange: (tab: AppTabId) => void };
 }) {
@@ -39,7 +39,7 @@ export function PreviewAppShell({
         <div className="space-y-2">{operationsContent}</div>
       ) : null}
       {active === "forecast" ? <div className="space-y-2">{forecastContent}</div> : null}
-      {active === "recurring" ? <div className="space-y-2">{recurringContent}</div> : null}
+      {active === "plan" ? <div className="space-y-2">{planContent}</div> : null}
       {active === "settings" ? <div className="space-y-2">{settingsContent}</div> : null}
       <AppBottomNav active={active} onChange={changeTab} />
     </>

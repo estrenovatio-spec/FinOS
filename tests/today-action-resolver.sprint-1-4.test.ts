@@ -121,7 +121,7 @@ test("confirm_payment uses the existing idempotent payment confirmation flow", a
 
 test("forecast and recurring commands navigate through existing tabs without routes", async () => {
   const visitedTabs: string[] = [];
-  const receivedFocus: unknown[] = [];
+  const receivedOptions: unknown[] = [];
   const executor = {
     confirmPendingTransaction() {
       return false;
@@ -135,9 +135,12 @@ test("forecast and recurring commands navigate through existing tabs without rou
     openQuickAdd() {
       assert.fail("quick add should not open in navigation test");
     },
-    navigateToTab(tab: string, options?: { forecastFocus?: unknown }) {
+    navigateToTab(
+      tab: string,
+      options?: { forecastFocus?: unknown; planSection?: string; entityId?: string | null },
+    ) {
       visitedTabs.push(tab);
-      receivedFocus.push(options?.forecastFocus ?? null);
+      receivedOptions.push(options ?? null);
     },
   };
 
@@ -155,15 +158,20 @@ test("forecast and recurring commands navigate through existing tabs without rou
   );
 
   assert.deepEqual([forecastResult, recurringResult], [{ ok: true }, { ok: true }]);
-  assert.deepEqual(visitedTabs, ["forecast", "recurring"]);
-  assert.deepEqual(receivedFocus, [
+  assert.deepEqual(visitedTabs, ["forecast", "plan"]);
+  assert.deepEqual(receivedOptions, [
     {
-      date: "2026-07-15",
-      source: "today_main_action",
-      reason: "future_deficit",
-      eventId: null,
+      forecastFocus: {
+        date: "2026-07-15",
+        source: "today_main_action",
+        reason: "future_deficit",
+        eventId: null,
+      },
     },
-    null,
+    {
+      planSection: "recurring",
+      entityId: "rent",
+    },
   ]);
 });
 

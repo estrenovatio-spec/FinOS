@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  CalendarSync,
   ChartColumn,
   House,
   Settings,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AppTabId } from "@/lib/app-bottom-nav";
@@ -59,14 +59,14 @@ export function PreviewHeaderNav({
       </Button>
       <Button
         type="button"
-        variant={active === "recurring" ? "default" : "outline"}
+        variant={active === "plan" ? "default" : "outline"}
         size="icon"
         className="h-8 w-8 shrink-0"
         aria-label={t(locale, "appTabBusiness")}
-        aria-current={active === "recurring" ? "page" : undefined}
-        onClick={() => onChange("recurring")}
+        aria-current={active === "plan" ? "page" : undefined}
+        onClick={() => onChange("plan")}
       >
-        <CalendarSync className="h-4 w-4" aria-hidden />
+        <Target className="h-4 w-4" aria-hidden />
       </Button>
       <Button
         type="button"

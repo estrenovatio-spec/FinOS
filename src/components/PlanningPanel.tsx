@@ -56,7 +56,7 @@ import type { DebtItem, RecurringFrequency, SavingsGoal } from "@/types/planning
 
 const HOUSEHOLD_DEBT_STRATEGY_KEY = "voicebudget-household-debt-strategy";
 
-type PlanningTab =
+export type PlanningTab =
   | "goals"
   | "funds"
   | "limits"
@@ -65,6 +65,17 @@ type PlanningTab =
   | "recurring"
   | "stats"
   | "advisor";
+
+const DEFAULT_VISIBLE_TABS: PlanningTab[] = [
+  "goals",
+  "funds",
+  "limits",
+  "debts",
+  "emergency",
+  "recurring",
+  "stats",
+  "advisor",
+];
 
 type RecurringPreset =
   | "weekly_1"
@@ -272,7 +283,19 @@ function sortGoalsByPriority(goals: SavingsGoal[], transactions: Transaction[]):
   });
 }
 
-export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } = {}) {
+export function PlanningPanel({
+  collapsible = true,
+  activeTab,
+  onActiveTabChange,
+  visibleTabs = DEFAULT_VISIBLE_TABS,
+  focusEntityId = null,
+}: {
+  collapsible?: boolean;
+  activeTab?: PlanningTab;
+  onActiveTabChange?: (tab: PlanningTab) => void;
+  visibleTabs?: PlanningTab[];
+  focusEntityId?: string | null;
+} = {}) {
   const locale = useStore((s) => s.locale);
   const transactions = useTransactions();
   const categories = useCategories();
@@ -362,7 +385,38 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
   const [editDebtOwner, setEditDebtOwner] = useState<DebtItem["owner"]>("all");
   const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
   const [recurringFilter, setRecurringFilter] = useState<"unpaid" | "paid" | "all">("unpaid");
-  const [planningTab, setPlanningTab] = useState<PlanningTab>("goals");
+  const [planningTab, setPlanningTab] = useState<PlanningTab>(
+    activeTab && visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0] ?? "goals",
+  );
+  const currentPlanningTab =
+    activeTab && visibleTabs.includes(activeTab) ? activeTab : planningTab;
+
+  useEffect(() => {
+    if (activeTab && visibleTabs.includes(activeTab)) return;
+    if (visibleTabs.includes(planningTab)) return;
+    setPlanningTab(visibleTabs[0] ?? "goals");
+  }, [activeTab, planningTab, visibleTabs]);
+
+  useEffect(() => {
+    if (!focusEntityId) return;
+    const element = document.querySelector<HTMLElement>(
+      `[data-plan-entity-id="${focusEntityId}"]`,
+    );
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusEntityId, currentPlanningTab]);
+
+  const changePlanningTab = useCallback(
+    (value: string) => {
+      const next = value as PlanningTab;
+      if (!visibleTabs.includes(next)) return;
+      if (!activeTab) {
+        setPlanningTab(next);
+      }
+      onActiveTabChange?.(next);
+    },
+    [activeTab, onActiveTabChange, visibleTabs],
+  );
 
   const customGoals = useMemo(
     () =>
@@ -776,34 +830,51 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
       />
       {open ? (
         <CardContent className={homeSectionContentClassName}>
-          <Tabs value={planningTab} onValueChange={(value) => setPlanningTab(value as PlanningTab)}>
-            <TabsList className="mb-3 grid h-auto w-full grid-cols-4 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1 shadow-sm">
-              <TabsTrigger value="goals" className={planningTabClass}>
-                {t(locale, "planningTabGoals")}
-              </TabsTrigger>
-              <TabsTrigger value="funds" className={planningTabClass}>
-                {t(locale, "planningTabFunds")}
-              </TabsTrigger>
-              <TabsTrigger value="limits" className={planningTabClass}>
-                {t(locale, "planningTabLimits")}
-              </TabsTrigger>
-              <TabsTrigger value="debts" className={planningTabClass}>
-                {locale === "ru" ? "Долги" : "Debts"}
-              </TabsTrigger>
-              <TabsTrigger value="emergency" className={planningTabClass}>
-                {t(locale, "planningTabEmergency")}
-              </TabsTrigger>
-              <TabsTrigger value="recurring" className={planningTabClass}>
-                {t(locale, "planningTabRecurring")}
-              </TabsTrigger>
-              <TabsTrigger value="stats" className={planningTabClass}>
-                {locale === "ru" ? "Статистика" : "Stats"}
-              </TabsTrigger>
-              <TabsTrigger value="advisor" className={planningTabClass}>
-                {locale === "ru" ? "Советник" : "Advisor"}
-              </TabsTrigger>
+          <Tabs value={currentPlanningTab} onValueChange={changePlanningTab}>
+            <TabsList className="mb-3 grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1 shadow-sm sm:grid-cols-3">
+              {visibleTabs.includes("goals") ? (
+                <TabsTrigger value="goals" className={planningTabClass}>
+                  {t(locale, "planningTabGoals")}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("funds") ? (
+                <TabsTrigger value="funds" className={planningTabClass}>
+                  {t(locale, "planningTabFunds")}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("limits") ? (
+                <TabsTrigger value="limits" className={planningTabClass}>
+                  {t(locale, "planningTabLimits")}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("debts") ? (
+                <TabsTrigger value="debts" className={planningTabClass}>
+                  {locale === "ru" ? "Долги" : "Debts"}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("emergency") ? (
+                <TabsTrigger value="emergency" className={planningTabClass}>
+                  {t(locale, "planningTabEmergency")}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("recurring") ? (
+                <TabsTrigger value="recurring" className={planningTabClass}>
+                  {t(locale, "planningTabRecurring")}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("stats") ? (
+                <TabsTrigger value="stats" className={planningTabClass}>
+                  {locale === "ru" ? "Статистика" : "Stats"}
+                </TabsTrigger>
+              ) : null}
+              {visibleTabs.includes("advisor") ? (
+                <TabsTrigger value="advisor" className={planningTabClass}>
+                  {locale === "ru" ? "Советник" : "Advisor"}
+                </TabsTrigger>
+              ) : null}
             </TabsList>
 
+            {visibleTabs.includes("goals") ? (
             <TabsContent value="goals" className="space-y-3">
               {customGoals.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t(locale, "planningGoalEmpty")}</p>
@@ -818,7 +889,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                     goal.deadline,
                   );
                   return (
-                    <div key={goal.id} className="space-y-2 rounded-lg border p-3">
+                    <div key={goal.id} data-plan-entity-id={goal.id} className="space-y-2 rounded-lg border p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="font-medium">{goal.name}</p>
@@ -997,7 +1068,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 </Button>
               </div>
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("funds") ? (
             <TabsContent value="funds" className="space-y-3">
               <div className="rounded-lg border bg-muted/40 p-3">
                 <button
@@ -1024,7 +1097,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 <p className="text-sm text-muted-foreground">{t(locale, "planningFundEmpty")}</p>
               ) : (
                 funds.map((fund) => (
-                  <div key={fund.id} className="space-y-2 rounded-lg border p-3">
+                  <div key={fund.id} data-plan-entity-id={fund.id} className="space-y-2 rounded-lg border p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-medium">{fund.name}</p>
@@ -1130,7 +1203,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 </Button>
               </div>
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("limits") ? (
             <TabsContent value="limits" className="space-y-3">
               <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
                 <p className="text-sm font-medium">{t(locale, "budgetMonthStart")}</p>
@@ -1168,7 +1243,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                   const over = spent > budget.monthlyLimit;
                   const label = getCategoryLabel(budget.categoryId, categories, locale);
                   return (
-                    <div key={budget.categoryId} className="space-y-2 rounded-lg border p-3">
+                    <div key={budget.categoryId} data-plan-entity-id={budget.categoryId} className="space-y-2 rounded-lg border p-3">
                       <div className="flex items-center justify-between">
                         <p className="font-medium">{label}</p>
                         <Button
@@ -1220,7 +1295,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 <Button onClick={handleSetLimit}>{t(locale, "planningLimitSet")}</Button>
               </div>
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("debts") ? (
             <TabsContent value="debts" className="space-y-3">
               <div className="rounded-lg border border-amber-300/70 bg-amber-50/70 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/25">
                 <div className="flex items-start gap-2">
@@ -1301,7 +1378,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                     debt.balance <= 0 ? 100 : debt.minPayment > 0 ? Math.min(100, Math.round((debt.minPayment / debt.balance) * 100)) : 0;
                   const overdue = debt.nextPaymentDate ? debt.nextPaymentDate < todayIso() : false;
                   return (
-                    <div key={debt.id} className="space-y-2 rounded-lg border p-3">
+                    <div key={debt.id} data-plan-entity-id={debt.id} className="space-y-2 rounded-lg border p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="font-medium leading-tight">{debt.name}</p>
@@ -1513,7 +1590,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 </Button>
               </div>
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("emergency") ? (
             <TabsContent value="emergency" className="space-y-3">
               <p className="text-sm text-muted-foreground">{t(locale, "planningEmergencyHint")}</p>
               <p className="text-sm">
@@ -1634,7 +1713,9 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 </div>
               )}
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("recurring") ? (
             <TabsContent value="recurring" className="space-y-3">
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {t(locale, "planningRecurringHint")}
@@ -1680,6 +1761,7 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                   return (
                     <div
                       key={item.id}
+                      data-plan-entity-id={item.id}
                       className={cn(
                         "rounded-lg border p-3",
                         item.enabled
@@ -1958,14 +2040,19 @@ export function PlanningPanel({ collapsible = true }: { collapsible?: boolean } 
                 </div>
               </div>
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("stats") ? (
             <TabsContent value="stats" className="space-y-3">
               <FinancialChart collapsible={false} />
             </TabsContent>
+            ) : null}
 
+            {visibleTabs.includes("advisor") ? (
             <TabsContent value="advisor" className="space-y-3">
-              <AiAnalysisTab active={planningTab === "advisor"} />
+              <AiAnalysisTab active={currentPlanningTab === "advisor"} />
             </TabsContent>
+            ) : null}
           </Tabs>
         </CardContent>
       ) : null}

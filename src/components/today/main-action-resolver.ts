@@ -1,6 +1,7 @@
 import type { AppTabId } from "@/lib/app-bottom-nav";
 import type { DecisionMainActionCommand } from "@/lib/decision-core/types";
 import type { ForecastFocus } from "@/lib/forecast-focus";
+import type { PlanSection } from "@/lib/plan-navigation";
 import type { Locale } from "@/types";
 
 export type TodayActionExecutionResult =
@@ -27,7 +28,11 @@ export type TodayActionExecutor = {
   openQuickAdd: () => void;
   navigateToTab: (
     tab: AppTabId,
-    options?: { forecastFocus?: ForecastFocus | null },
+    options?: {
+      forecastFocus?: ForecastFocus | null;
+      planSection?: PlanSection;
+      entityId?: string | null;
+    },
   ) => void;
 };
 
@@ -78,8 +83,8 @@ export function getMainActionButtonLabel(
       return locale === "ru" ? "Открыть прогноз" : "Open forecast";
     case "open_recurring_operations":
       return locale === "ru"
-        ? "Открыть регулярные операции"
-        : "Open recurring operations";
+        ? "Открыть план"
+        : "Open plan";
     case "add_transaction":
       return locale === "ru" ? "Добавить операцию" : "Add entry";
     case "none":
@@ -108,7 +113,10 @@ export async function executeMainActionCommand(
       });
       return { ok: true };
     case "open_recurring_operations":
-      executor.navigateToTab("recurring");
+      executor.navigateToTab("plan", {
+        planSection: "recurring",
+        entityId: command.recurringId ?? null,
+      });
       return { ok: true };
     case "add_transaction":
       executor.openQuickAdd();

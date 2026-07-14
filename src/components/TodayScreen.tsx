@@ -24,6 +24,7 @@ import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
+import type { PlanSection } from "@/lib/plan-navigation";
 import {
   calculateFreeMoneyUntilPeriodEnd,
   calculatePlannedFreeMoneyUntilPeriodEnd,
@@ -36,7 +37,11 @@ export function TodayScreen({
 }: {
   onNavigateToTab: (
     tab: AppTabId,
-    options?: { forecastFocus?: ForecastFocus | null },
+    options?: {
+      forecastFocus?: ForecastFocus | null;
+      planSection?: PlanSection;
+      entityId?: string | null;
+    },
   ) => void;
 }) {
   const locale = useStore((s) => s.locale);

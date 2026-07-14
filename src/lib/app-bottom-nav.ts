@@ -2,7 +2,7 @@ export type AppTabId =
   | "today"
   | "operations"
   | "forecast"
-  | "recurring"
+  | "plan"
   | "settings";
 
 const TAB_STORAGE_KEY = "vb_app_tab_v1";
@@ -22,14 +22,14 @@ export function readStoredAppTab(): AppTabId {
       raw === "today" ||
       raw === "operations" ||
       raw === "forecast" ||
-      raw === "recurring" ||
+      raw === "plan" ||
       raw === "settings"
     ) {
       return raw;
     }
     if (raw === "home" || raw === "family") return "today";
     if (raw === "advisor" || raw === "learn") return "forecast";
-    if (raw === "business") return "recurring";
+    if (raw === "business" || raw === "recurring" || raw === "regulars") return "plan";
     if (raw === "more") return "settings";
   } catch {
     /* ignore */
@@ -45,14 +45,14 @@ export function readRequestedAppTab(): AppTabId | null {
       raw === "today" ||
       raw === "operations" ||
       raw === "forecast" ||
-      raw === "recurring" ||
+      raw === "plan" ||
       raw === "settings"
     ) {
       return raw;
     }
     if (raw === "home" || raw === "family") return "today";
     if (raw === "advisor" || raw === "learn") return "forecast";
-    if (raw === "business") return "recurring";
+    if (raw === "business" || raw === "recurring" || raw === "regulars") return "plan";
     if (raw === "more") return "settings";
   } catch {
     /* ignore */

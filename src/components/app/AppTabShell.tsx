@@ -12,13 +12,13 @@ export function AppTabShell({
   todayContent,
   operationsContent,
   forecastContent,
-  recurringContent,
+  planContent,
   settingsContent,
 }: {
   todayContent: ReactNode;
   operationsContent: ReactNode;
   forecastContent: ReactNode;
-  recurringContent: ReactNode;
+  planContent: ReactNode;
   settingsContent: ReactNode;
 }) {
   const [tab, setTab] = useState<AppTabId>("today");
@@ -38,7 +38,7 @@ export function AppTabShell({
         {tab === "today" ? todayContent : null}
         {tab === "operations" ? operationsContent : null}
         {tab === "forecast" ? forecastContent : null}
-        {tab === "recurring" ? recurringContent : null}
+        {tab === "plan" ? planContent : null}
         {tab === "settings" ? settingsContent : null}
       </div>
       <AppBottomNav active={tab} onChange={changeTab} />

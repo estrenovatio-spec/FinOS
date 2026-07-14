@@ -2,10 +2,10 @@
 
 import { useMemo } from "react";
 import { FocusedForecastCard } from "@/components/app/FocusedForecastCard";
-import { PlanningPanel } from "@/components/PlanningPanel";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import type { ForecastFocus } from "@/lib/forecast-focus";
+import type { PlanSection } from "@/lib/plan-navigation";
 import {
   useHouseholdBalances,
   useStore,
@@ -23,8 +23,10 @@ function formatHorizonMonths(months: 1 | 3 | 6, locale: "ru" | "en"): string {
 
 export function ForecastTab({
   focus,
+  onOpenPlan,
 }: {
   focus: ForecastFocus | null;
+  onOpenPlan?: (params: { section: PlanSection; entityId?: string | null }) => void;
 }) {
   const locale = useStore((s) => s.locale);
   const forecastHorizonMonths = useStore((s) => s.forecastHorizonMonths);
@@ -71,6 +73,37 @@ export function ForecastTab({
     ],
   );
   const horizonMonths = snapshot.forecast.horizonMonths ?? forecastHorizonMonths;
+  const planLink = useMemo(() => {
+    const focusedEvent =
+      focus?.eventId != null
+        ? snapshot.forecast.events.find((event) => event.id === focus.eventId) ?? null
+        : null;
+    if (!focusedEvent) {
+      return { section: "recurring" as PlanSection, entityId: null };
+    }
+    if (focusedEvent.source === "essential_budget") {
+      return {
+        section: "limits" as PlanSection,
+        entityId: focusedEvent.budgetReserveItems?.[0]?.categoryId ?? null,
+      };
+    }
+    if (focusedEvent.source === "debt_payment") {
+      return { section: "debts" as PlanSection, entityId: null };
+    }
+    if (focusedEvent.source === "recurring") {
+      return {
+        section: "recurring" as PlanSection,
+        entityId: focusedEvent.recurringId ?? null,
+      };
+    }
+    if (focusedEvent.source === "income_source") {
+      return {
+        section: "recurring" as PlanSection,
+        entityId: focusedEvent.incomeSourceId ?? null,
+      };
+    }
+    return { section: "recurring" as PlanSection, entityId: null };
+  }, [focus?.eventId, snapshot.forecast.events]);
 
   return (
     <div className="space-y-3 py-1">
@@ -90,7 +123,13 @@ export function ForecastTab({
         focus={focus}
         explanation={snapshot.constraintExplanation}
       />
-      <PlanningPanel collapsible={false} />
+      <button
+        type="button"
+        className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+        onClick={() => onOpenPlan?.(planLink)}
+      >
+        {locale === "ru" ? "Изменить план" : "Edit plan"}
+      </button>
     </div>
   );
 }
