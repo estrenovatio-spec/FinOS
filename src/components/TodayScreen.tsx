@@ -9,7 +9,6 @@ import {
 import { TodayHero } from "@/components/today/TodayHero";
 import { TodayOverview } from "@/components/today/TodayOverview";
 import { TodayRatesCard } from "@/components/today/TodayRatesCard";
-import { TodaySecondaryInsights } from "@/components/today/TodaySecondaryInsights";
 import {
   executeMainActionCommand,
 } from "@/components/today/main-action-resolver";
@@ -279,12 +278,6 @@ export function TodayScreen({
 
   return (
     <div className="space-y-3 pb-24">
-      <section className="space-y-1 px-1 pt-1">
-        <h1 className="text-[1.45rem] font-semibold tracking-tight text-foreground">
-          {locale === "ru" ? "Сегодня" : "Today"}
-        </h1>
-      </section>
-
       <TodayHero
         hero={view.hero}
         actionBusy={actionBusy}
@@ -315,8 +308,6 @@ export function TodayScreen({
           </CardContent>
         </Card>
       ) : null}
-
-      <TodaySecondaryInsights avoid={view.avoid} peaceIndex={view.peaceIndex} />
 
       {liveRatesEnabled ? <TodayRatesCard locale={locale} /> : null}
 

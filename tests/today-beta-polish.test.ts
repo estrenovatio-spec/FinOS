@@ -147,7 +147,6 @@ test("empty user sees one primary setup action and no fake analytics", () => {
   assert.equal(view.overviewItems.length, 1);
   assert.equal(view.overviewItems[0]?.label, "Сейчас в кошельке");
   assert.equal(view.overviewItems[0]?.value, "Текущий остаток не указан");
-  assert.equal(view.peaceIndex, null);
 });
 
 test("hero shows executable CTA for income setup", () => {
@@ -198,7 +197,7 @@ test("hero without urgent action does not show forced CTA", () => {
 
   assert.equal(view.hero.ctaLabel, null);
   assert.match(view.hero.due ?? "", /25\.07\.2026/);
-  assert.equal(view.hero.title, "Сегодня всё спокойно");
+  assert.equal(view.hero.title, "Всё спокойно");
   assert.equal(view.hero.amount, null);
 });
 
@@ -695,7 +694,7 @@ test("reserve required keeps the reserve guidance in hero without duplicating a 
   assert.equal(view.overviewItems.length <= 2, true);
 });
 
-test("avoid is suppressed when it only repeats reserve wording", () => {
+test("today view no longer exposes avoid or peace index cards", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       mainAction: {
@@ -729,7 +728,8 @@ test("avoid is suppressed when it only repeats reserve wording", () => {
     balances: { all: 50000, me: 50000, partner: 0 },
   });
 
-  assert.equal(view.avoid, null);
+  assert.equal("avoid" in view, false);
+  assert.equal("peaceIndex" in view, false);
 });
 
 test("future deficit says money may run short", () => {
@@ -1158,6 +1158,27 @@ test("MoneySetupDialog with initialSection=current_balance shows the current bal
   assert.equal(view.prompt, "Сколько денег сейчас доступно?");
   assert.equal(view.inputLabel, "Доступно сейчас");
   assert.equal(view.showInlineSaveButton, true);
+});
+
+test("TodayScreen no longer renders the top Today heading or secondary insight cards", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/TodayScreen.tsx"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /<TodaySecondaryInsights/);
+  assert.doesNotMatch(source, /locale === "ru" \? "Сегодня" : "Today"/);
+});
+
+test("Settings tab now renders real app settings instead of services or business hubs", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/app/SettingsTab.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /<SettingsDialogNav open onOpenChange=\{\(\) => \{\}\} \/>/);
+  assert.doesNotMatch(source, /<MoreTab/);
+  assert.doesNotMatch(source, /<BusinessTab/);
 });
 
 test("setActualCash replaces the current balance instead of adding to it", () => {

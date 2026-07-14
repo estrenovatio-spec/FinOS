@@ -44,19 +44,11 @@ export type TodayPaymentsView = {
   items: DecisionTodayPayment[];
 };
 
-export type TodaySecondaryInsightView = {
-  title: string;
-  value: string;
-  caption?: string | null;
-};
-
 export type TodayScreenView = {
   hero: TodayHeroView;
   overviewTitle: string;
   overviewItems: TodayOverviewItem[];
   payments: TodayPaymentsView | null;
-  avoid: TodaySecondaryInsightView | null;
-  peaceIndex: TodaySecondaryInsightView | null;
   hiddenPrimaryPaymentId: string | null;
   showQuickAddHint: boolean;
 };
@@ -177,7 +169,7 @@ function buildHeroTitle(mainAction: DecisionMainAction, locale: Locale): string 
     case "complete_required_expenses_setup":
       return mainAction.title;
     case "hold":
-      return locale === "ru" ? "Сегодня всё спокойно" : "Today is calm";
+      return locale === "ru" ? "Всё спокойно" : "All calm";
     default:
       return mainAction.title;
   }
@@ -464,17 +456,6 @@ function buildPlannedFreeMoneyItem(
   };
 }
 
-function isAvoidDuplicate(mainAction: DecisionMainAction, text: string | null): boolean {
-  if (!text) return true;
-  if (mainAction.type === "reserve_for_risk") {
-    return text.toLocaleLowerCase("ru-RU").includes("резерв");
-  }
-  if (mainAction.type === "complete_income_setup" || mainAction.type === "complete_balance_setup") {
-    return true;
-  }
-  return false;
-}
-
 function buildOverview(input: TodayPresentationInput): {
   items: TodayOverviewItem[];
   hiddenPrimaryPaymentId: string | null;
@@ -526,36 +507,15 @@ function buildOverview(input: TodayPresentationInput): {
 }
 
 export function buildTodayScreenView(input: TodayPresentationInput): TodayScreenView {
-  const { decision, locale } = input;
+  const { locale } = input;
   const hero = buildHero(input);
   const overview = buildOverview(input);
-  const avoid =
-    decision.avoid.text && !isAvoidDuplicate(decision.mainAction, decision.avoid.text)
-      ? {
-          title: locale === "ru" ? "Сегодня лучше не делать" : "Better not today",
-          value: decision.avoid.text,
-          caption: decision.avoid.reason ?? null,
-        }
-      : null;
-  const peaceIndex =
-    hero.isEmptyState
-      ? null
-      : {
-          title:
-            locale === "ru"
-              ? `Индекс спокойствия: ${decision.peaceIndex.value} из 100`
-              : `Peace index: ${decision.peaceIndex.value} of 100`,
-          value: decision.peaceIndex.note,
-          caption: null,
-        };
 
   return {
     hero,
     overviewTitle: locale === "ru" ? "На сегодня" : "For today",
     overviewItems: overview.items,
     payments: overview.payments,
-    avoid,
-    peaceIndex,
     hiddenPrimaryPaymentId: overview.hiddenPrimaryPaymentId,
     showQuickAddHint: !hero.isEmptyState,
   };

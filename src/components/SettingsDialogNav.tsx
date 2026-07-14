@@ -2,22 +2,19 @@
 
 import { ChevronLeft } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { useTelegramBackHandler } from "@/hooks/useTelegramBackHandler";
-import { AiMemoryCenter } from "@/components/AiMemoryCenter";
-import { CategoryManager } from "@/components/CategoryManager";
-import { HelpFeedbackCard } from "@/components/HelpFeedbackCard";
-import { HelpFaqDialog } from "@/components/HelpFaqDialog";
+import { ArchiveRestorePanel } from "@/components/ArchiveRestorePanel";
 import { HouseholdCloudPanel } from "@/components/HouseholdCloudPanel";
 import { SettingsMenuRow } from "@/components/SettingsMenuRow";
 import { SettingsSection } from "@/components/SettingsSection";
 import { UpdateAppButton } from "@/components/UpdateAppButton";
-import { VehicleSettingsPanel } from "@/components/VehicleSettingsPanel";
+import { MoreReportsTab } from "@/components/app/MoreReportsTab";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { isCloudSyncActive } from "@/lib/cloud/push";
+import { useTelegramBackHandler } from "@/hooks/useTelegramBackHandler";
 import { defaultBusinessUnit } from "@/lib/business/types";
-import { t } from "@/lib/i18n";
 import { setCloudPaused } from "@/lib/cloud/cloud-pause";
+import { isCloudSyncActive } from "@/lib/cloud/push";
+import { t } from "@/lib/i18n";
 import { clearAppStorage } from "@/lib/storage-reset";
 import type { Locale } from "@/types";
 import { useBusinessStore } from "@/store/useBusinessStore";
@@ -27,26 +24,16 @@ import { useStore } from "@/store/useStore";
 type SettingsScreen =
   | "menu"
   | "language"
-  | "help"
-  | "memory"
-  | "categories"
-  | "vehicle"
-  | "cloud";
+  | "cloud"
+  | "export"
+  | "backup"
+  | "about";
 
 type MenuItem = {
-  id: Exclude<SettingsScreen, "menu">;
-  titleKey: Parameters<typeof t>[1];
-  descriptionKey?: Parameters<typeof t>[1];
-  danger?: boolean;
+  id: Exclude<SettingsScreen, "menu" | "cloud">;
+  title: string;
+  description?: string;
 };
-
-const MENU_ITEMS: MenuItem[] = [
-  { id: "categories", titleKey: "categoriesTitle", descriptionKey: "categoriesHint" },
-  { id: "memory", titleKey: "settingsFinancialMemory", descriptionKey: "settingsFinancialMemoryHint" },
-  { id: "vehicle", titleKey: "vehicleGarageTitle", descriptionKey: "vehicleHintMulti" },
-  { id: "help", titleKey: "helpTitle" },
-  { id: "language", titleKey: "settingsLanguage", descriptionKey: "settingsLanguageHint" },
-];
 
 export function SettingsDialogNav({
   open,
@@ -58,15 +45,44 @@ export function SettingsDialogNav({
   const locale = useStore((s) => s.locale);
   const forecastHorizonMonths = useStore((s) => s.forecastHorizonMonths);
   const setForecastHorizonMonths = useStore((s) => s.setForecastHorizonMonths);
+  const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
+  const setBudgetMonthStartDay = useStore((s) => s.setBudgetMonthStartDay);
   const setLocale = useStore((s) => s.setLocale);
-  const businessModeEnabled = useStore((s) => s.businessModeEnabled);
-  const liveRatesEnabled = useStore((s) => s.liveRatesEnabled);
-  const setBusinessModeEnabled = useStore((s) => s.setBusinessModeEnabled);
-  const setPassiveIncomeEnabled = useStore((s) => s.setPassiveIncomeEnabled);
-  const setLiveRatesEnabled = useStore((s) => s.setLiveRatesEnabled);
   const { toast } = useToast();
   const [screen, setScreen] = useState<SettingsScreen>("menu");
   const [confirmClear, setConfirmClear] = useState(false);
+
+  const menuItems: MenuItem[] = [
+    {
+      id: "language",
+      title: t(locale, "settingsLanguage"),
+      description: t(locale, "settingsLanguageHint"),
+    },
+    {
+      id: "export",
+      title: locale === "ru" ? "Экспорт данных" : "Export data",
+      description:
+        locale === "ru"
+          ? "Сохранить операции и отчёты в файл."
+          : "Save your entries and reports to a file.",
+    },
+    {
+      id: "backup",
+      title: locale === "ru" ? "Резервные копии и восстановление" : "Backups and restore",
+      description:
+        locale === "ru"
+          ? "Посмотреть копии и вернуть данные при необходимости."
+          : "Review backups and restore data if needed.",
+    },
+    {
+      id: "about",
+      title: locale === "ru" ? "О приложении" : "About the app",
+      description:
+        locale === "ru"
+          ? "Что умеет FIN OS и как обновить приложение."
+          : "What FIN OS does and how to update it.",
+    },
+  ];
 
   useEffect(() => {
     if (!open) {
@@ -148,20 +164,13 @@ export function SettingsDialogNav({
     toast(t(locale, "cloudDeviceResetDone"), "success");
   };
 
-  const activeItem = MENU_ITEMS.find((m) => m.id === screen);
   const cloudSectionTitle = locale === "ru" ? "Аккаунт и синхронизация" : "Account and sync";
-  const cloudSectionDescription =
-    locale === "ru"
-      ? "Вход по email, статус синхронизации и выход."
-      : "Email sign-in, sync status, and logout.";
   const dialogTitle =
     screen === "menu"
       ? t(locale, "settings")
-      : activeItem
-        ? activeItem.id === "cloud"
-          ? cloudSectionTitle
-          : t(locale, activeItem.titleKey)
-        : t(locale, "settings");
+      : screen === "cloud"
+        ? cloudSectionTitle
+        : menuItems.find((item) => item.id === screen)?.title ?? t(locale, "settings");
 
   const detailContent: Record<Exclude<SettingsScreen, "menu">, ReactNode> = {
     language: (
@@ -187,15 +196,6 @@ export function SettingsDialogNav({
         </div>
       </div>
     ),
-    help: (
-      <div className="space-y-3">
-        <HelpFaqDialog locale={locale} />
-        <HelpFeedbackCard locale={locale} />
-      </div>
-    ),
-    memory: <AiMemoryCenter />,
-    categories: <CategoryManager />,
-    vehicle: <VehicleSettingsPanel />,
     cloud: (
       <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
         <HouseholdCloudPanel embedded />
@@ -211,6 +211,23 @@ export function SettingsDialogNav({
           <Button variant="destructive" className="w-full" onClick={() => void handleClear()} type="button">
             {confirmClear ? t(locale, "clearDataConfirmAgain") : t(locale, "clearData")}
           </Button>
+        </div>
+        <UpdateAppButton />
+      </div>
+    ),
+    export: <MoreReportsTab />,
+    backup: <ArchiveRestorePanel />,
+    about: (
+      <div className="space-y-3">
+        <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {locale === "ru" ? "О приложении" : "About the app"}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {locale === "ru"
+              ? "FIN OS помогает следить за текущими деньгами, видеть будущие платежи и понимать, что по плану можно себе позволить."
+              : "FIN OS helps you track current money, see upcoming payments, and understand what you can afford under your plan."}
+          </p>
         </div>
         <UpdateAppButton />
       </div>
@@ -239,78 +256,106 @@ export function SettingsDialogNav({
         <div className="space-y-3">
           <SettingsSection
             title={cloudSectionTitle}
-            description={cloudSectionDescription}
+            description={
+              locale === "ru"
+                ? "Вход по email, синхронизация между устройствами и выход."
+                : "Email sign-in, sync between devices, and logout."
+            }
           >
             <HouseholdCloudPanel embedded />
           </SettingsSection>
-          <div className="space-y-2 rounded-xl border-2 border-primary/20 bg-primary/5 p-3">
-            <ToggleQuestionRow
-              locale={locale}
-              title={t(locale, "settingsBizQuestionBusiness")}
-              active={businessModeEnabled}
-              onChange={(next) => {
-                const enabled = next === "yes";
-                setBusinessModeEnabled(enabled);
-                setPassiveIncomeEnabled(false);
-              }}
-            />
-            <ToggleQuestionRow
-              locale={locale}
-              title={t(locale, "settingsOnlineRatesQuestion")}
-              active={liveRatesEnabled}
-              onChange={(next) => {
-                setLiveRatesEnabled(next === "yes");
-              }}
-            />
-          </div>
+
           <SettingsSection
-            title={locale === "ru" ? "Прогноз" : "Forecast"}
+            title={locale === "ru" ? "Приложение" : "App"}
             description={
               locale === "ru"
-                ? "Чем дальше горизонт, тем больше расчёт зависит от плановых данных."
-                : "The longer the horizon, the more the forecast relies on planned data."
+                ? "Язык, финансовый период и горизонт прогноза."
+                : "Language, financial period, and forecast horizon."
             }
           >
-            <div className="space-y-2">
-              <p className="text-sm font-semibold">
-                {locale === "ru" ? "Горизонт прогноза" : "Forecast horizon"}
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {[1, 3, 6].map((months) => (
-                  <Button
-                    key={months}
-                    type="button"
-                    variant={forecastHorizonMonths === months ? "default" : "outline"}
-                    className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs leading-tight"
-                    onClick={() => setForecastHorizonMonths(months as 1 | 3 | 6)}
-                  >
-                    {locale === "ru"
-                      ? months === 1
-                        ? "1 месяц"
-                        : months === 3
-                          ? "3 месяца"
-                          : "6 месяцев"
-                      : months === 1
-                        ? "1 month"
-                        : `${months} months`}
-                  </Button>
-                ))}
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">
+                  {locale === "ru" ? "Финансовый период" : "Financial period"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {locale === "ru"
+                    ? "Выберите день, с которого начинается ваш финансовый месяц."
+                    : "Choose the day your financial month starts."}
+                </p>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={budgetMonthStartDay}
+                  onChange={(event) => setBudgetMonthStartDay(Number(event.target.value))}
+                >
+                  {Array.from({ length: 28 }, (_, index) => index + 1).map((day) => (
+                    <option key={day} value={day}>
+                      {locale === "ru" ? `${day} число` : `Day ${day}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">
+                  {locale === "ru" ? "Горизонт прогноза" : "Forecast horizon"}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 3, 6].map((months) => (
+                    <Button
+                      key={months}
+                      type="button"
+                      variant={forecastHorizonMonths === months ? "default" : "outline"}
+                      className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs leading-tight"
+                      onClick={() => setForecastHorizonMonths(months as 1 | 3 | 6)}
+                    >
+                      {locale === "ru"
+                        ? months === 1
+                          ? "1 месяц"
+                          : months === 3
+                            ? "3 месяца"
+                            : "6 месяцев"
+                        : months === 1
+                          ? "1 month"
+                          : `${months} months`}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
           </SettingsSection>
-          {MENU_ITEMS.map((item) => (
-            <SettingsMenuRow
-              key={item.id}
-              title={t(locale, item.titleKey)}
-              description={
-                item.descriptionKey
-                  ? t(locale, item.descriptionKey)
-                  : undefined
-              }
-              danger={item.danger}
-              onClick={() => setScreen(item.id)}
-            />
-          ))}
+
+          <SettingsSection
+            title={locale === "ru" ? "Данные" : "Data"}
+            description={
+              locale === "ru"
+                ? "Экспортируйте данные и управляйте резервными копиями."
+                : "Export your data and manage backups."
+            }
+          >
+            <div className="space-y-2">
+              {menuItems
+                .filter((item) => item.id === "export" || item.id === "backup")
+                .map((item) => (
+                  <SettingsMenuRow
+                    key={item.id}
+                    title={item.title}
+                    description={item.description}
+                    onClick={() => setScreen(item.id)}
+                  />
+                ))}
+            </div>
+          </SettingsSection>
+
+          {menuItems
+            .filter((item) => item.id !== "export" && item.id !== "backup")
+            .map((item) => (
+              <SettingsMenuRow
+                key={item.id}
+                title={item.title}
+                description={item.description}
+                onClick={() => setScreen(item.id)}
+              />
+            ))}
         </div>
       ) : (
         <div className="min-h-[12rem] min-w-0 max-w-full overflow-hidden">
@@ -318,41 +363,5 @@ export function SettingsDialogNav({
         </div>
       )}
     </>
-  );
-}
-
-function ToggleQuestionRow({
-  locale,
-  title,
-  active,
-  onChange,
-}: {
-  locale: Locale;
-  title: string;
-  active: boolean;
-  onChange: (next: "yes" | "no") => void;
-}) {
-  return (
-    <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
-      <p className="text-sm font-semibold">{title}</p>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant={active ? "default" : "outline"}
-          className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs leading-tight"
-          onClick={() => onChange("yes")}
-        >
-          {t(locale, "yes")}
-        </Button>
-        <Button
-          type="button"
-          variant={!active ? "default" : "outline"}
-          className="h-auto min-h-9 whitespace-normal px-2 py-2 text-xs leading-tight"
-          onClick={() => onChange("no")}
-        >
-          {t(locale, "no")}
-        </Button>
-      </div>
-    </div>
   );
 }
