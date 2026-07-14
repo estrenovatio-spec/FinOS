@@ -17,6 +17,7 @@
     "test:cloud-auth": "node --import tsx --test tests/email-otp.test.ts tests/email-sender.test.ts tests/email-otp-service.test.ts",
     "test:currency": "node --import tsx --test tests/currency-widget.test.ts",
     "test:adviser": "node --import tsx --test tests/adviser-tab.test.ts",
+    "test:financial-calendar": "node --import tsx --test tests/financial-calendar.test.ts",
     "db:push": "node scripts/with-env-local.cjs npx prisma db push",
     "db:backup": "node scripts/with-env-local.cjs node scripts/backup-db.mjs",
     "env:check": "node scripts/check-env.cjs",

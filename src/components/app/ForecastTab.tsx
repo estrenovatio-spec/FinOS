@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ForecastCalendarView } from "@/components/app/ForecastCalendarView";
 import { FocusedForecastCard } from "@/components/app/FocusedForecastCard";
+import { Button } from "@/components/ui/button";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import type { ForecastFocus } from "@/lib/forecast-focus";
@@ -34,6 +36,7 @@ export function ForecastTab({
   const moneySetup = useStore((s) => s.moneySetup);
   const recurringTransactions = useStore((s) => s.recurringTransactions);
   const debts = useStore((s) => s.debts);
+  const savingsGoals = useStore((s) => s.savingsGoals);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
   const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
   const householdFilter = useStore((s) => s.householdFilter);
@@ -73,6 +76,7 @@ export function ForecastTab({
     ],
   );
   const horizonMonths = snapshot.forecast.horizonMonths ?? forecastHorizonMonths;
+  const [viewMode, setViewMode] = useState<"line" | "calendar">("line");
   const planLink = useMemo(() => {
     const focusedEvent =
       focus?.eventId != null
@@ -117,12 +121,41 @@ export function ForecastTab({
             : `Horizon: ${formatHorizonMonths(horizonMonths, locale)} · forecast until ${snapshot.forecast.horizonEndDate}.`}
         </p>
       </div>
-      <FocusedForecastCard
-        locale={locale}
-        forecast={snapshot.forecast}
-        focus={focus}
-        explanation={snapshot.constraintExplanation}
-      />
+      <div className="grid grid-cols-2 gap-2 sm:inline-flex sm:w-auto">
+        <Button
+          type="button"
+          variant={viewMode === "line" ? "default" : "outline"}
+          className="h-auto min-h-9 px-3 py-2 text-xs"
+          onClick={() => setViewMode("line")}
+        >
+          {locale === "ru" ? "Линия" : "Line"}
+        </Button>
+        <Button
+          type="button"
+          variant={viewMode === "calendar" ? "default" : "outline"}
+          className="h-auto min-h-9 px-3 py-2 text-xs"
+          onClick={() => setViewMode("calendar")}
+        >
+          {locale === "ru" ? "Календарь" : "Calendar"}
+        </Button>
+      </div>
+      {viewMode === "line" ? (
+        <FocusedForecastCard
+          locale={locale}
+          forecast={snapshot.forecast}
+          focus={focus}
+          explanation={snapshot.constraintExplanation}
+        />
+      ) : (
+        <ForecastCalendarView
+          locale={locale}
+          forecast={snapshot.forecast}
+          startDate={today}
+          goals={savingsGoals}
+          explanation={snapshot.constraintExplanation}
+          onOpenPlan={onOpenPlan}
+        />
+      )}
       <button
         type="button"
         className="text-sm font-medium text-primary underline-offset-4 hover:underline"
