@@ -127,12 +127,28 @@ export function useHouseholdCloud() {
   const pushToCloud = useCallback(async () => {
     const sessionToken = useCloudStore.getState().token;
     if (!sessionToken) return false;
-    const { transactions, categories } = useStore.getState();
+    const {
+      transactions,
+      categories,
+      savingsGoals,
+      categoryBudgets,
+      recurringTransactions,
+      debts,
+      moneySetup,
+    } = useStore.getState();
 
     setLoading(true);
     setError(null);
     try {
-      const res = await apiImportLocal(sessionToken, { transactions, categories });
+      const res = await apiImportLocal(sessionToken, {
+        transactions,
+        categories,
+        savingsGoals,
+        categoryBudgets,
+        recurringTransactions,
+        debts,
+        moneySetup,
+      });
       applyHouseholdSync(res.sync, sessionToken, { replace: shouldReplaceOnPull() });
       useCloudStore.getState().touchSync();
       return true;
@@ -158,6 +174,7 @@ export function useHouseholdCloud() {
       categoryBudgets,
       recurringTransactions,
       debts,
+      moneySetup,
     } = useStore.getState();
     setLoading(true);
     setError(null);
@@ -181,6 +198,7 @@ export function useHouseholdCloud() {
         categoryBudgets,
         recurringTransactions,
         debts,
+        moneySetup,
         replaceTransactions: true,
         replacePlanning: true,
       });

@@ -92,6 +92,7 @@ async function pushCurrentTransactionsSnapshot(
           categoryBudgets: local.categoryBudgets,
           recurringTransactions: local.recurringTransactions,
           debts: local.debts,
+          moneySetup: local.moneySetup,
         }
       : {}),
   });

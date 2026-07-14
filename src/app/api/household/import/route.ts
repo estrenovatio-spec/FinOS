@@ -4,6 +4,7 @@ import { dbUnavailable, forbidden, mapCloudGuardError, unauthorized } from "@/li
 import { requireSession } from "@/lib/api/household-auth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { importLocalSnapshot, assertMember } from "@/lib/household/service";
+import { MONEY_SETUP_INCOME_SOURCE_KINDS } from "@/lib/money-setup";
 
 const txSchema = z.object({
   id: z.string(),
@@ -53,8 +54,22 @@ const recurringSchema = z.object({
   intervalMonths: z.number().int().min(1).max(60).nullable().optional(),
   dayOfMonth: z.number().nullable(),
   nextRunDate: z.string(),
+  endDate: z.string().nullable().optional(),
   enabled: z.boolean(),
   skippedDates: z.array(z.string()).optional(),
+});
+
+const incomeSourceSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  expectedDate: z.string().nullable(),
+  expectedAmount: z.number().finite().nullable(),
+  kind: z.enum(MONEY_SETUP_INCOME_SOURCE_KINDS),
+  recurrence: z.enum(["once", "monthly"]).optional(),
+  intervalMonths: z.number().int().min(1).max(60).nullable().optional(),
+  dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  isPrimary: z.boolean().optional(),
 });
 
 const debtSchema = z.object({
@@ -69,6 +84,17 @@ const debtSchema = z.object({
   priority: z.enum(["normal", "high"]).optional(),
 });
 
+const moneySetupSchema = z.object({
+  nextIncomeDate: z.string().nullable(),
+  expectedIncomeAmount: z.number().finite().nullable(),
+  incomeSources: z.array(incomeSourceSchema).optional().default([]),
+  useHouseholdBalance: z.boolean(),
+  requiredRecurringIds: z.array(z.string()),
+  hasNoRequiredFixedExpenses: z.boolean().optional().default(false),
+  essentialCategoryIds: z.array(z.string()),
+  updatedAt: z.string().nullable(),
+});
+
 const bodySchema = z.object({
   transactions: z.array(txSchema),
   replaceTransactions: z.boolean().optional(),
@@ -77,6 +103,7 @@ const bodySchema = z.object({
   categoryBudgets: z.array(categoryBudgetSchema).optional(),
   recurringTransactions: z.array(recurringSchema).optional(),
   debts: z.array(debtSchema).optional(),
+  moneySetup: moneySetupSchema.optional(),
   categories: z
     .array(
       z.object({
@@ -135,6 +162,14 @@ export async function POST(req: NextRequest) {
         ...d,
         priority: d.priority ?? "normal",
       })),
+      moneySetup: body.moneySetup
+        ? {
+            ...body.moneySetup,
+            incomeSources: body.moneySetup.incomeSources ?? [],
+            hasNoRequiredFixedExpenses:
+              body.moneySetup.hasNoRequiredFixedExpenses ?? false,
+          }
+        : undefined,
       replaceTransactions: body.replaceTransactions === true,
       replacePlanning: body.replacePlanning === true,
     });

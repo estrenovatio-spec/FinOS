@@ -135,7 +135,7 @@ export function applyHouseholdSync(
     recurringTransactions: merged.recurringTransactions,
     debts: merged.debts,
     moneySetup: pruneMoneySetupIds(
-      normalizeMoneySetup(remote.moneySetup ?? merged.moneySetup ?? emptyMoneySetup()),
+      normalizeMoneySetup(merged.moneySetup ?? emptyMoneySetup()),
       merged.recurringTransactions,
       merged.categories,
     ),

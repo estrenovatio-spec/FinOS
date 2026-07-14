@@ -242,6 +242,7 @@ export async function apiImportLocal(
     categoryBudgets?: CategoryBudget[];
     recurringTransactions?: RecurringTransaction[];
     debts?: DebtItem[];
+    moneySetup?: MoneySetup;
   },
 ) {
   const res = await apiFetch("/api/household/import", {

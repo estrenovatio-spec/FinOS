@@ -1,6 +1,6 @@
 import { migrateCategoryId, sanitizeCategories } from "@/lib/categories";
 import type { SyncPayload } from "@/lib/household/types";
-import { normalizeMoneySetup, type MoneySetup } from "@/lib/money-setup";
+import { emptyMoneySetup, normalizeMoneySetup, type MoneySetup } from "@/lib/money-setup";
 import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
 
@@ -11,7 +11,7 @@ function txTime(tx: Transaction): number {
   return Number.isNaN(d) ? 0 : d;
 }
 
-function itemTime(item: { updatedAt?: string }): number {
+function itemTime(item: { updatedAt?: string | null }): number {
   const updated = item.updatedAt ? Date.parse(item.updatedAt) : NaN;
   return Number.isNaN(updated) ? 0 : updated;
 }
@@ -176,6 +176,40 @@ function mergePlanningByKey<T extends { updatedAt?: string }>(
   return Array.from(map.values());
 }
 
+function hasMeaningfulMoneySetup(setup: MoneySetup): boolean {
+  return Boolean(
+    setup.nextIncomeDate ||
+      setup.expectedIncomeAmount != null ||
+      setup.incomeSources.length > 0 ||
+      setup.essentialCategoryIds.length > 0 ||
+      setup.requiredRecurringIds.length > 0 ||
+      setup.hasNoRequiredFixedExpenses ||
+      setup.useHouseholdBalance,
+  );
+}
+
+export function mergeMoneySetup(
+  localRaw: MoneySetup | undefined,
+  remoteRaw: MoneySetup | undefined,
+): MoneySetup {
+  const local = normalizeMoneySetup(localRaw ?? emptyMoneySetup());
+  const remote = normalizeMoneySetup(remoteRaw ?? emptyMoneySetup());
+
+  const localHasData = hasMeaningfulMoneySetup(local);
+  const remoteHasData = hasMeaningfulMoneySetup(remote);
+  if (localHasData && !remoteHasData) return local;
+  if (remoteHasData && !localHasData) return remote;
+
+  const localUpdated = itemTime(local);
+  const remoteUpdated = itemTime(remote);
+  if (remoteUpdated > localUpdated) return remote;
+  if (localUpdated > remoteUpdated) return local;
+
+  if (remote.incomeSources.length > local.incomeSources.length) return remote;
+  if (local.incomeSources.length > remote.incomeSources.length) return local;
+  return remoteHasData ? remote : local;
+}
+
 export function mergeSavingsGoals(
   local: SavingsGoal[],
   remote: SavingsGoal[],
@@ -300,7 +334,7 @@ export function mergeSyncPayload(
     deletedRecurringIds,
   );
   const debts = mergeDebts(localPlanning.debts, remote.debts ?? [], lastSyncedAt, deletedDebtIds);
-  const moneySetup = normalizeMoneySetup(remote.moneySetup ?? localPlanning.moneySetup);
+  const moneySetup = mergeMoneySetup(localPlanning.moneySetup, remote.moneySetup);
 
   const localOnlyTransactionIds = localTransactions
     .map((t) => t.id)

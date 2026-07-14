@@ -572,6 +572,7 @@ export async function importLocalSnapshot(
     categoryBudgets?: CategoryBudget[];
     recurringTransactions?: RecurringTransaction[];
     debts?: DebtItem[];
+    moneySetup?: MoneySetup;
   },
 ) {
   await assertMember(userId, householdId);
@@ -702,8 +703,18 @@ export async function importLocalSnapshot(
     prisma.category.findMany({ where: { householdId } }).then((rows) => rows.map(dbCategoryToApp)),
     readHouseholdMoneySetup(householdId),
   ]);
+  const importedMoneySetup = data.moneySetup
+    ? withMoneySetupUpdatedAt(
+        pruneMoneySetupIds(
+          normalizeMoneySetup(data.moneySetup),
+          nextPlanning.recurringTransactions,
+          nextCategories,
+        ),
+        data.moneySetup.updatedAt ?? undefined,
+      )
+    : currentMoneySetup;
   const prunedMoneySetup = pruneMoneySetupIds(
-    currentMoneySetup,
+    importedMoneySetup,
     nextPlanning.recurringTransactions,
     nextCategories,
   );
