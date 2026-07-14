@@ -155,3 +155,42 @@ test("applyHouseholdSync does not wipe local income sources when remote sync has
   useStore.setState(previousStore);
   useCloudStore.setState(previousCloud);
 });
+
+test("applyHouseholdSync replaces local current-balance offsets from cloud balanceOffsets", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    cashOffsetMe: 1111,
+    cashOffsetPartner: 0,
+    transactions: [],
+    categories: getDefaultCategories(),
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    cloudUserId: "user-1",
+    householdMemberUserIds: ["user-1"],
+    token: "token-1",
+    household,
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      viewerUserId: "user-1",
+      memberUserIds: ["user-1"],
+      balanceOffsets: {
+        "user-1": 4321,
+      },
+    }),
+    "token-1",
+  );
+
+  assert.equal(useStore.getState().cashOffsetMe, 4321);
+  assert.equal(useStore.getState().cashOffsetPartner, 0);
+  assert.equal(useCloudStore.getState().balanceOffsets["user-1"], 4321);
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});

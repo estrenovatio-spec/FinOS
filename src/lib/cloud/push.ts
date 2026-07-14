@@ -8,6 +8,7 @@ import {
   apiDeleteGoal,
   apiDeleteRecurring,
   apiDeleteTransaction,
+  apiPatchBalanceOffset,
   apiPatchMoneySetup,
   apiPatchPartnerLabel,
   apiUpdateTransaction,
@@ -23,7 +24,10 @@ import { isCloudPaused } from "@/lib/cloud/cloud-pause";
 import { isCloudRestoreInProgress } from "@/lib/cloud/restore-lock";
 import type { Vehicle, VehicleGaragePrefs } from "@/types/vehicle";
 import { isAuthSyncError, isSubscriptionSyncError } from "@/lib/cloud/sync-errors";
-import { decodeUserIdFromHouseholdToken } from "@/lib/cloud/viewer-identity";
+import {
+  decodeUserIdFromHouseholdToken,
+  findHouseholdPartnerUserId,
+} from "@/lib/cloud/viewer-identity";
 import { hasCloudAuth } from "@/lib/cloud/auth-payload";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useStore } from "@/store/useStore";
@@ -374,12 +378,35 @@ export async function cloudDeleteGarage(): Promise<void> {
   }
 }
 
-/** Баланс "реально в кармане" не синхронизируется. */
+/** Баланс "реально в кармане" синхронизируется как replace-offset на userId. */
 export async function cloudPushBalanceOffset(
   owner: BudgetOwner,
   offset: number,
 ): Promise<void> {
-  return;
+  const t = await resolveWritableToken();
+  if (!t) return;
+
+  const viewerUserId =
+    useCloudStore.getState().cloudUserId ?? decodeUserIdFromHouseholdToken(t);
+  if (!viewerUserId) return;
+
+  const targetUserId =
+    owner === "me"
+      ? viewerUserId
+      : findHouseholdPartnerUserId(
+          viewerUserId,
+          useCloudStore.getState().householdMemberUserIds,
+          useStore.getState().transactions,
+        );
+  if (!targetUserId) return;
+
+  try {
+    const res = await apiPatchBalanceOffset(t, targetUserId, offset);
+    applyHouseholdSync(res.sync, t);
+    useCloudStore.getState().touchSync();
+  } catch {
+    /* keep local offset; polling/manual retry will reconcile later */
+  }
 }
 
 export type { BudgetOwner, TxType };

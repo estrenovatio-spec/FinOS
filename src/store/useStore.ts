@@ -85,6 +85,7 @@ import {
   cloudPushTransactionUpdate,
   cloudDeleteGarage,
   cloudPushGarage,
+  cloudPushBalanceOffset,
 } from "@/lib/cloud/push";
 import {
   applyGoalDelta,
@@ -1207,6 +1208,7 @@ export const useStore = create<StoreState>()(
         } else {
           set({ cashOffsetPartner: offset });
         }
+        void cloudPushBalanceOffset(owner, offset);
       },
       addCategory: (type, labelRu, labelEn, keywords = []) => {
         const ru = labelRu.trim();

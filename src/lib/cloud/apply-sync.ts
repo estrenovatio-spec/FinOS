@@ -2,6 +2,7 @@ import { defaultVehicleGaragePrefs, resolveRemoteGarage } from "@/lib/vehicle";
 import { applyGoalMonthlyToGoal } from "@/lib/planning/analytics";
 import { mergeSyncPayload } from "@/lib/cloud/merge-sync";
 import { emptyMoneySetup, normalizeMoneySetup, pruneMoneySetupIds } from "@/lib/money-setup";
+import { cashOffsetsForViewer } from "@/lib/balance-offsets";
 import {
   cloudPushCategory,
   cloudPushCategoryBudget,
@@ -48,10 +49,17 @@ export function applyHouseholdSync(
 
   useCloudStore.getState().setSession(token, remote.household);
   useCloudStore.getState().setLastWriteError(null);
-  ensureCloudViewerUserId(remote.viewerUserId ?? undefined);
+  const viewerUserId = ensureCloudViewerUserId(remote.viewerUserId ?? undefined);
   if (remote.memberUserIds.length > 0) {
     useCloudStore.getState().setHouseholdMemberUserIds(remote.memberUserIds);
   }
+  const balanceOffsets = remote.balanceOffsets ?? {};
+  useCloudStore.getState().setBalanceOffsets(balanceOffsets);
+  const syncedOffsets = cashOffsetsForViewer(
+    balanceOffsets,
+    viewerUserId,
+    remote.memberUserIds,
+  );
   if (remote.memberUserIds.length > 1) {
     useStore.getState().setHouseholdFilter("all");
   }
@@ -92,6 +100,8 @@ export function applyHouseholdSync(
       recurringTransactions: remote.recurringTransactions ?? [],
       debts: remote.debts ?? [],
       moneySetup: prunedMoneySetup,
+      cashOffsetMe: syncedOffsets.cashOffsetMe,
+      cashOffsetPartner: syncedOffsets.cashOffsetPartner,
       vehicles: garage.vehicles,
       vehiclePrefs: garage.vehiclePrefs,
     });
@@ -139,6 +149,8 @@ export function applyHouseholdSync(
       merged.recurringTransactions,
       merged.categories,
     ),
+    cashOffsetMe: syncedOffsets.cashOffsetMe,
+    cashOffsetPartner: syncedOffsets.cashOffsetPartner,
     vehicles: garage.vehicles,
     vehiclePrefs: garage.vehiclePrefs,
     // Имена в балансе (userName / partnerName) — только на этом телефоне, не из облака.

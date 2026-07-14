@@ -185,6 +185,7 @@ export function MoneySetupDialog({
   const essentialCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
   const currentBalanceInputRef = useRef<HTMLInputElement | null>(null);
   const incomeDateInputRef = useRef<HTMLInputElement | null>(null);
+  const wasOpenRef = useRef(false);
 
   const incomeKindOptions = useMemo(
     () =>
@@ -254,7 +255,12 @@ export function MoneySetupDialog({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setNextIncomeDate(moneySetup.nextIncomeDate ?? "");
     setExpectedIncomeAmount(
       moneySetup.expectedIncomeAmount != null
