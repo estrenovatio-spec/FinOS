@@ -278,7 +278,9 @@ export async function cloudPushGoal(goal: SavingsGoal): Promise<void> {
   try {
     await apiUpsertGoal(t, goal);
     await pullCloudAfterWrite();
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "sync_failed";
+    noteCloudWriteError(isSubscriptionSyncError(e) ? "subscription_required" : msg);
     /* ignore — цель остаётся локально, push повторится как localOnly */
   }
 }

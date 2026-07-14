@@ -6,6 +6,9 @@ export type HouseholdDbCapabilities = {
   txFuelLiters: boolean;
   txVehicleId: boolean;
   vehicleGarage: boolean;
+  savingsGoalMonthlyContribution: boolean;
+  savingsGoalKind: boolean;
+  savingsGoalEmergencyMonths: boolean;
 };
 
 const DEFAULT_CAPS: HouseholdDbCapabilities = {
@@ -13,6 +16,9 @@ const DEFAULT_CAPS: HouseholdDbCapabilities = {
   txFuelLiters: false,
   txVehicleId: false,
   vehicleGarage: false,
+  savingsGoalMonthlyContribution: false,
+  savingsGoalKind: false,
+  savingsGoalEmergencyMonths: false,
 };
 
 let cached: HouseholdDbCapabilities | null = null;
@@ -47,6 +53,7 @@ export async function getHouseholdDbCapabilities(): Promise<HouseholdDbCapabilit
           (table_name = 'Transaction' AND column_name IN ('odometerKm', 'fuelLiters', 'vehicleId'))
           OR (table_name = 'Household' AND column_name IN ('vehicleGarageMode', 'vehicleMemberPrefs'))
           OR (table_name = 'Vehicle' AND column_name = 'id')
+          OR (table_name = 'SavingsGoal' AND column_name IN ('monthlyContribution', 'kind', 'emergencyMonths'))
         )
     `;
 
@@ -56,12 +63,18 @@ export async function getHouseholdDbCapabilities(): Promise<HouseholdDbCapabilit
     const householdCols = new Set(
       rows.filter((r) => r.table_name === "Household").map((r) => r.column_name),
     );
+    const savingsGoalCols = new Set(
+      rows.filter((r) => r.table_name === "SavingsGoal").map((r) => r.column_name),
+    );
     const hasVehicleTable = rows.some((r) => r.table_name === "Vehicle");
 
     cached = {
       txOdometerKm: txCols.has("odometerKm"),
       txFuelLiters: txCols.has("fuelLiters"),
       txVehicleId: txCols.has("vehicleId"),
+      savingsGoalMonthlyContribution: savingsGoalCols.has("monthlyContribution"),
+      savingsGoalKind: savingsGoalCols.has("kind"),
+      savingsGoalEmergencyMonths: savingsGoalCols.has("emergencyMonths"),
       vehicleGarage:
         hasVehicleTable &&
         householdCols.has("vehicleGarageMode") &&

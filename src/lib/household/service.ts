@@ -1,4 +1,5 @@
-import type { HouseholdMode, Prisma } from "@prisma/client";
+import { HouseholdMode } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { normalizeAppCurrency } from "@/lib/app-currency";
 import { getDefaultCategories, getFallbackCategoryId } from "@/lib/categories";
 import { prisma } from "@/lib/db";
@@ -58,6 +59,132 @@ import type { HouseholdPublic, SyncPayload } from "@/lib/household/types";
 
 export type { HouseholdPublic, SyncPayload };
 
+type SavingsGoalCompatRow = {
+  id: string;
+  householdId: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  deadline: string | null;
+  monthlyContribution?: number | null;
+  kind?: string | null;
+  emergencyMonths?: number | null;
+  updatedAt: Date;
+};
+
+function compatGoalRowToApp(row: SavingsGoalCompatRow): SavingsGoal {
+  return {
+    id: row.id,
+    name: row.name,
+    targetAmount: row.targetAmount,
+    savedAmount: row.savedAmount,
+    deadline: row.deadline,
+    monthlyContribution: row.monthlyContribution ?? null,
+    kind: row.kind === "emergency" ? "emergency" : "custom",
+    emergencyMonths: row.emergencyMonths ?? null,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+async function fetchSavingsGoalCompatRows(householdId: string): Promise<SavingsGoalCompatRow[]> {
+  const caps = await getHouseholdDbCapabilities();
+  const optionalSelects: string[] = [];
+  if (caps.savingsGoalMonthlyContribution) {
+    optionalSelects.push(`"monthlyContribution"`);
+  }
+  if (caps.savingsGoalKind) {
+    optionalSelects.push(`kind`);
+  }
+  if (caps.savingsGoalEmergencyMonths) {
+    optionalSelects.push(`"emergencyMonths"`);
+  }
+  const optionalSql = optionalSelects.length > 0 ? `, ${optionalSelects.join(", ")}` : "";
+  return prisma.$queryRawUnsafe<SavingsGoalCompatRow[]>(
+    `
+      SELECT id, "householdId", name, "targetAmount", "savedAmount", deadline, "updatedAt"${optionalSql}
+      FROM "SavingsGoal"
+      WHERE "householdId" = $1
+    `,
+    householdId,
+  );
+}
+
+async function upsertSavingsGoalCompat(householdId: string, goal: SavingsGoal): Promise<void> {
+  const caps = await getHouseholdDbCapabilities();
+  const params: unknown[] = [];
+  const pushParam = (value: unknown): string => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  const insertColumns: string[] = [
+    `"id"`,
+    `"householdId"`,
+    `"name"`,
+    `"targetAmount"`,
+    `"savedAmount"`,
+    `"deadline"`,
+    `"updatedAt"`,
+  ];
+  const insertValues: string[] = [
+    pushParam(goal.id),
+    pushParam(householdId),
+    pushParam(goal.name),
+    pushParam(goal.targetAmount),
+    pushParam(goal.savedAmount),
+    pushParam(goal.deadline),
+    "CURRENT_TIMESTAMP",
+  ];
+  const updateAssignments: string[] = [
+    `"name" = ${pushParam(goal.name)}`,
+    `"targetAmount" = ${pushParam(goal.targetAmount)}`,
+    `"savedAmount" = ${pushParam(goal.savedAmount)}`,
+    `"deadline" = ${pushParam(goal.deadline)}`,
+    `"updatedAt" = CURRENT_TIMESTAMP`,
+  ];
+
+  if (caps.savingsGoalMonthlyContribution) {
+    insertColumns.push(`"monthlyContribution"`);
+    insertValues.push(pushParam(goal.monthlyContribution));
+    updateAssignments.push(`"monthlyContribution" = ${pushParam(goal.monthlyContribution)}`);
+  }
+  if (caps.savingsGoalKind) {
+    insertColumns.push(`"kind"`);
+    insertValues.push(pushParam(goal.kind));
+    updateAssignments.push(`"kind" = ${pushParam(goal.kind)}`);
+  }
+  if (caps.savingsGoalEmergencyMonths) {
+    insertColumns.push(`"emergencyMonths"`);
+    insertValues.push(pushParam(goal.emergencyMonths));
+    updateAssignments.push(`"emergencyMonths" = ${pushParam(goal.emergencyMonths)}`);
+  }
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "SavingsGoal" (${insertColumns.join(", ")})
+      VALUES (${insertValues.join(", ")})
+      ON CONFLICT ("householdId", "id")
+      DO UPDATE SET ${updateAssignments.join(", ")}
+    `,
+    ...params,
+  );
+}
+
+async function findSavingsGoalCompat(
+  householdId: string,
+  id: string,
+): Promise<SavingsGoal | null> {
+  const rows = await fetchSavingsGoalCompatRows(householdId);
+  const row = rows.find((item) => item.id === id);
+  return row ? compatGoalRowToApp(row) : null;
+}
+
+async function deleteSavingsGoalCompat(householdId: string, id: string): Promise<void> {
+  await prisma.$executeRaw`
+    DELETE FROM "SavingsGoal"
+    WHERE "householdId" = ${householdId} AND id = ${id}
+  `;
+}
+
 function isMissingDbColumn(err: unknown): boolean {
   return isMissingDbObject(err);
 }
@@ -69,36 +196,8 @@ async function fetchSavingsGoalsSafe(householdId: string): Promise<SavingsGoal[]
   } catch (err) {
     if (!isMissingDbColumn(err)) throw err;
     console.warn("[household] SavingsGoal schema outdated — run prisma/migrate-planning-and-balance.sql");
-    const rows = await prisma.$queryRaw<
-      {
-        id: string;
-        householdId: string;
-        name: string;
-        targetAmount: number;
-        savedAmount: number;
-        deadline: string | null;
-        kind: string | null;
-        emergencyMonths: number | null;
-        updatedAt: Date;
-      }[]
-    >`
-      SELECT id, "householdId", name, "targetAmount", "savedAmount", deadline, kind, "emergencyMonths", "updatedAt"
-      FROM "SavingsGoal"
-      WHERE "householdId" = ${householdId}
-    `;
-    return rows.map(
-      (row): SavingsGoal => ({
-        id: row.id,
-        name: row.name,
-        targetAmount: row.targetAmount,
-        savedAmount: row.savedAmount,
-        deadline: row.deadline,
-        monthlyContribution: null,
-        kind: row.kind === "emergency" ? "emergency" : "custom",
-        emergencyMonths: row.emergencyMonths,
-        updatedAt: row.updatedAt.toISOString(),
-      }),
-    );
+    const rows = await fetchSavingsGoalCompatRows(householdId);
+    return rows.map(compatGoalRowToApp);
   }
 }
 
@@ -634,13 +733,16 @@ export async function importLocalSnapshot(
   }
 
   for (const goal of data.savingsGoals ?? []) {
-    await prisma.savingsGoal.upsert({
-      where: { householdId_id: { householdId, id: goal.id } },
-      create: appGoalToDb(householdId, goal),
-      update: appGoalToDb(householdId, goal),
-    }).catch((err) => {
+    try {
+      await prisma.savingsGoal.upsert({
+        where: { householdId_id: { householdId, id: goal.id } },
+        create: appGoalToDb(householdId, goal),
+        update: appGoalToDb(householdId, goal),
+      });
+    } catch (err) {
       if (!isMissingDbColumn(err)) throw err;
-    });
+      await upsertSavingsGoalCompat(householdId, goal);
+    }
   }
   for (const budget of data.categoryBudgets ?? []) {
     await prisma.categoryBudget.upsert({
@@ -864,29 +966,46 @@ export async function upsertCloudGoal(
   goal: SavingsGoal,
 ) {
   await assertMember(userId, householdId);
-  await prisma.savingsGoal.upsert({
-    where: { householdId_id: { householdId, id: goal.id } },
-    create: appGoalToDb(householdId, goal),
-    update: {
-      name: goal.name,
-      targetAmount: goal.targetAmount,
-      savedAmount: goal.savedAmount,
-      deadline: goal.deadline,
-      monthlyContribution: goal.monthlyContribution,
-      kind: goal.kind,
-      emergencyMonths: goal.emergencyMonths,
-    },
-  });
+  try {
+    await prisma.savingsGoal.upsert({
+      where: { householdId_id: { householdId, id: goal.id } },
+      create: appGoalToDb(householdId, goal),
+      update: {
+        name: goal.name,
+        targetAmount: goal.targetAmount,
+        savedAmount: goal.savedAmount,
+        deadline: goal.deadline,
+        monthlyContribution: goal.monthlyContribution,
+        kind: goal.kind,
+        emergencyMonths: goal.emergencyMonths,
+      },
+    });
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    await upsertSavingsGoalCompat(householdId, goal);
+  }
 }
 
 export async function deleteCloudGoal(userId: string, householdId: string, id: string) {
   await assertMember(userId, householdId);
-  const existing = await prisma.savingsGoal.findUnique({
-    where: { householdId_id: { householdId, id } },
-  });
+  let existing: SavingsGoal | null = null;
+  try {
+    const row = await prisma.savingsGoal.findUnique({
+      where: { householdId_id: { householdId, id } },
+    });
+    existing = row ? dbGoalToApp(row) : null;
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    existing = await findSavingsGoalCompat(householdId, id);
+  }
   if (!existing) throw new Error("not_found");
   if (existing.kind === "emergency") throw new Error("cannot_delete_emergency");
-  await prisma.savingsGoal.delete({ where: { householdId_id: { householdId, id } } });
+  try {
+    await prisma.savingsGoal.delete({ where: { householdId_id: { householdId, id } } });
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    await deleteSavingsGoalCompat(householdId, id);
+  }
 }
 
 export async function depositCloudGoal(
@@ -896,20 +1015,33 @@ export async function depositCloudGoal(
   amount: number,
 ) {
   await assertMember(userId, householdId);
-  const existing = await prisma.savingsGoal.findUnique({
-    where: { householdId_id: { householdId, id } },
-  });
+  let existing: SavingsGoal | null = null;
+  try {
+    const row = await prisma.savingsGoal.findUnique({
+      where: { householdId_id: { householdId, id } },
+    });
+    existing = row ? dbGoalToApp(row) : null;
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    existing = await findSavingsGoalCompat(householdId, id);
+  }
   if (!existing) throw new Error("not_found");
-  const goal = applyGoalMonthlyToGoal(
-    dbGoalToApp({ ...existing, savedAmount: existing.savedAmount + amount }),
-  );
-  await prisma.savingsGoal.update({
-    where: { householdId_id: { householdId, id } },
-    data: {
-      savedAmount: goal.savedAmount,
-      monthlyContribution: goal.monthlyContribution,
-    },
+  const goal = applyGoalMonthlyToGoal({
+    ...existing,
+    savedAmount: existing.savedAmount + amount,
   });
+  try {
+    await prisma.savingsGoal.update({
+      where: { householdId_id: { householdId, id } },
+      data: {
+        savedAmount: goal.savedAmount,
+        monthlyContribution: goal.monthlyContribution,
+      },
+    });
+  } catch (err) {
+    if (!isMissingDbColumn(err)) throw err;
+    await upsertSavingsGoalCompat(householdId, goal);
+  }
 }
 
 export async function upsertCloudCategoryBudget(
