@@ -199,6 +199,7 @@ test("hero without urgent action does not show forced CTA", () => {
   assert.equal(view.hero.ctaLabel, null);
   assert.match(view.hero.due ?? "", /25\.07\.2026/);
   assert.equal(view.hero.title, "Сегодня всё спокойно");
+  assert.equal(view.hero.amount, null);
 });
 
 test("hero keeps the same canonical date even without a separate safe-until card", () => {
@@ -687,6 +688,7 @@ test("reserve required keeps the reserve guidance in hero without duplicating a 
   });
 
   assert.equal(view.hero.title, "Лучше оставить");
+  assert.equal(view.hero.amount, null);
   assert.doesNotMatch(view.hero.title, /Сохраните резерв/);
   const reserve = view.overviewItems.find((item) => item.id === "reserve");
   assert.equal(reserve, undefined);
@@ -762,6 +764,7 @@ test("future deficit says money may run short", () => {
 
   assert.match(view.hero.title, /27\.07\.2026 денег может не хватить/);
   assert.match(view.hero.reason ?? "", /баланс уйдёт в минус/);
+  assert.equal(view.hero.amount, null);
 });
 
 test("current deficit says money is missing right now", () => {
@@ -793,6 +796,7 @@ test("current deficit says money is missing right now", () => {
 
   assert.equal(view.hero.title, "Сейчас денег не хватает");
   assert.match(view.hero.reason ?? "", /влияют на остаток/);
+  assert.equal(view.hero.amount, null);
 });
 
 test("payment today uses a concrete payment name", () => {
@@ -818,6 +822,33 @@ test("payment today uses a concrete payment name", () => {
   });
 
   assert.equal(view.hero.title, "Оплатите интернет");
+  assert.match(view.hero.amount ?? "", /1[\s\u00A0]200 ₽/);
+});
+
+test("overdue payment keeps the concrete payment amount in hero", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "pay_overdue",
+        title: "Оплатите аренду",
+        text: "Аренда просрочена на 10 000 ₽.",
+        description: "Платёж уже просрочен.",
+        reason: "Этот платёж уже должен был быть оплачен.",
+        amount: 10000,
+        dueDate: "2026-07-10",
+        relatedEntityId: "rent",
+        priority: "critical",
+        command: { type: "confirm_payment", paymentId: "rent" },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 4,
+    moneySetup: emptyMoneySetup(),
+    balances: { all: 9000, me: 9000, partner: 0 },
+  });
+
+  assert.equal(view.hero.title, "Оплатите аренду");
+  assert.match(view.hero.amount ?? "", /10[\s\u00A0]000 ₽/);
 });
 
 test("operations nav icon uses receipt text while other tabs stay unchanged", () => {

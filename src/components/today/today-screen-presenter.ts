@@ -354,7 +354,12 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
     statusLabel: status.label,
     tone: status.tone,
     title: buildHeroTitle(decision.mainAction, locale),
-    amount: rub(decision.mainAction.amount ?? null, locale),
+    amount:
+      decision.mainAction.type === "pay_today" ||
+      decision.mainAction.type === "pay_overdue" ||
+      decision.mainAction.type === "confirm_income"
+        ? rub(decision.mainAction.amount ?? null, locale)
+        : null,
     due: buildHeroDue(decision, locale),
     reason: buildHeroReason(decision, locale, currentBalance != null),
     ctaLabel: getMainActionButtonLabel(decision.mainAction.command, locale),
