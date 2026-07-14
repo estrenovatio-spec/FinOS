@@ -9,6 +9,7 @@ import { SubscriptionExpiredReminder } from "@/components/SubscriptionExpiredRem
 import { SubscriptionAccessBanner } from "@/components/SubscriptionAccessBanner";
 import { TrialBanner } from "@/components/TrialBanner";
 import { TodayScreen } from "@/components/TodayScreen";
+import { EmailSyncOnboardingDialog } from "@/components/EmailSyncOnboardingDialog";
 import { ForecastTab } from "@/components/app/ForecastTab";
 import { OperationsTab } from "@/components/app/OperationsTab";
 import { RecurringTab } from "@/components/app/RecurringTab";
@@ -118,6 +119,7 @@ export default function HomePage() {
       lang={locale}
     >
       <HouseholdCloudBootstrap />
+      <EmailSyncOnboardingDialog />
       <PaymentReturnRefresh />
       <SettingsDialogHost />
       {!previewMode ? <FamilyOnboarding /> : null}
