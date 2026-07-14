@@ -79,9 +79,10 @@ async function fetchSavingsGoalsSafe(householdId: string): Promise<SavingsGoal[]
         deadline: string | null;
         kind: string | null;
         emergencyMonths: number | null;
+        updatedAt: Date;
       }[]
     >`
-      SELECT id, "householdId", name, "targetAmount", "savedAmount", deadline, kind, "emergencyMonths"
+      SELECT id, "householdId", name, "targetAmount", "savedAmount", deadline, kind, "emergencyMonths", "updatedAt"
       FROM "SavingsGoal"
       WHERE "householdId" = ${householdId}
     `;
@@ -95,6 +96,7 @@ async function fetchSavingsGoalsSafe(householdId: string): Promise<SavingsGoal[]
         monthlyContribution: null,
         kind: row.kind === "emergency" ? "emergency" : "custom",
         emergencyMonths: row.emergencyMonths,
+        updatedAt: row.updatedAt.toISOString(),
       }),
     );
   }
