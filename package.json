@@ -18,6 +18,7 @@
     "test:currency": "node --import tsx --test tests/currency-widget.test.ts",
     "test:adviser": "node --import tsx --test tests/adviser-tab.test.ts",
     "test:financial-calendar": "node --import tsx --test tests/financial-calendar.test.ts",
+    "test:financial-scenarios": "node --import tsx --test tests/financial-scenarios.test.ts",
     "db:push": "node scripts/with-env-local.cjs npx prisma db push",
     "db:backup": "node scripts/with-env-local.cjs node scripts/backup-db.mjs",
     "env:check": "node scripts/check-env.cjs",
