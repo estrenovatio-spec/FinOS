@@ -473,6 +473,46 @@ test("Allowed uses the forecast minimum after essential budgets are spread once"
   assert.equal(scenario.result.allowed.amount, scenario.ctx.forecast.minBalance);
 });
 
+test("Category budgets affect forecast even when no essential categories are marked", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-12",
+      balances: { all: 40000, me: 40000, partner: 0 },
+      transactions: [
+        tx({
+          id: "groceries-spent",
+          amount: 19200,
+          type: "expense",
+          categoryId: "groceries",
+          date: "2026-07-05",
+          confirmed: true,
+        }),
+      ],
+      categoryBudgets: [
+        {
+          categoryId: "groceries",
+          monthlyLimit: 30000,
+        },
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        nextIncomeDate: "2026-07-20",
+        expectedIncomeAmount: 60000,
+        hasNoRequiredFixedExpenses: true,
+        essentialCategoryIds: [],
+      },
+    }),
+  );
+
+  assert.equal(scenario.ctx.essentialBudgetReserve.totalRemaining, 10800);
+  assert.ok(
+    scenario.ctx.forecast.events.some(
+      (event) => event.source === "essential_budget" && event.date >= "2026-07-12",
+    ),
+  );
+  assert.equal(scenario.result.allowed.amount, scenario.ctx.forecast.minBalance);
+});
+
 test("Spent above the essential limit does not create a negative reserve", () => {
   const scenario = evaluate(
     buildState({

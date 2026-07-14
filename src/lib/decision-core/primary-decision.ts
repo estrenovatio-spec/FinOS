@@ -15,7 +15,7 @@ type ResolvePrimaryDecisionInput = {
 };
 
 function appendMissingReason(
-  missing: Set<"income" | "required_expenses" | "essential_budgets" | "balance">,
+  missing: Set<"income" | "required_expenses" | "balance">,
   status: string,
 ) {
   if (status === "missing_income" || status === "unconfirmed_income") {
@@ -24,16 +24,13 @@ function appendMissingReason(
   if (status === "missing_required_expenses") {
     missing.add("required_expenses");
   }
-  if (status === "missing_essential_budgets") {
-    missing.add("essential_budgets");
-  }
   if (status === "missing_balance") {
     missing.add("balance");
   }
 }
 
 function resolveMissingData(ctx: DecisionCoreContext, safeUntil: DecisionSafeUntil): PrimaryDecision | null {
-  const missing = new Set<"income" | "required_expenses" | "essential_budgets" | "balance">();
+  const missing = new Set<"income" | "required_expenses" | "balance">();
 
   appendMissingReason(missing, safeUntil.rawStatus);
   appendMissingReason(missing, ctx.safeSpending.status);

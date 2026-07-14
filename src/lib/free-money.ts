@@ -202,7 +202,7 @@ export function calculateFreeMoneyUntilPeriodEnd(
     note:
       breakdown.freeMoney > 0
         ? state.locale === "ru"
-          ? `Из уже полученных денег после обязательных платежей и плановых базовых трат до ${formatIsoDate(period.to, state.locale)} остаётся ${rub(breakdown.freeMoney, state.locale)}.`
+          ? `Из уже полученных денег после обязательных платежей и плановых расходов до ${formatIsoDate(period.to, state.locale)} остаётся ${rub(breakdown.freeMoney, state.locale)}.`
           : `After required payments and planned essentials until ${period.to}, ${rub(
               breakdown.freeMoney,
               state.locale,
@@ -267,11 +267,11 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
     note:
       state.locale === "ru"
         ? includesUnconfirmedIncome
-          ? `После всех платежей и базовых расходов до ${formatIsoDate(period.to, state.locale)}, если регулярные доходы придут по плану. Поступление ещё не подтверждено.`
-          : `После всех платежей и базовых расходов до ${formatIsoDate(period.to, state.locale)}, если регулярные доходы придут по плану.`
+          ? `После всех платежей и плановых расходов до ${formatIsoDate(period.to, state.locale)}, если регулярные доходы придут по плану. Поступление ещё не подтверждено.`
+          : `После всех платежей и плановых расходов до ${formatIsoDate(period.to, state.locale)}, если регулярные доходы придут по плану.`
         : includesUnconfirmedIncome
-          ? `After all payments and planned essentials until ${period.to}, if recurring income arrives as planned. The income is not confirmed yet.`
-          : `After all payments and planned essentials until ${period.to}, if recurring income arrives as planned.`,
+          ? `After all payments and planned spending until ${period.to}, if recurring income arrives as planned. The income is not confirmed yet.`
+          : `After all payments and planned spending until ${period.to}, if recurring income arrives as planned.`,
     breakdown,
   };
 }

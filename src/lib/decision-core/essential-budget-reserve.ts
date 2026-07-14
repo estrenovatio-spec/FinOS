@@ -30,16 +30,10 @@ export function buildEssentialBudgetReserve(
     ctx.budgetMonthStartDay,
     new Date(`${ctx.today}T12:00:00`),
   );
-  const essentialIds = [...new Set(ctx.moneySetup.essentialCategoryIds)];
-  const budgetsByCategory = new Map(
-    ctx.categoryBudgets.map((item) => [item.categoryId, item] as const),
-  );
-  const items = essentialIds
-    .map((categoryId) => {
-      const budget = budgetsByCategory.get(categoryId);
-      if (!budget || !Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
-        return null;
-      }
+  const items = ctx.categoryBudgets
+    .filter((budget) => Number.isFinite(budget.monthlyLimit) && budget.monthlyLimit > 0)
+    .map((budget) => {
+      const categoryId = budget.categoryId;
 
       const spent = ctx.confirmedTransactions
         .filter(
@@ -70,7 +64,6 @@ export function buildEssentialBudgetReserve(
         remaining,
       };
     })
-    .filter((item): item is EssentialBudgetReserveItem => item != null)
     .sort((left, right) => right.remaining - left.remaining);
 
   return {

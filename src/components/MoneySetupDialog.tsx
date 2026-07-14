@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getCategoryLabel, sortCategoriesByLabel } from "@/lib/categories";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import {
   MONEY_SETUP_INCOME_SOURCE_KINDS,
@@ -52,29 +51,6 @@ type MoneySetupDialogProps = {
   initialSection?: MoneySetupInitialSection | null;
 };
 
-const ESSENTIAL_PRIORITY_IDS = [
-  "groceries",
-  "transport",
-  "health",
-  "kids_family",
-  "household_supplies",
-  "shopping",
-];
-
-const ESSENTIAL_EXCLUDED_KEYWORDS = ["recurring", "regular", "subscription", "subscriptions", "регуляр"] as const;
-
-function toggleId(list: string[], id: string): string[] {
-  return list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
-}
-
-function parseAmount(value: string): number | null {
-  const normalized = value.replace(/\s+/g, "").replace(",", ".");
-  if (!normalized) return null;
-  const amount = Number(normalized);
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  return amount;
-}
-
 function parseBalanceAmount(value: string): number | null {
   const normalized = value.replace(/\s+/g, "").replace(",", ".");
   if (!normalized) return null;
@@ -83,21 +59,11 @@ function parseBalanceAmount(value: string): number | null {
   return amount;
 }
 
-function isServiceEssentialCategory(
-  categoryId: string,
-  label: string,
-): boolean {
-  const haystack = `${categoryId} ${label}`.toLocaleLowerCase("ru-RU");
-  return ESSENTIAL_EXCLUDED_KEYWORDS.some((keyword) =>
-    haystack.includes(keyword),
-  );
-}
-
 function normalizeMoneySetupInitialSection(
   section: MoneySetupInitialSection | null | undefined,
-): "balance" | "income" | "essential_budgets" | null {
+): "balance" | "income" | null {
   if (section === "current_balance") return "balance";
-  if (section === "required_expenses") return "essential_budgets";
+  if (section === "required_expenses" || section === "essential_budgets") return null;
   return section ?? null;
 }
 
@@ -137,37 +103,11 @@ export function MoneySetupDialog({
 }: MoneySetupDialogProps) {
   const locale = useStore((s) => s.locale);
   const moneySetup = useStore((s) => s.moneySetup);
-  const categories = useStore((s) => s.categories);
+  const categoryBudgets = useStore((s) => s.categoryBudgets);
   const updateMoneySetup = useStore((s) => s.updateMoneySetup);
   const setActualCash = useStore((s) => s.setActualCash);
   const balances = useHouseholdBalances();
   const { toast } = useToast();
-
-  const categoryOptions = useMemo(() => {
-    const expenseCategories = sortCategoriesByLabel(
-      categories.filter((category) => {
-        if (category.type !== "expense") return false;
-        const label = getCategoryLabel(category.id, categories, locale);
-        return !isServiceEssentialCategory(category.id, label);
-      }),
-      categories,
-      locale,
-    );
-    const priority = new Map(
-      ESSENTIAL_PRIORITY_IDS.map((id, index) => [id, index]),
-    );
-    return [...expenseCategories].sort((a, b) => {
-      const aPriority = priority.get(a.id);
-      const bPriority = priority.get(b.id);
-      if (aPriority != null && bPriority != null) return aPriority - bPriority;
-      if (aPriority != null) return -1;
-      if (bPriority != null) return 1;
-      return getCategoryLabel(a.id, categories, locale).localeCompare(
-        getCategoryLabel(b.id, categories, locale),
-        locale === "ru" ? "ru" : "en",
-      );
-    });
-  }, [categories, locale]);
 
   const [nextIncomeDate, setNextIncomeDate] = useState("");
   const [expectedIncomeAmount, setExpectedIncomeAmount] = useState("");
@@ -175,14 +115,10 @@ export function MoneySetupDialog({
   const [incomeSources, setIncomeSources] = useState<IncomeSourceDraft[]>([]);
   const [confirmResetIncomeSources, setConfirmResetIncomeSources] =
     useState(false);
-  const [essentialCategoryIds, setEssentialCategoryIds] = useState<string[]>(
-    [],
-  );
   const [useHouseholdBalance, setUseHouseholdBalance] = useState(false);
   const [currentBalanceInput, setCurrentBalanceInput] = useState("");
   const incomeSectionRef = useRef<HTMLDivElement | null>(null);
   const balanceSectionRef = useRef<HTMLDivElement | null>(null);
-  const essentialCategoriesSectionRef = useRef<HTMLDivElement | null>(null);
   const currentBalanceInputRef = useRef<HTMLInputElement | null>(null);
   const incomeDateInputRef = useRef<HTMLInputElement | null>(null);
   const wasOpenRef = useRef(false);
@@ -236,8 +172,8 @@ export function MoneySetupDialog({
     [locale],
   );
   const progress = useMemo(
-    () => buildMoneySetupProgress({ locale, moneySetup, balances }),
-    [balances, locale, moneySetup],
+    () => buildMoneySetupProgress({ locale, moneySetup, categoryBudgets, balances }),
+    [balances, categoryBudgets, locale, moneySetup],
   );
   const normalizedInitialSection = normalizeMoneySetupInitialSection(initialSection);
   const currentAvailableBalance = useHouseholdBalance ? balances.all : balances.me;
@@ -270,7 +206,6 @@ export function MoneySetupDialog({
     setShowIncomeSources(moneySetup.incomeSources.length > 0);
     setIncomeSources(moneySetup.incomeSources.map(toIncomeSourceDraft));
     setConfirmResetIncomeSources(false);
-    setEssentialCategoryIds(moneySetup.essentialCategoryIds);
     setUseHouseholdBalance(moneySetup.useHouseholdBalance);
     setCurrentBalanceInput(String(moneySetup.useHouseholdBalance ? balances.all : balances.me));
   }, [balances.all, balances.me, moneySetup, open]);
@@ -316,9 +251,7 @@ export function MoneySetupDialog({
     const target =
       normalizedInitialSection === "balance"
         ? balanceSectionRef.current
-        : normalizedInitialSection === "income"
-        ? incomeSectionRef.current
-        : essentialCategoriesSectionRef.current;
+        : incomeSectionRef.current;
 
     const frame = window.requestAnimationFrame(() => {
       target?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -406,7 +339,7 @@ export function MoneySetupDialog({
       ...incomePayload,
       requiredRecurringIds: moneySetup.requiredRecurringIds,
       hasNoRequiredFixedExpenses: moneySetup.hasNoRequiredFixedExpenses,
-      essentialCategoryIds,
+      essentialCategoryIds: moneySetup.essentialCategoryIds,
       useHouseholdBalance: showHouseholdToggle ? useHouseholdBalance : false,
     });
     toast(
@@ -444,8 +377,8 @@ export function MoneySetupDialog({
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             {locale === "ru"
-              ? "Коротко укажите доход и обязательные расходы."
-              : "Quickly add your income and must-cover expenses."}
+              ? "Коротко укажите текущий остаток и ближайший доход."
+              : "Quickly add your current balance and next income."}
           </p>
           <div className="mt-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
             <div className="flex items-start justify-between gap-3">
@@ -847,49 +780,6 @@ export function MoneySetupDialog({
 
               </div>
             ) : null}
-          </div>
-
-          <div ref={essentialCategoriesSectionRef} className="space-y-2.5">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium text-foreground">
-                {locale === "ru"
-                  ? "Необходимые категории для жизни"
-                  : "Essential life categories"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {locale === "ru"
-                  ? "Отметьте то, без чего нельзя прожить до следующего дохода."
-                  : "Mark what you need before the next income arrives."}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {locale === "ru"
-                  ? "Обязательные платежи — это конкретные платежи с датой и суммой. Необходимые категории — это базовые траты: продукты, транспорт, здоровье."
-                  : "Required payments are specific payments with a date and amount. Essential categories are core expenses like groceries, transport, and health."}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              {categoryOptions.map((category) => (
-                <label
-                  key={category.id}
-                  className="flex items-center gap-2 rounded-md border border-border/70 px-3 py-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={essentialCategoryIds.includes(category.id)}
-                    onChange={() =>
-                      setEssentialCategoryIds((prev) =>
-                        toggleId(prev, category.id),
-                      )
-                    }
-                  />
-                  <span className="text-foreground">
-                    {getCategoryLabel(category.id, categories, locale)}
-                  </span>
-                </label>
-              ))}
-            </div>
           </div>
 
           {showHouseholdToggle ? (

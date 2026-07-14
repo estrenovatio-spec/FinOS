@@ -539,7 +539,7 @@ test("planned free money breakdown arithmetic stays explicit", () => {
       "Регулярные доходы",
       "Регулярные платежи",
       "Другие обязательные платежи",
-      "Плановые базовые траты",
+      "Плановые расходы",
       "Другие обязательные расходы",
       "По плану свободно",
     ],
@@ -1042,8 +1042,8 @@ test("money setup progress is based on filled data", () => {
     moneySetup: {
       ...emptyMoneySetup(),
       nextIncomeDate: "2026-07-25",
-      essentialCategoryIds: ["groceries"],
     },
+    categoryBudgets: [{ categoryId: "groceries", monthlyLimit: 30000 }],
     balances: { all: 15000, me: 15000, partner: 0 },
   });
 
@@ -1057,8 +1057,8 @@ test("money setup progress no longer asks to mark recurring payments separately"
     moneySetup: {
       ...emptyMoneySetup(),
       nextIncomeDate: "2026-07-25",
-      essentialCategoryIds: ["groceries"],
     },
+    categoryBudgets: [{ categoryId: "groceries", monthlyLimit: 30000 }],
     balances: { all: 15000, me: 15000, partner: 0 },
   });
 
@@ -1089,11 +1089,11 @@ test("essential-only missing data no longer asks to add required payments", () =
   });
 
   assert.equal(view.hero.title, "Настройте базовые траты");
-  assert.equal(view.hero.ctaLabel, "Настроить важные траты");
+  assert.equal(view.hero.ctaLabel, "Настроить плановые расходы");
   assert.match(view.hero.reason ?? "", /базовых тратах периода/i);
 });
 
-test("money setup dialog no longer renders required recurring payment checkboxes", () => {
+test("money setup dialog no longer renders required recurring payment checkboxes or essential category toggles", () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), "src/components/MoneySetupDialog.tsx"),
     "utf8",
@@ -1102,6 +1102,8 @@ test("money setup dialog no longer renders required recurring payment checkboxes
   assert.doesNotMatch(source, /Обязательные регулярные платежи/);
   assert.doesNotMatch(source, /required recurring payments/i);
   assert.doesNotMatch(source, /У меня нет обязательных регулярных платежей/);
+  assert.doesNotMatch(source, /Необходимые категории для жизни/);
+  assert.doesNotMatch(source, /Essential life categories/);
 });
 
 test("money setup progress updates when another section is filled", () => {
@@ -1111,6 +1113,7 @@ test("money setup progress updates when another section is filled", () => {
       ...emptyMoneySetup(),
       nextIncomeDate: "2026-07-25",
     },
+    categoryBudgets: [],
     balances: { all: 15000, me: 15000, partner: 0 },
   });
   const after = buildMoneySetupProgress({
@@ -1118,13 +1121,29 @@ test("money setup progress updates when another section is filled", () => {
     moneySetup: {
       ...emptyMoneySetup(),
       nextIncomeDate: "2026-07-25",
-      essentialCategoryIds: ["groceries"],
     },
+    categoryBudgets: [{ categoryId: "groceries", monthlyLimit: 30000 }],
     balances: { all: 15000, me: 15000, partner: 0 },
   });
 
   assert.equal(before.completed, 2);
   assert.equal(after.completed, 3);
+});
+
+test("money setup progress ignores legacy essential ids without actual budgets", () => {
+  const progress = buildMoneySetupProgress({
+    locale: "ru",
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+      essentialCategoryIds: ["groceries"],
+    },
+    categoryBudgets: [],
+    balances: { all: 15000, me: 15000, partner: 0 },
+  });
+
+  assert.equal(progress.completed, 2);
+  assert.equal(progress.items.find((item) => item.id === "essential_categories")?.done, false);
 });
 
 test("MoneySetupDialog with initialSection=current_balance shows the current balance input immediately", () => {

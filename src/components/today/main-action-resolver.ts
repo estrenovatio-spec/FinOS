@@ -69,8 +69,8 @@ export function getMainActionButtonLabel(
         return locale === "ru" ? "Добавить обязательства" : "Add obligations";
       }
       return locale === "ru"
-        ? "Настроить важные траты"
-        : "Set essential spending";
+        ? "Настроить плановые расходы"
+        : "Set planned spending";
     case "confirm_income_source":
       return command.status === "overdue_unconfirmed"
         ? locale === "ru"

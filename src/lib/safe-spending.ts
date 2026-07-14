@@ -12,7 +12,6 @@ export type SafeSpendingStatus =
   | "unconfirmed_income"
   | "missing_balance"
   | "missing_required_expenses"
-  | "missing_essential_budgets"
   | "invalid_period"
   | "not_enough_data";
 
@@ -156,7 +155,7 @@ export function calculateSafeSpending(
     today,
     availableNow: input.availableNow,
     recurringExpenseMode: "all_active_expenses",
-    essentialCategoryIds: input.moneySetup.essentialCategoryIds,
+    plannedBudgetCategoryIds: input.categoryBudgets.map((item) => item.categoryId),
   };
 
   const income = pickNearestIncome(
@@ -230,33 +229,19 @@ export function calculateSafeSpending(
   base.requiredFixedUntilIncome = requiredFixedUntilIncome;
   debug.requiredFixedUntilIncome = requiredFixedUntilIncome;
 
-  const essentialIds = [...new Set(input.moneySetup.essentialCategoryIds)];
-  if (essentialIds.length > 0) {
-    const budgetsByCategory = new Map(
-      input.categoryBudgets.map((item) => [item.categoryId, item] as const),
-    );
-    const categoryIds = new Set(
-      input.categories.map((category) => category.id),
-    );
-    let missingEssentialBudget = false;
+  const plannedBudgets = input.categoryBudgets.filter(
+    (budget) => Number.isFinite(budget.monthlyLimit) && budget.monthlyLimit > 0,
+  );
+  if (plannedBudgets.length > 0) {
+    const categoryIds = new Set(input.categories.map((category) => category.id));
     let essentialReserveUntilIncome = 0;
     const essentialReserveBreakdown: SafeSpendingResult["essentialReserveBreakdown"] =
       [];
 
-    for (const categoryId of essentialIds) {
+    for (const budget of plannedBudgets) {
+      const categoryId = budget.categoryId;
       if (!categoryIds.has(categoryId)) {
-        reasons.push(`essential_category_missing:${categoryId}`);
-      }
-      const budget = budgetsByCategory.get(categoryId);
-      if (!budget) {
-        reasons.push(`missing_budget_for_essential_category:${categoryId}`);
-        missingEssentialBudget = true;
-        continue;
-      }
-      if (!Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
-        reasons.push(`invalid_budget_for_essential_category:${categoryId}`);
-        missingEssentialBudget = true;
-        continue;
+        reasons.push(`budget_category_missing:${categoryId}`);
       }
       const dailyReserve = budget.monthlyLimit / 30;
       const reserveUntilIncome = dailyReserve * daysUntilIncome;
@@ -274,10 +259,6 @@ export function calculateSafeSpending(
       (left, right) => right.reserveUntilIncome - left.reserveUntilIncome,
     );
     debug.essentialReserveUntilIncome = essentialReserveUntilIncome;
-
-    if (missingEssentialBudget) {
-      return buildResult(base, "missing_essential_budgets");
-    }
   } else {
     base.essentialReserveUntilIncome = 0;
     base.essentialReserveBreakdown = [];

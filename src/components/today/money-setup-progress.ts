@@ -1,4 +1,5 @@
 import type { MoneySetup } from "@/lib/money-setup";
+import type { CategoryBudget } from "@/types/planning";
 import type { Locale } from "@/types";
 
 export type MoneySetupProgressItem = {
@@ -18,6 +19,7 @@ export type MoneySetupProgress = {
 type MoneySetupProgressInput = {
   locale: Locale;
   moneySetup: MoneySetup;
+  categoryBudgets: CategoryBudget[];
   balances: {
     all: number;
     me: number;
@@ -28,7 +30,7 @@ type MoneySetupProgressInput = {
 export function buildMoneySetupProgress(
   input: MoneySetupProgressInput,
 ): MoneySetupProgress {
-  const { locale, moneySetup, balances } = input;
+  const { locale, moneySetup, categoryBudgets, balances } = input;
   const currentBalance = moneySetup.useHouseholdBalance ? balances.all : balances.me;
 
   const items: MoneySetupProgressItem[] = [
@@ -47,8 +49,8 @@ export function buildMoneySetupProgress(
     },
     {
       id: "essential_categories",
-      label: locale === "ru" ? "Базовые траты" : "Essential spending",
-      done: moneySetup.essentialCategoryIds.length > 0,
+      label: locale === "ru" ? "Плановые расходы" : "Planned spending",
+      done: categoryBudgets.some((item) => Number.isFinite(item.monthlyLimit) && item.monthlyLimit > 0),
     },
   ];
 

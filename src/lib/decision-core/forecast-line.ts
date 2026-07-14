@@ -320,8 +320,12 @@ function buildFutureEssentialBudgetEvents(
   ctx: DecisionCoreContext,
   horizonEndDate: string,
 ): ForecastEvent[] {
-  const essentialIds = [...new Set(ctx.moneySetup.essentialCategoryIds)];
-  if (essentialIds.length === 0) return [];
+  const budgetCategoryIds = [...new Set(
+    ctx.categoryBudgets
+      .filter((item) => Number.isFinite(item.monthlyLimit) && item.monthlyLimit > 0)
+      .map((item) => item.categoryId),
+  )];
+  if (budgetCategoryIds.length === 0) return [];
 
   const budgetsByCategory = new Map(
     ctx.categoryBudgets.map((item) => [item.categoryId, item] as const),
@@ -349,7 +353,7 @@ function buildFutureEssentialBudgetEvents(
     const visibleTo = period.to <= horizonEndDate ? period.to : horizonEndDate;
     if (visibleFrom > visibleTo) continue;
 
-    for (const categoryId of essentialIds) {
+    for (const categoryId of budgetCategoryIds) {
       const budget = budgetsByCategory.get(categoryId);
       if (!budget || !Number.isFinite(budget.monthlyLimit) || budget.monthlyLimit <= 0) {
         continue;

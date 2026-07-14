@@ -94,7 +94,9 @@ function hasAnyMoneySetup(setup: MoneySetup): boolean {
     setup.nextIncomeDate ||
       setup.expectedIncomeAmount ||
       setup.incomeSources.length > 0 ||
-      setup.essentialCategoryIds.length > 0,
+      setup.requiredRecurringIds.length > 0 ||
+      setup.hasNoRequiredFixedExpenses ||
+      setup.useHouseholdBalance,
   );
 }
 
@@ -411,11 +413,11 @@ function buildPlannedFreeMoneyItem(
     caption:
       locale === "ru"
         ? plannedFreeMoney.includesUnconfirmedIncome
-          ? "После всех платежей и базовых расходов, если регулярные доходы придут по плану. Поступление ещё не подтверждено."
-          : "После всех платежей и базовых расходов, если регулярные доходы придут по плану."
+          ? "После всех платежей и плановых расходов, если регулярные доходы придут по плану. Поступление ещё не подтверждено."
+          : "После всех платежей и плановых расходов, если регулярные доходы придут по плану."
         : plannedFreeMoney.includesUnconfirmedIncome
-          ? "After all payments and planned essentials, if recurring income arrives as planned. The income is not confirmed yet."
-          : "After all payments and planned essentials, if recurring income arrives as planned.",
+          ? "After all payments and planned spending, if recurring income arrives as planned. The income is not confirmed yet."
+          : "After all payments and planned spending, if recurring income arrives as planned.",
     layout: "wide",
     details: plannedFreeMoney.breakdown
       ? [
@@ -443,7 +445,7 @@ function buildPlannedFreeMoneyItem(
             tone: "negative",
           },
           {
-            label: locale === "ru" ? "Плановые базовые траты" : "Planned essentials",
+            label: locale === "ru" ? "Плановые расходы" : "Planned spending",
             value: `-${moneyValue(plannedFreeMoney.breakdown.essentialPlannedSpending, locale) ?? ""}`,
             tone: "negative",
           },
