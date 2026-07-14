@@ -24,7 +24,7 @@ export function PlanTab({
         collapsible={false}
         activeTab={section}
         onActiveTabChange={(tab) => onSectionChange(tab as PlanSection)}
-        visibleTabs={["recurring", "goals", "limits", "debts", "funds", "emergency"]}
+        visibleTabs={["recurring", "goals", "limits", "debts", "funds", "emergency", "stats", "advisor"]}
         focusEntityId={entityId}
       />
     </div>

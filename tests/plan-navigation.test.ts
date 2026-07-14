@@ -44,9 +44,12 @@ test("forecast tab is read-only and links into plan instead of rendering plannin
   assert.match(forecastTabSource, /onOpenPlan/);
 });
 
-test("plan tab reuses planning panel sections for recurring goals limits debts and funds", () => {
+test("plan tab reuses planning panel sections for recurring goals limits debts funds stats and adviser", () => {
   assert.match(planTabSource, /<PlanningPanel/);
-  assert.match(planTabSource, /visibleTabs=\{\["recurring", "goals", "limits", "debts", "funds", "emergency"\]\}/);
+  assert.match(
+    planTabSource,
+    /visibleTabs=\{\["recurring", "goals", "limits", "debts", "funds", "emergency", "stats", "advisor"\]\}/,
+  );
   assert.match(planTabSource, /Доходы, платежи, цели и бюджеты на будущее/);
 });
 
