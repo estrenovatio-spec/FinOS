@@ -191,9 +191,15 @@ test("expected event dialog uses human labels and keeps the confirmation form re
   assert.match(todaySource, /Оплатил/);
   assert.match(recurringSource, /Не оплатил/);
   assert.match(dialogSource, /Напомнить завтра/);
+  assert.match(dialogSource, /onClick=\{handleSnoozeUntilTomorrow\}/);
+  assert.match(dialogSource, /Сохранить перенос/);
+  assert.match(dialogSource, /Отменить событие\?/);
+  assert.match(dialogSource, /Оно больше не будет учитываться в прогнозе\./);
   assert.match(dialogSource, /Обновить регулярную сумму/);
   assert.match(dialogSource, /Доход перенесён\\nНовое ожидание/);
   assert.match(dialogSource, /Платёж перенесён\\nНовое ожидание/);
+  assert.doesNotMatch(dialogSource, /onClick=\{\(\) => setSkipChoice\("remind_tomorrow"\)\}/);
+  assert.doesNotMatch(dialogSource, /Готово/);
   assert.match(txDialogSource, /fieldMode\?: "full" \| "expected_event"/);
   assert.match(txDialogSource, /!expectedEventMode \? \(/);
 });

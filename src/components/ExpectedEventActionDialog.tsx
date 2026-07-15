@@ -142,6 +142,8 @@ export function ExpectedEventActionDialog({
 
   const confirmOpen = open && mode === "confirm" && event != null;
   const skipOpen = open && mode === "skip" && event != null;
+  const isRescheduleMode = skipChoice === "reschedule";
+  const isCancelMode = skipChoice === "cancel";
 
   function appendHistory(
     action:
@@ -436,9 +438,9 @@ export function ExpectedEventActionDialog({
                 </Button>
                 <Button
                   type="button"
-                  variant={skipChoice === "remind_tomorrow" ? "default" : "outline"}
+                  variant="outline"
                   className="flex w-full items-center justify-start gap-2 text-left"
-                  onClick={() => setSkipChoice("remind_tomorrow")}
+                  onClick={handleSnoozeUntilTomorrow}
                 >
                   <Clock3 className="h-4 w-4 shrink-0" />
                   {locale === "ru" ? "Напомнить завтра" : "Remind me tomorrow"}
@@ -454,7 +456,7 @@ export function ExpectedEventActionDialog({
                 </Button>
               </div>
 
-              {skipChoice === "reschedule" ? (
+              {isRescheduleMode ? (
                 <div className="space-y-1">
                   <label className="text-sm font-medium" htmlFor="expected-event-date">
                     {locale === "ru" ? "Новая дата" : "New date"}
@@ -468,19 +470,57 @@ export function ExpectedEventActionDialog({
                 </div>
               ) : null}
 
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-                  {locale === "ru" ? "Назад" : "Back"}
-                </Button>
-                <Button
-                  type="button"
-                  className="flex-1"
-                  onClick={applySkipChoice}
-                  disabled={skipChoice === "reschedule" && !rescheduleDate}
-                >
-                  {locale === "ru" ? "Готово" : "Done"}
-                </Button>
-              </div>
+              {isCancelMode ? (
+                <div className="space-y-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-3">
+                  <p className="text-sm font-medium">
+                    {locale === "ru" ? "Отменить событие?" : "Cancel this event?"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {locale === "ru"
+                      ? "Оно больше не будет учитываться в прогнозе."
+                      : "It will no longer be included in the forecast."}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      {locale === "ru" ? "Отмена" : "Keep event"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={applySkipChoice}
+                    >
+                      {locale === "ru" ? "Отменить событие" : "Cancel event"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {isRescheduleMode ? (
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    {locale === "ru" ? "Назад" : "Back"}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={applySkipChoice}
+                    disabled={!rescheduleDate}
+                  >
+                    {locale === "ru" ? "Сохранить перенос" : "Save reschedule"}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>
