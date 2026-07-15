@@ -3,6 +3,7 @@
 import { ChevronLeft } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ArchiveRestorePanel } from "@/components/ArchiveRestorePanel";
+import { CategoryManager } from "@/components/CategoryManager";
 import { HouseholdCloudPanel } from "@/components/HouseholdCloudPanel";
 import { SettingsMenuRow } from "@/components/SettingsMenuRow";
 import { SettingsSection } from "@/components/SettingsSection";
@@ -23,6 +24,7 @@ import { useStore } from "@/store/useStore";
 
 type SettingsScreen =
   | "menu"
+  | "categories"
   | "language"
   | "cloud"
   | "export"
@@ -53,6 +55,14 @@ export function SettingsDialogNav({
   const [confirmClear, setConfirmClear] = useState(false);
 
   const menuItems: MenuItem[] = [
+    {
+      id: "categories",
+      title: locale === "ru" ? "Категории" : "Categories",
+      description:
+        locale === "ru"
+          ? "Добавляйте свои категории и ключевые слова."
+          : "Add your own categories and keywords.",
+    },
     {
       id: "language",
       title: t(locale, "settingsLanguage"),
@@ -173,6 +183,7 @@ export function SettingsDialogNav({
         : menuItems.find((item) => item.id === screen)?.title ?? t(locale, "settings");
 
   const detailContent: Record<Exclude<SettingsScreen, "menu">, ReactNode> = {
+    categories: <CategoryManager />,
     language: (
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">{t(locale, "settingsLanguageHint")}</p>

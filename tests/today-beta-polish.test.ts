@@ -1211,10 +1211,16 @@ test("Settings tab now renders real app settings instead of services or business
     path.join(process.cwd(), "src/components/app/SettingsTab.tsx"),
     "utf8",
   );
+  const settingsNavSource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/SettingsDialogNav.tsx"),
+    "utf8",
+  );
 
   assert.match(source, /<SettingsDialogNav open onOpenChange=\{\(\) => \{\}\} \/>/);
   assert.doesNotMatch(source, /<MoreTab/);
   assert.doesNotMatch(source, /<BusinessTab/);
+  assert.match(settingsNavSource, /"Категории"/);
+  assert.match(settingsNavSource, /<CategoryManager \/>/);
 });
 
 test("Today and recurring pending cards use the shared confirm and skip workflow", () => {
