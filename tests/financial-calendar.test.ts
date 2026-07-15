@@ -192,7 +192,7 @@ test("forecast tab exposes a line and calendar switch without adding a new botto
   assert.doesNotMatch(source, /id: "calendar"/);
 });
 
-test("calendar view offers month navigation and day details with Edit plan deep link", () => {
+test("calendar view uses inline accordion details instead of a detached details block", () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), "src/components/app/ForecastCalendarView.tsx"),
     "utf8",
@@ -200,10 +200,12 @@ test("calendar view offers month navigation and day details with Edit plan deep 
 
   assert.match(source, /Календарь денег/);
   assert.match(source, /setMonthIndex/);
-  assert.match(source, /formatHumanDateLong\(selectedDate, locale\)/);
-  assert.match(source, /Что произойдёт с деньгами в этот день/);
+  assert.match(source, /selectedDate === day\.date/);
+  assert.match(source, /onClick=\{\(\) => setSelectedDate/);
+  assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
   assert.match(source, /Баланс после дня/);
   assert.match(source, /🟡/);
   assert.match(source, /Изменить план/);
+  assert.doesNotMatch(source, /Что произойдёт с деньгами в этот день/);
 });

@@ -1140,10 +1140,10 @@ export const DICT = {
     planningRecurringPaidOn: "Оплачено: {date}",
     planningRecurringSkippedInPeriod: "Не было в этом периоде: {count}",
     planningRecurringHint:
-      "Когда наступит дата, отметьте «Оплатил». Если платёж не прошёл — выберите «Не оплатил» и решите, перенести, напомнить завтра или отменить только это ожидание.",
+      "Когда наступит дата, отметьте «Оплатил». Если платёж не прошёл — выберите «Не оплатил» и решите, перенести, напомнить завтра или отменить только платёж этого месяца.",
     recurringPendingTitle: "Подтвердите регулярный расход",
     recurringPendingHint:
-      "С баланса спишется только после подтверждения. Если платёж ещё не прошёл, выберите «Не оплатил» и решите, что сделать с этим ожиданием.",
+      "С баланса спишется только после подтверждения. Если платёж ещё не прошёл, выберите «Не оплатил» и решите, что сделать с этим ожидаемым платежом.",
     recurringPendingBadge: "Ждёт подтверждения",
     recurringPendingConfirm: "Оплатил",
     recurringPendingSkip: "Не оплатил",
@@ -2282,14 +2282,14 @@ export const DICT = {
     planningRecurringPaidOn: "Paid: {date}",
     planningRecurringSkippedInPeriod: "Skipped this period: {count}",
     planningRecurringHint:
-      "When the date arrives, mark the event as “Paid”. If the payment did not happen, choose “Not paid” and then move it, remind tomorrow, or cancel only this occurrence.",
+      "When the date arrives, mark the payment as “Paid”. If it did not happen, choose “Not paid” and then move it, remind tomorrow, or cancel only this month's payment.",
     recurringPendingTitle: "Confirm the recurring expense",
     recurringPendingHint:
-      "It affects the balance only after confirmation. If the payment did not happen, choose “Not paid” and decide what to do with this expected occurrence.",
+      "It affects the balance only after confirmation. If the payment did not happen, choose “Not paid” and decide what to do with this expected payment.",
     recurringPendingBadge: "Awaiting confirmation",
     recurringPendingConfirm: "Paid",
     recurringPendingSkip: "Not paid",
-    recurringPendingDismiss: "Cancel occurrence",
+    recurringPendingDismiss: "Cancel this month's payment",
     recurringPendingConfirmShort: "✓",
     recurringPendingDismissShort: "✕",
     planningRecurringStatusActive: "Active",

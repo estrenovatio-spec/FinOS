@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Goal, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Goal, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,11 +23,6 @@ import type {
 } from "@/lib/decision-core/types";
 import type { Locale } from "@/types";
 import type { SavingsGoal } from "@/types/planning";
-
-const WEEKDAY_LABELS: Record<Locale, string[]> = {
-  ru: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
-  en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-};
 
 function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   switch (source) {
@@ -188,33 +183,6 @@ export function ForecastCalendarView({
     setSelectedDate(firstMeaningfulDay?.date ?? null);
   }, [month]);
 
-  const selectedDay = selectedDate ? daysByDate.get(selectedDate) ?? null : null;
-  const selectedGoals = selectedDate ? goalMap.get(selectedDate) ?? [] : [];
-
-  const selectedEvent = selectedDay?.events[0] ?? null;
-  const planLink = (() => {
-    if (selectedGoals[0]) {
-      return { section: "goals" as const, entityId: selectedGoals[0].id };
-    }
-    if (!selectedEvent) return { section: "recurring" as const, entityId: null };
-    if (selectedEvent.source === "essential_budget") {
-      return {
-        section: "limits" as const,
-        entityId: selectedEvent.budgetReserveItems?.[0]?.categoryId ?? null,
-      };
-    }
-    if (selectedEvent.source === "debt_payment") {
-      return { section: "debts" as const, entityId: null };
-    }
-    if (selectedEvent.source === "recurring") {
-      return { section: "recurring" as const, entityId: selectedEvent.recurringId ?? null };
-    }
-    if (selectedEvent.source === "income_source") {
-      return { section: "recurring" as const, entityId: selectedEvent.incomeSourceId ?? null };
-    }
-    return { section: "recurring" as const, entityId: null };
-  })();
-
   if (!month) {
     return (
       <Card className="border-primary/20 bg-primary/5 shadow-none">
@@ -272,272 +240,245 @@ export function ForecastCalendarView({
               {locale === "ru" ? "< Листайте по месяцам >" : "< Browse months >"}
             </p>
           </div>
-
-          <div className="hidden grid-cols-7 gap-2 md:grid">
-            {WEEKDAY_LABELS[locale].map((label) => (
-              <p key={label} className="px-1 text-xs font-medium text-muted-foreground">
-                {label}
-              </p>
-            ))}
-            {month.days.map((day) =>
-              day.isCurrentMonth ? (
-                <button
-                  key={day.date}
-                  type="button"
-                  onClick={() => setSelectedDate(day.date)}
-                  className={[
-                    "min-h-[112px] rounded-xl border p-2 text-left transition-colors",
-                    selectedDate === day.date
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/25"
-                      : "border-border/70 bg-background/80 hover:bg-muted/40",
-                    day.isDeficit ? "border-rose-300" : "",
-                  ].join(" ")}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-sm font-semibold text-foreground">{day.dayNumber}</span>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatWeekdayShort(day.date, locale)}
-                      </p>
-                    </div>
-                    {day.isDeficit ? <TriangleAlert className="h-4 w-4 text-rose-600" /> : null}
-                  </div>
-                  <div className="mt-2 space-y-1 text-xs">
-                    {day.incomeTotal > 0 ? (
-                      <p className="font-medium text-emerald-600">+{formatMoney(day.incomeTotal, locale)} ₽</p>
-                    ) : null}
-                    {day.expenseTotal > 0 ? (
-                      <p className="font-medium text-rose-600">−{formatMoney(day.expenseTotal, locale)} ₽</p>
-                    ) : null}
-                    {day.endBalance != null ? (
-                      <p className="text-muted-foreground">
-                        {locale === "ru" ? "После дня:" : "After day:"} {formatMoney(day.endBalance, locale)} ₽
-                      </p>
-                    ) : null}
-                    {day.goals.length > 0 ? (
-                      <p className="flex items-center gap-1 text-sky-600">
-                        <Goal className="h-3.5 w-3.5" />
-                        {day.goals.length}
-                      </p>
-                    ) : null}
-                  </div>
-                </button>
-              ) : (
-                <div key={day.date} aria-hidden className="min-h-[112px] rounded-xl bg-transparent" />
-              ),
-            )}
-          </div>
-
-          <div className="space-y-2 md:hidden">
+          <div className="space-y-2">
             {month.days
               .filter((day) => day.isCurrentMonth && (day.hasEvents || day.goals.length > 0))
-              .map((day) => (
-                <button
-                  key={day.date}
-                  type="button"
-                  onClick={() => setSelectedDate(day.date)}
-                  className={[
-                    "w-full rounded-xl border p-3 text-left transition-colors",
-                    selectedDate === day.date
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/25"
-                      : "border-border/70 bg-background/80",
-                  ].join(" ")}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-xl font-semibold leading-none text-foreground">
-                          {day.dayNumber}
-                        </p>
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            {formatWeekdayShort(day.date, locale)}
-                          </p>
-                          <p className="text-sm font-semibold text-foreground">
-                            {formatTransactionDateShort(day.date, locale)}
-                          </p>
+              .map((day) => {
+                const isOpen = selectedDate === day.date;
+                const forecastDay = daysByDate.get(day.date) ?? null;
+                const dayGoals = goalMap.get(day.date) ?? [];
+                const grouped = forecastDay ? groupEventsForDay(forecastDay.events) : null;
+                const sections =
+                  grouped == null
+                    ? []
+                    : [
+                        {
+                          key: "expected",
+                          title: locale === "ru" ? "Ожидается" : "Expected",
+                          events: grouped.expected,
+                        },
+                        {
+                          key: "income",
+                          title: locale === "ru" ? "Доходы" : "Income",
+                          events: grouped.incomes,
+                        },
+                        {
+                          key: "expense",
+                          title: locale === "ru" ? "Расходы" : "Expenses",
+                          events: grouped.expenses,
+                        },
+                      ].filter((section) => section.events.length > 0);
+
+                const inlinePlanLink = (() => {
+                  if (dayGoals[0]) {
+                    return { section: "goals" as const, entityId: dayGoals[0].id };
+                  }
+                  const firstEvent = forecastDay?.events[0] ?? null;
+                  if (!firstEvent) return { section: "recurring" as const, entityId: null };
+                  if (firstEvent.source === "essential_budget") {
+                    return {
+                      section: "limits" as const,
+                      entityId: firstEvent.budgetReserveItems?.[0]?.categoryId ?? null,
+                    };
+                  }
+                  if (firstEvent.source === "debt_payment") {
+                    return { section: "debts" as const, entityId: null };
+                  }
+                  if (firstEvent.source === "recurring") {
+                    return { section: "recurring" as const, entityId: firstEvent.recurringId ?? null };
+                  }
+                  if (firstEvent.source === "income_source") {
+                    return { section: "recurring" as const, entityId: firstEvent.incomeSourceId ?? null };
+                  }
+                  return { section: "recurring" as const, entityId: null };
+                })();
+
+                return (
+                  <div
+                    key={day.date}
+                    className={[
+                      "overflow-hidden rounded-2xl border bg-background/80 transition-colors",
+                      isOpen ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border/70",
+                      day.isDeficit ? "border-rose-300" : "",
+                    ].join(" ")}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate((current) => (current === day.date ? null : day.date))}
+                      className="w-full px-4 py-3 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-start gap-3">
+                            <div className="min-w-[3.25rem] text-center">
+                              <p className="text-2xl font-semibold leading-none text-foreground">
+                                {day.dayNumber}
+                              </p>
+                              <p className="mt-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                {formatWeekdayShort(day.date, locale)}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatHumanDateLong(day.date, locale)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {day.date === todayIso
+                                  ? locale === "ru"
+                                    ? "Сегодня"
+                                    : "Today"
+                                  : locale === "ru"
+                                    ? `${day.eventsCount} движений по деньгам`
+                                    : `${day.eventsCount} money events`}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="text-right text-xs">
+                            {day.incomeTotal > 0 ? (
+                              <p className="font-medium text-emerald-600">+{formatMoney(day.incomeTotal, locale)} ₽</p>
+                            ) : null}
+                            {day.expenseTotal > 0 ? (
+                              <p className="font-medium text-rose-600">−{formatMoney(day.expenseTotal, locale)} ₽</p>
+                            ) : null}
+                            {day.endBalance != null ? (
+                              <p className="mt-1 text-muted-foreground">
+                                {locale === "ru" ? "После дня" : "After day"}: {formatMoney(day.endBalance, locale)} ₽
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="mt-0.5 flex flex-col items-end gap-2">
+                            {day.isDeficit ? <TriangleAlert className="h-4 w-4 text-rose-600" /> : null}
+                            <ChevronDown
+                              className={[
+                                "h-4 w-4 text-muted-foreground transition-transform",
+                                isOpen ? "rotate-180" : "",
+                              ].join(" ")}
+                            />
+                          </div>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {day.eventsCount > 0
-                          ? locale === "ru"
-                            ? `${day.eventsCount} движений`
-                            : `${day.eventsCount} money events`
-                          : locale === "ru"
-                            ? "Без движений"
-                            : "No movement"}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs">
-                      {day.incomeTotal > 0 ? (
-                        <p className="font-medium text-emerald-600">+{formatMoney(day.incomeTotal, locale)} ₽</p>
-                      ) : null}
-                      {day.expenseTotal > 0 ? (
-                        <p className="font-medium text-rose-600">−{formatMoney(day.expenseTotal, locale)} ₽</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </button>
-              ))}
-          </div>
-        </div>
+                    </button>
 
-        {selectedDate ? (
-          <div className="space-y-3 rounded-xl border border-primary/20 bg-background/80 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-base font-semibold text-foreground">
-                  {formatHumanDateLong(selectedDate, locale)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {locale === "ru"
-                    ? selectedDate === todayIso
-                      ? "Сегодня"
-                      : "Что произойдёт с деньгами в этот день"
-                    : selectedDate === todayIso
-                      ? "Today"
-                      : "What happens to your money on this day"}
-                </p>
-              </div>
-              {selectedDay?.endBalance != null ? (
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-foreground">
-                    {formatMoney(selectedDay.endBalance, locale)} ₽
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {locale === "ru" ? "Баланс после дня" : "Balance after the day"}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-
-            {selectedGoals.length > 0 ? (
-              <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/70 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
-                  {locale === "ru" ? "Цели" : "Goals"}
-                </p>
-                {selectedGoals.map((goal) => (
-                  <div key={goal.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-foreground">{goal.name}</span>
-                    <span className="text-muted-foreground">
-                      {locale === "ru" ? "Срок" : "Due"} {formatIsoDate(goal.deadline ?? "", locale)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {selectedDay ? (
-              <>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
-                    <p className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Сколько было утром" : "Start of day"}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-foreground">
-                      {formatMoney(selectedDay.startBalance, locale)} ₽
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
-                    <p className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Сколько останется после дня" : "End of day"}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-foreground">
-                      {formatMoney(selectedDay.endBalance, locale)} ₽
-                    </p>
-                  </div>
-                </div>
-
-                {(() => {
-                  const grouped = groupEventsForDay(selectedDay.events);
-                  const sections = [
-                    {
-                      key: "expected",
-                      title: locale === "ru" ? "Ожидается" : "Expected",
-                      events: grouped.expected,
-                    },
-                    {
-                      key: "income",
-                      title: locale === "ru" ? "Доходы" : "Income",
-                      events: grouped.incomes,
-                    },
-                    {
-                      key: "expense",
-                      title: locale === "ru" ? "Расходы" : "Expenses",
-                      events: grouped.expenses,
-                    },
-                  ].filter((section) => section.events.length > 0);
-
-                  return (
-                    <div className="space-y-3">
-                      {sections.map((section) => (
-                        <div key={section.key} className="space-y-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            {section.title}
-                          </p>
-                          {section.events.map((event) => {
-                            const income = event.amount > 0;
-                            const accent = eventAccent(event, locale);
-                            return (
-                              <div key={event.id} className="rounded-lg border border-border/60 bg-background/70 p-3">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className={["text-xs font-medium", accent.tone].join(" ")}>
-                                      {accent.badge} {accent.label}
-                                    </p>
-                                    <p className="mt-1 truncate text-sm font-medium text-foreground">
-                                      {event.title}
-                                    </p>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                      {sourceLabel(event.source, locale)}
-                                    </p>
-                                    {plannedIncomeStateLabel(event, locale) ? (
-                                      <p className="mt-0.5 text-xs text-muted-foreground">
-                                        {plannedIncomeStateLabel(event, locale)}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                  <p className={["text-sm font-semibold", income ? "text-emerald-600" : "text-rose-600"].join(" ")}>
-                                    {income ? "+" : "−"}
-                                    {formatMoney(Math.abs(event.amount), locale)} ₽
-                                  </p>
-                                </div>
+                    {isOpen ? (
+                      <div className="space-y-3 border-t border-primary/10 px-4 py-4">
+                        {dayGoals.length > 0 ? (
+                          <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/70 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
+                              {locale === "ru" ? "Цели" : "Goals"}
+                            </p>
+                            {dayGoals.map((goal) => (
+                              <div key={goal.id} className="flex items-center justify-between gap-3 text-sm">
+                                <span className="min-w-0 truncate text-foreground">{goal.name}</span>
+                                <span className="text-muted-foreground">
+                                  {locale === "ru" ? "Срок" : "Due"} {formatIsoDate(goal.deadline ?? "", locale)}
+                                </span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
+                            ))}
+                          </div>
+                        ) : null}
 
-                {explanation?.date === selectedDate ? (
-                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-                    <p className="text-sm font-semibold text-foreground">{explanation.title}</p>
-                    <p className="mt-1 text-sm text-foreground">{explanation.summary}</p>
-                    {explanation.detail ? (
-                      <p className="mt-1 text-xs leading-snug text-muted-foreground">{explanation.detail}</p>
+                        {forecastDay ? (
+                          <>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+                                <p className="text-xs text-muted-foreground">
+                                  {locale === "ru" ? "Сколько было утром" : "Start of day"}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">
+                                  {formatMoney(forecastDay.startBalance, locale)} ₽
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+                                <p className="text-xs text-muted-foreground">
+                                  {locale === "ru" ? "Баланс после дня" : "After the day"}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">
+                                  {formatMoney(forecastDay.endBalance, locale)} ₽
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              {sections.map((section) => (
+                                <div key={section.key} className="space-y-2">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    {section.title}
+                                  </p>
+                                  {section.events.map((event) => {
+                                    const income = event.amount > 0;
+                                    const accent = eventAccent(event, locale);
+                                    return (
+                                      <div key={event.id} className="rounded-lg border border-border/60 bg-background/70 p-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <p className={["text-xs font-medium", accent.tone].join(" ")}>
+                                              {accent.badge} {accent.label}
+                                            </p>
+                                            <p className="mt-1 text-sm font-medium text-foreground">
+                                              {event.title}
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                              {sourceLabel(event.source, locale)}
+                                            </p>
+                                            {plannedIncomeStateLabel(event, locale) ? (
+                                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                                {plannedIncomeStateLabel(event, locale)}
+                                              </p>
+                                            ) : null}
+                                          </div>
+                                          <p
+                                            className={[
+                                              "text-sm font-semibold",
+                                              income ? "text-emerald-600" : "text-rose-600",
+                                            ].join(" ")}
+                                          >
+                                            {income ? "+" : "−"}
+                                            {formatMoney(Math.abs(event.amount), locale)} ₽
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+
+                            {explanation?.date === day.date ? (
+                              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                                <p className="text-sm font-semibold text-foreground">{explanation.title}</p>
+                                <p className="mt-1 text-sm text-foreground">{explanation.summary}</p>
+                                {explanation.detail ? (
+                                  <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                                    {explanation.detail}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-border/70 bg-background/70 p-3 text-sm text-muted-foreground">
+                            {locale === "ru"
+                              ? "На эту дату пока ничего не запланировано."
+                              : "Nothing is planned for this date yet."}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                          onClick={() => onOpenPlan?.(inlinePlanLink)}
+                        >
+                          {locale === "ru" ? "Изменить план" : "Edit plan"}
+                        </button>
+                      </div>
                     ) : null}
                   </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border/70 bg-background/70 p-3 text-sm text-muted-foreground">
-                {locale === "ru"
-                  ? "На эту дату пока ничего не запланировано."
-                  : "Nothing is planned for this date yet."}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-              onClick={() => onOpenPlan?.(planLink)}
-            >
-              {locale === "ru" ? "Изменить план" : "Edit plan"}
-            </button>
+                );
+              })}
           </div>
-        ) : null}
+        </div>
       </CardContent>
     </Card>
   );

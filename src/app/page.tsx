@@ -3,13 +3,13 @@
 import { PreviewAppShell } from "@/components/app/PreviewAppShell";
 import { useRecurringProcessor } from "@/hooks/useRecurringProcessor";
 import { HouseholdCloudBootstrap } from "@/components/HouseholdCloudBootstrap";
+import { FirstLaunchOnboardingDialog } from "@/components/FirstLaunchOnboardingDialog";
 import { SettingsDialogHost } from "@/components/SettingsDialogHost";
 import { PaymentReturnRefresh } from "@/components/PaymentReturnRefresh";
 import { SubscriptionExpiredReminder } from "@/components/SubscriptionExpiredReminder";
 import { SubscriptionAccessBanner } from "@/components/SubscriptionAccessBanner";
 import { TrialBanner } from "@/components/TrialBanner";
 import { TodayScreen } from "@/components/TodayScreen";
-import { EmailSyncOnboardingDialog } from "@/components/EmailSyncOnboardingDialog";
 import { ForecastTab } from "@/components/app/ForecastTab";
 import { OperationsTab } from "@/components/app/OperationsTab";
 import { PlanTab } from "@/components/app/PlanTab";
@@ -25,7 +25,6 @@ import {
   writeStoredPlanSection,
   type PlanSection,
 } from "@/lib/plan-navigation";
-import { FamilyOnboarding } from "@/components/FamilyOnboarding";
 import { detectLocale } from "@/lib/i18n";
 import type { ForecastFocus } from "@/lib/forecast-focus";
 import { clearDismissibleHintKeys } from "@/lib/storage-reset";
@@ -170,10 +169,9 @@ export default function HomePage() {
       lang={locale}
     >
       <HouseholdCloudBootstrap />
-      <EmailSyncOnboardingDialog />
+      <FirstLaunchOnboardingDialog onNavigate={onAppViewChange} />
       <PaymentReturnRefresh />
       <SettingsDialogHost />
-      {!previewMode ? <FamilyOnboarding /> : null}
       <SubscriptionAccessBanner />
       <TrialBanner />
       <SubscriptionExpiredReminder />

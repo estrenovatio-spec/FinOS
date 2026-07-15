@@ -27,9 +27,36 @@ test("Plan tab exposes statistics and adviser in the visible planning tabs", () 
   assert.match(planTab, /visibleTabs=\{\["recurring", "goals", "limits", "debts", "funds", "emergency", "stats", "advisor"\]\}/);
 });
 
-test("Adviser screen shows a clear title and real starter questions", () => {
+test("Adviser screen now starts from a dedicated questions hub with contextual prompts", () => {
   assert.match(aiAnalysisTab, /Финансовый советник/);
-  assert.match(aiAnalysisTab, /Задайте вопрос о своих деньгах и планах/);
-  assert.match(aiAnalysisTab, /Могу ли я сейчас сделать покупку на 10 000 ₽\?/);
-  assert.match(aiAnalysisTab, /Что будет, если доход задержится\?/);
+  assert.match(aiAnalysisTab, /value="questions"/);
+  assert.match(aiAnalysisTab, /Вопросы/);
+  assert.match(aiAnalysisTab, /О чём можно спросить/);
+  assert.match(aiAnalysisTab, /buildAdvisorContext/);
+  assert.match(aiAnalysisTab, /Ваш вопрос/);
+  assert.match(aiAnalysisTab, /Открыть разбор на 7 дней/);
+  assert.match(aiAnalysisTab, /Открыть разбор на 30 дней/);
+});
+
+test("Advisor context builder prepares cards for balance, forecast, goals, recurring and limits", () => {
+  const advisorContext = readFileSync("src/lib/advisor-context.ts", "utf8");
+
+  assert.match(advisorContext, /id: "balance"/);
+  assert.match(advisorContext, /id: "forecast"/);
+  assert.match(advisorContext, /id: "goals"/);
+  assert.match(advisorContext, /id: "recurring"/);
+  assert.match(advisorContext, /id: "limits"/);
+});
+
+test("App shell uses the new first-launch onboarding instead of the legacy family overlay", () => {
+  const pageSource = readFileSync("src/app/page.tsx", "utf8");
+  const onboardingSource = readFileSync("src/components/FirstLaunchOnboardingDialog.tsx", "utf8");
+
+  assert.match(pageSource, /FirstLaunchOnboardingDialog/);
+  assert.doesNotMatch(pageSource, /<FamilyOnboarding/);
+  assert.match(onboardingSource, /Вход и синхронизация/);
+  assert.match(onboardingSource, /Доходы/);
+  assert.match(onboardingSource, /Обязательные платежи/);
+  assert.match(onboardingSource, /Лимиты и базовые траты/);
+  assert.match(onboardingSource, /Перейти в Today/);
 });
