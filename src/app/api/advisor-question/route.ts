@@ -29,6 +29,52 @@ function sanitizeValidationIssues(issues: z.ZodIssue[]) {
   }));
 }
 
+function buildSafeContextDebug(context: {
+  financialContext?: {
+    balances: {
+      currentBalance: number;
+      plannedFreeMoney: number;
+      periodEndDate: string;
+    };
+    incomes: {
+      recurring: Array<{ amount: number }>;
+      oneOff: Array<{ amount: number }>;
+      expectedTotal: number;
+    };
+    expenses: {
+      recurringTotal: number;
+      plannedBudgetsTotal: number;
+    };
+    goals: unknown[];
+    forecast: {
+      firstDeficitDate: string | null;
+    };
+  };
+}) {
+  const financialContext = context.financialContext;
+  if (!financialContext) return null;
+  return {
+    currentBalance: financialContext.balances.currentBalance,
+    plannedFreeMoney: financialContext.balances.plannedFreeMoney,
+    periodEndDate: financialContext.balances.periodEndDate,
+    incomeSourcesCount:
+      financialContext.incomes.recurring.length + financialContext.incomes.oneOff.length,
+    recurringIncomeTotal: financialContext.incomes.recurring.reduce(
+      (sum, income) => sum + Math.round(income.amount),
+      0,
+    ),
+    oneOffIncomeTotal: financialContext.incomes.oneOff.reduce(
+      (sum, income) => sum + Math.round(income.amount),
+      0,
+    ),
+    expectedIncomeTotal: Math.round(financialContext.incomes.expectedTotal),
+    recurringExpensesTotal: Math.round(financialContext.expenses.recurringTotal),
+    plannedBudgetsTotal: Math.round(financialContext.expenses.plannedBudgetsTotal),
+    goalsCount: financialContext.goals.length,
+    nearestRiskDate: financialContext.forecast.firstDeficitDate,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawJson: unknown = await request.json();
@@ -81,7 +127,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      console.info("[advisor-question] llm request", llmDebug);
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[advisor-question] llm request", {
+          ...llmDebug,
+          advisorContextSummary: buildSafeContextDebug(context),
+        });
+      } else {
+        console.info("[advisor-question] llm request", llmDebug);
+      }
       const completion = await createPlainTextChatCompletion(client, {
         model: resolveAdvisorModel(userPlan),
         messages: [
@@ -92,6 +145,7 @@ export async function POST(request: NextRequest) {
               cards: context.cards,
               periodNote: context.periodNote,
               questionGuide: context.questionGuide,
+              financialContext: context.financialContext,
             }),
           },
           ...messages.map((message) => ({

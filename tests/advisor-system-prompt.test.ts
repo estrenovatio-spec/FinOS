@@ -39,12 +39,11 @@ test("advisor prompt contains the fixed behavior rules and response format", () 
     ],
   });
 
-  assert.match(prompt, /Ты — финансовый советник FIN OS/);
+  assert.match(prompt, /Ты — личный финансовый консультант FIN OS/);
   assert.match(prompt, /Используй только информацию из переданного финансового контекста/);
   assert.match(prompt, /Не придумывай данные и не пересчитывай суммы самостоятельно/);
-  assert.match(prompt, /Сейчас:/);
-  assert.match(prompt, /Почему:/);
-  assert.match(prompt, /Что можно сделать:/);
+  assert.match(prompt, /Каждый важный вывод опирай на конкретные суммы, даты или статьи/);
+  assert.match(prompt, /Ответ должен быть коротким для мобильного экрана/);
 });
 
 test("advisor prompt avoids the banned technical English words in Russian copy", () => {
@@ -102,6 +101,7 @@ test("advisor context passes the financial picture instead of raw transactions",
   const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
   const context = buildAdvisorContext({
     locale: "ru",
+    today: state.today,
     currentBalance: state.balances.me,
     decision: snapshot,
     recurringTransactions: state.recurringTransactions,
@@ -109,17 +109,26 @@ test("advisor context passes the financial picture instead of raw transactions",
     debts: [],
     categoryBudgets: state.categoryBudgets,
     plannedFreeMoney,
+    categories: state.categories,
+    budgetMonthStartDay: state.budgetMonthStartDay,
+    transactions: state.transactions,
+    expectedEventReminderStates: state.moneySetup.expectedEventReminderStates,
   });
   const prompt = getAdvisorSystemPrompt({
     locale: "ru",
     cards: context.cards,
     periodNote: "до 31 июля 2026",
+    financialContext: context.financialContext,
   });
 
   assert.ok(context.cards.some((card) => card.id === "balance"));
   assert.ok(context.cards.some((card) => card.id === "free_money"));
   assert.ok(context.cards.some((card) => card.id === "recurring"));
+  assert.ok(context.financialContext.incomes.recurring.length > 0);
   assert.match(prompt, /Сейчас в кошельке/);
   assert.match(prompt, /Можно потратить/);
   assert.match(prompt, /Регулярные платежи и доходы/);
+  assert.match(prompt, /Структурированный финансовый контекст/);
+  assert.match(prompt, /Регулярные доходы:/);
+  assert.match(prompt, /Лимиты:/);
 });

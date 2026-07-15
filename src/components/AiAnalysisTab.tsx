@@ -118,6 +118,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
     () =>
       buildAdvisorContext({
         locale,
+        today,
         currentBalance: balances.me,
         decision,
         recurringTransactions,
@@ -125,16 +126,25 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
         debts,
         categoryBudgets,
         plannedFreeMoney,
+        transactions,
+        categories,
+        budgetMonthStartDay,
+        expectedEventReminderStates: moneySetup.expectedEventReminderStates,
       }),
     [
       balances.me,
+      budgetMonthStartDay,
+      categories,
       categoryBudgets,
       decision,
       debts,
       locale,
+      moneySetup.expectedEventReminderStates,
       plannedFreeMoney,
       recurringTransactions,
       savingsGoals,
+      today,
+      transactions,
     ],
   );
 
@@ -165,6 +175,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
       question,
       state: advisorState,
       plannedFreeMoneyAmount: plannedFreeMoney.amount ?? 0,
+      financialContext: advisorContext.financialContext,
     });
 
     const nextMessages = [...messages, { role: "user" as const, content: question }];
@@ -184,6 +195,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
           periodNote,
           periodEndDate: decision.forecast.horizonEndDate,
           questionGuide: questionBrief.promptGuide ?? undefined,
+          financialContext: advisorContext.financialContext,
         },
       };
 
