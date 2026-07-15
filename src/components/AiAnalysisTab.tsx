@@ -8,6 +8,7 @@ import { WeeklyAnalysisTab } from "@/components/WeeklyAnalysisTab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { buildAdvisorContext } from "@/lib/advisor-context";
+import type { AdvisorQuestionRequest } from "@/lib/ai/advisor-contract";
 import { buildAdvisorQuestionBrief } from "@/lib/ai/question-classifier";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { formatHumanDateLong, getLocalTodayIsoDate } from "@/lib/format-date";
@@ -173,34 +174,44 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
     setSendingQuestion(true);
 
     try {
+      const payload: AdvisorQuestionRequest = {
+        locale,
+        userPlan,
+        question,
+        messages,
+        context: {
+          cards: advisorContext.cards,
+          periodNote,
+          periodEndDate: decision.forecast.horizonEndDate,
+          questionGuide: questionBrief.promptGuide ?? undefined,
+        },
+      };
+
       const response = await fetch("/api/advisor-question", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locale,
-          userPlan,
-          question,
-          messages,
-          context: {
-            cards: advisorContext.cards,
-            periodNote,
-            periodEndDate: decision.forecast.horizonEndDate,
-            questionGuide: questionBrief.promptGuide,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const json = (await response.json()) as { success?: boolean; reply?: string; error?: string };
-      if (!response.ok || !json.reply) {
+      const json = (await response.json()) as {
+        success?: boolean;
+        reply?: string;
+        answer?: string;
+        error?: string;
+        userMessage?: string;
+      };
+      const answer = json.reply ?? json.answer;
+      if (!response.ok || !answer) {
         setQuestionError(
-          locale === "ru"
-            ? "Не удалось получить ответ. Попробуйте ещё раз."
-            : "Could not get an answer. Please try again.",
+          json.userMessage
+            ?? (locale === "ru"
+              ? "Не удалось получить ответ. Попробуйте ещё раз."
+              : "Could not get an answer. Please try again."),
         );
         return;
       }
 
-      setMessages([...nextMessages, { role: "assistant", content: json.reply }]);
+      setMessages([...nextMessages, { role: "assistant", content: answer }]);
     } catch {
       setQuestionError(
         locale === "ru"

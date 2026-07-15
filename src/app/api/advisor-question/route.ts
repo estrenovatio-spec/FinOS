@@ -7,41 +7,48 @@ import {
   getPlainTextLlmClient,
   isLlmConfigured,
 } from "@/lib/llm";
+import {
+  advisorQuestionRequestSchema,
+  normalizeAdvisorQuestionRequestBody,
+} from "@/lib/ai/advisor-contract";
 import { getAdvisorSystemPrompt } from "@/lib/ai/advisor-system-prompt";
 import { resolveAdvisorModel } from "@/lib/ai/model-router";
 
 export const maxDuration = 60;
 
-const messageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string().min(1).max(2000),
-});
+function listTopLevelKeys(input: unknown): string[] {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return [];
+  return Object.keys(input as Record<string, unknown>).sort();
+}
 
-const cardSchema = z.object({
-  label: z.string().min(1).max(100),
-  value: z.string().min(1).max(200),
-  note: z.string().min(1).max(400),
-});
-
-const bodySchema = z.object({
-  locale: z.enum(["ru", "en"]),
-  userPlan: z.enum(["free", "standard", "pro"]).default("free"),
-  question: z.string().min(1).max(1000),
-  messages: z.array(messageSchema).max(12).default([]),
-  context: z.object({
-    cards: z.array(cardSchema).max(8),
-    periodNote: z.string().max(200).optional(),
-    periodEndDate: z.string().optional(),
-    questionGuide: z.string().max(4000).optional(),
-  }),
-});
+function sanitizeValidationIssues(issues: z.ZodIssue[]) {
+  return issues.map((issue) => ({
+    path: issue.path.join("."),
+    code: issue.code,
+    message: issue.message,
+  }));
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const json: unknown = await request.json();
-    const parsed = bodySchema.safeParse(json);
+    const rawJson: unknown = await request.json();
+    const json = normalizeAdvisorQuestionRequestBody(rawJson);
+    const parsed = advisorQuestionRequestSchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+      const receivedFields = listTopLevelKeys(rawJson);
+      const issues = sanitizeValidationIssues(parsed.error.issues);
+      console.warn("[advisor-question] invalid_request", {
+        receivedFields,
+        issues,
+      });
+      return NextResponse.json(
+        {
+          error: "invalid_request",
+          userMessage:
+            "Не удалось отправить вопрос. Обновите страницу и попробуйте ещё раз.",
+        },
+        { status: 400 },
+      );
     }
 
     const { locale, userPlan, question, messages, context } = parsed.data;
@@ -54,13 +61,23 @@ export async function POST(request: NextRequest) {
 
     if (!isLlmConfigured()) {
       console.warn("[advisor-question] llm missing config", llmDebug);
-      return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
+      return NextResponse.json({
+        success: true,
+        reply: fallbackReply,
+        answer: fallbackReply,
+        fallback: true,
+      });
     }
 
     const client = getPlainTextLlmClient();
     if (!client) {
       console.warn("[advisor-question] llm client init failed", llmDebug);
-      return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
+      return NextResponse.json({
+        success: true,
+        reply: fallbackReply,
+        answer: fallbackReply,
+        fallback: true,
+      });
     }
 
     try {
@@ -92,17 +109,27 @@ export async function POST(request: NextRequest) {
 
       const reply = extractPlainTextFromLlmContent(completion.choices[0]?.message?.content);
       if (!reply) {
-        return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
+        return NextResponse.json({
+          success: true,
+          reply: fallbackReply,
+          answer: fallbackReply,
+          fallback: true,
+        });
       }
 
-      return NextResponse.json({ success: true, reply });
+      return NextResponse.json({ success: true, reply, answer: reply });
     } catch (error) {
       console.warn("[advisor-question] llm fallback", {
         ...llmDebug,
         name: error instanceof Error ? error.name : "unknown",
         message: error instanceof Error ? error.message : "unknown",
       });
-      return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
+      return NextResponse.json({
+        success: true,
+        reply: fallbackReply,
+        answer: fallbackReply,
+        fallback: true,
+      });
     }
   } catch {
     return NextResponse.json({ error: "advisor_question_failed" }, { status: 500 });
