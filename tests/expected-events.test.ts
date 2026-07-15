@@ -7,7 +7,7 @@ import {
   rescheduleIncomeSourceInSetup,
   shouldSuggestRecurringAmountUpdate,
 } from "@/lib/expected-events";
-import { emptyMoneySetup } from "@/lib/money-setup";
+import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 
 test("rescheduling legacy income source materializes it into incomeSources and updates primary date", () => {
   const setup = {
@@ -75,6 +75,49 @@ test("canceling recurring income skips the current occurrence and advances to th
   assert.equal(next.nextIncomeDate, "2026-08-14");
 });
 
+test("rescheduling recurring income closes the overdue occurrence and keeps the original monthly cadence", () => {
+  const setup = {
+    ...emptyMoneySetup(),
+    incomeSources: [
+      {
+        id: "salary-main",
+        label: "Зарплата",
+        expectedDate: "2026-07-06",
+        expectedAmount: 50000,
+        kind: "salary" as const,
+        recurrence: "monthly" as const,
+        intervalMonths: 1,
+        dayOfMonth: 6,
+        endDate: null,
+        isPrimary: true,
+      },
+    ],
+  };
+
+  const next = rescheduleIncomeSourceInSetup(setup, "salary-main", "2026-07-16", "ru");
+  const resolved = resolveMoneySetupIncomeSources({
+    moneySetup: next,
+    confirmedTransactions: [],
+    today: "2026-07-10",
+    forecastHorizonMonths: 3,
+    locale: "ru",
+  });
+
+  assert.deepEqual(
+    resolved.map((source) => [source.occurrenceDate, source.status]),
+    [
+      ["2026-07-16", "scheduled"],
+      ["2026-08-06", "scheduled"],
+      ["2026-09-06", "scheduled"],
+      ["2026-10-06", "scheduled"],
+    ],
+  );
+  assert.equal(
+    resolved.some((source) => source.occurrenceDate === "2026-07-06"),
+    false,
+  );
+});
+
 test("recurring amount suggestion appears only when the actual amount differs by more than ten percent", () => {
   assert.equal(shouldSuggestRecurringAmountUpdate(24000, 26000), false);
   assert.equal(shouldSuggestRecurringAmountUpdate(24000, 27000), true);
@@ -103,6 +146,8 @@ test("expected event dialog uses human labels and keeps the confirmation form re
   assert.match(recurringSource, /Не оплатил/);
   assert.match(dialogSource, /Напомнить завтра/);
   assert.match(dialogSource, /Обновить регулярную сумму/);
+  assert.match(dialogSource, /Доход перенесён\\nНовое ожидание/);
+  assert.match(dialogSource, /Платёж перенесён\\nНовое ожидание/);
   assert.match(txDialogSource, /fieldMode\?: "full" \| "expected_event"/);
   assert.match(txDialogSource, /!expectedEventMode \? \(/);
 });

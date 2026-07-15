@@ -256,8 +256,8 @@ export function ExpectedEventActionDialog({
         appendHistory("rescheduled", { resultingDate: rescheduleDate });
         toast(
           locale === "ru"
-            ? `Ожидаемый доход перенесён на ${formatTransactionDate(rescheduleDate, locale)}`
-            : `Expected income moved to ${formatTransactionDate(rescheduleDate, locale)}`,
+            ? `Доход перенесён\nНовое ожидание: ${formatTransactionDate(rescheduleDate, locale)}`
+            : `Income moved\nNext expected date: ${formatTransactionDate(rescheduleDate, locale)}`,
           "success",
         );
       } else if (skipChoice === "cancel") {
@@ -287,8 +287,8 @@ export function ExpectedEventActionDialog({
       appendHistory("rescheduled", { resultingDate: rescheduleDate });
       toast(
         locale === "ru"
-          ? `Платёж перенесён на ${formatTransactionDate(rescheduleDate, locale)}`
-          : `Payment moved to ${formatTransactionDate(rescheduleDate, locale)}`,
+          ? `Платёж перенесён\nНовое ожидание: ${formatTransactionDate(rescheduleDate, locale)}`
+          : `Payment moved\nNext expected date: ${formatTransactionDate(rescheduleDate, locale)}`,
         "success",
       );
       onOpenChange(false);

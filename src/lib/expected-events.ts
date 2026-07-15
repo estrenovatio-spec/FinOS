@@ -127,6 +127,13 @@ export function rescheduleIncomeSourceInSetup(
   const sources = materializeIncomeSources(setup, locale);
   const source = sources.find((item) => item.id === incomeSourceId);
   if (!source) return setup;
+  const nextDayOfMonth =
+    source.recurrence === "monthly"
+      ? (source.dayOfMonth ??
+        (source.expectedDate
+          ? (Number.parseInt(source.expectedDate.slice(8, 10), 10) || null)
+          : null))
+      : (Number.parseInt(newDate.slice(8, 10), 10) || source.dayOfMonth);
   return rebuildLegacyFields(
     setup,
     sources.map((item) =>
@@ -134,7 +141,7 @@ export function rescheduleIncomeSourceInSetup(
         ? {
             ...item,
             expectedDate: newDate,
-            dayOfMonth: Number.parseInt(newDate.slice(8, 10), 10) || item.dayOfMonth,
+            dayOfMonth: nextDayOfMonth,
           }
         : item,
     ),

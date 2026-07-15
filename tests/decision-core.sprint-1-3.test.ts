@@ -17,6 +17,7 @@ import { calculateDecisionSafeSpending, buildSafeUntil } from "@/lib/decision-co
 import { buildTodayPayments } from "@/lib/decision-core/today-payments";
 import type { DecisionCoreContext, DecisionCoreState } from "@/lib/decision-core/types";
 import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
+import { rescheduleIncomeSourceInSetup } from "@/lib/expected-events";
 import { confirmPendingPaymentById } from "@/lib/pending-payment";
 import { buildStoredTransactionNote } from "@/lib/transaction-note";
 import { countsInBalance } from "@/lib/transaction-confirmed";
@@ -2324,6 +2325,105 @@ test("overdue unconfirmed income does not stop the monthly series", () => {
       ["2026-09-14", "scheduled"],
       ["2026-10-14", "scheduled"],
     ],
+  );
+});
+
+test("rescheduling an overdue income removes the old hero event and moves forecast to the new date", () => {
+  const initialSetup = {
+    ...emptyMoneySetup(),
+    incomeSources: [
+      {
+        id: "salary-july",
+        label: "Зарплата",
+        expectedDate: "2026-07-06",
+        expectedAmount: 50000,
+        kind: "salary" as const,
+        recurrence: "monthly" as const,
+        intervalMonths: 1,
+        dayOfMonth: 6,
+        isPrimary: true,
+      },
+    ],
+  };
+
+  const rescheduledSetup = rescheduleIncomeSourceInSetup(
+    initialSetup,
+    "salary-july",
+    "2026-07-16",
+    "ru",
+  );
+
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-10",
+      balances: { all: 10000, me: 10000, partner: 0 },
+      moneySetup: rescheduledSetup,
+    }),
+  );
+
+  const incomeEvents = scenario.ctx.forecast.events.filter(
+    (event) => event.source === "income_source",
+  );
+
+  assert.notEqual(scenario.result.mainAction.type, "resolve_income_delay");
+  assert.equal(
+    incomeEvents.some((event) => event.incomeOccurrenceDate === "2026-07-06"),
+    false,
+  );
+  assert.equal(
+    incomeEvents.some(
+      (event) =>
+        event.incomeOccurrenceDate === "2026-07-16" &&
+        event.date === "2026-07-16",
+    ),
+    true,
+  );
+});
+
+test("rescheduling an overdue payment removes the old overdue hero state and moves forecast to the new date", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-10",
+      balances: { all: 60000, me: 60000, partner: 0 },
+      transactions: [
+        tx({
+          id: "rent-july",
+          amount: 50000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-16",
+          note: "Аренда",
+          confirmed: false,
+          recurringId: "rent-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "rent-recurring",
+          amount: 50000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Аренда",
+          nextRunDate: "2026-07-16",
+          frequency: "monthly",
+          dayOfMonth: 6,
+        }),
+      ],
+    }),
+  );
+
+  const paymentEvents = scenario.ctx.forecast.events.filter(
+    (event) => event.source === "pending_transaction" || event.source === "recurring",
+  );
+
+  assert.notEqual(scenario.result.mainAction.type, "overdue_payment");
+  assert.equal(
+    paymentEvents.some((event) => event.date === "2026-07-06" && event.amount === -50000),
+    false,
+  );
+  assert.equal(
+    paymentEvents.some((event) => event.date === "2026-07-16" && event.amount === -50000),
+    true,
   );
 });
 
