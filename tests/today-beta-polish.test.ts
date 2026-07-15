@@ -576,7 +576,7 @@ test("planned free money breakdown arithmetic stays explicit", () => {
       "Регулярные платежи",
       "Платежи по долгам",
       "Расходы по лимитам",
-      "Можно потратить",
+      "Останется свободно",
     ],
   );
   assert.equal(planned?.details?.at(-1)?.value, "2 500 ₽");

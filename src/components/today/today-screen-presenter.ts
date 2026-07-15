@@ -454,7 +454,7 @@ function buildPlannedFreeMoneyItem(
             ]
           : []),
         {
-          label: locale === "ru" ? "Можно потратить" : "Available to spend",
+          label: locale === "ru" ? "Останется свободно" : "Free after plan",
           value: moneyValue(plannedFreeMoney.breakdown.plannedFreeMoney, locale) ?? "",
           tone: "total",
         },
