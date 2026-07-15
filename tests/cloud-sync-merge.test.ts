@@ -160,6 +160,67 @@ test("applyHouseholdSync does not wipe local income sources when remote sync has
   useCloudStore.setState(previousCloud);
 });
 
+test("applyHouseholdSync does not resurrect a locally deleted category from remote sync", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  const remoteOnlyCategory = {
+    id: "test-category",
+    type: "expense" as const,
+    labels: { ru: "Тестовая", en: "Test" },
+    keywords: ["test"],
+    isSystem: false,
+  };
+
+  useStore.setState({
+    ...previousStore,
+    transactions: [],
+    categories: getDefaultCategories(),
+    deletedCategoryArchive: [
+      {
+        id: "archive-test-category",
+        deletedAt: "2026-07-15T10:00:00.000Z",
+        category: remoteOnlyCategory,
+        fallbackCategoryId: "other",
+        affectedTransactions: [],
+      },
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-15T10:05:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      categories: [...getDefaultCategories(), remoteOnlyCategory],
+    }),
+    "token-1",
+  );
+
+  assert.equal(
+    useStore.getState().categories.some((category) => category.id === "test-category"),
+    false,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
 test("applyHouseholdSync replaces local current-balance offsets from cloud balanceOffsets", () => {
   const previousStore = useStore.getState();
   const previousCloud = useCloudStore.getState();

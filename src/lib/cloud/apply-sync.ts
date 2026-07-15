@@ -46,6 +46,9 @@ export function applyHouseholdSync(
   const deletedRecurring = new Set(cloud.deletedRecurringIds ?? []);
   const deletedDebts = new Set(cloud.deletedDebtIds ?? []);
   const deletedTransactions = new Set(cloud.deletedTransactionIds ?? []);
+  const deletedCategories = new Set(
+    (local.deletedCategoryArchive ?? []).map((entry) => entry.category.id),
+  );
   const pendingTransactionUpdates = new Set(Object.keys(cloud.pendingTransactionUpdateIds ?? {}));
   const pendingGoalIds = new Set(cloud.pendingGoalIds ?? []);
   const remoteTxIds = new Set(remote.transactions.map((t) => t.id));
@@ -129,6 +132,7 @@ export function applyHouseholdSync(
     remote,
     cloud.lastSyncedAt,
     new Set(cloud.lastSyncedRemoteCategoryIds),
+    deletedCategories,
     deletedRecurring,
     deletedTransactions,
     deletedDebts,
