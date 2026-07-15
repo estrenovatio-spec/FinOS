@@ -358,11 +358,8 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
                 {locale === "ru" ? "Отправить →" : "Send →"}
               </Button>
             </div>
-            {questionError ? (
-              <p className="mt-2 text-sm text-destructive">{questionError}</p>
-            ) : null}
             {messages.length > 0 || sendingQuestion ? (
-              <div className="mt-4 space-y-3 rounded-xl border border-border/70 bg-muted/20 p-3">
+              <div className="mt-3 space-y-3 rounded-xl border border-border/70 bg-muted/20 p-3">
                 {messages.map((message, index) => (
                   <div
                     key={`${message.role}-${index}`}
@@ -391,6 +388,9 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
                   </div>
                 ) : null}
               </div>
+            ) : null}
+            {questionError ? (
+              <p className="mt-2 text-sm text-destructive">{questionError}</p>
             ) : null}
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <Button
