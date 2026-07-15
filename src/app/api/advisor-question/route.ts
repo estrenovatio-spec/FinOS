@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createPlainTextChatCompletion,
   extractPlainTextFromLlmContent,
+  getSafeLlmConfigDebug,
   getPlainTextLlmClient,
   isLlmConfigured,
 } from "@/lib/llm";
@@ -49,17 +50,21 @@ export async function POST(request: NextRequest) {
       locale === "ru"
         ? "Сейчас не получилось получить ответ. Попробуйте ещё раз через минуту."
         : "Could not get an answer right now. Please try again in a minute.";
+    const llmDebug = getSafeLlmConfigDebug();
 
     if (!isLlmConfigured()) {
+      console.warn("[advisor-question] llm missing config", llmDebug);
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
 
     const client = getPlainTextLlmClient();
     if (!client) {
+      console.warn("[advisor-question] llm client init failed", llmDebug);
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
 
     try {
+      console.info("[advisor-question] llm request", llmDebug);
       const completion = await createPlainTextChatCompletion(client, {
         model: resolveAdvisorModel(userPlan),
         messages: [
@@ -93,6 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, reply });
     } catch (error) {
       console.warn("[advisor-question] llm fallback", {
+        ...llmDebug,
         name: error instanceof Error ? error.name : "unknown",
         message: error instanceof Error ? error.message : "unknown",
       });

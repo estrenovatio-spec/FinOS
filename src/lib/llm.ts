@@ -1,9 +1,15 @@
 import OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 
+function normalizeEnvValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.replace(/^['"]|['"]$/g, "").trim() || undefined;
+}
+
 function envFirst(...keys: string[]): string | undefined {
   for (const key of keys) {
-    const value = process.env[key]?.trim();
+    const value = normalizeEnvValue(process.env[key]);
     if (value) return value;
   }
   return undefined;
@@ -25,6 +31,23 @@ export function getLlmProvider(): string {
   const provider = llmProvider();
   if (provider) return provider;
   return getLlmBaseUrl() ? "custom" : "openai";
+}
+
+export function getSafeLlmConfigDebug(): {
+  provider: string;
+  baseUrl: string | null;
+  model: string;
+  hasApiKey: boolean;
+  keyPrefix: string | null;
+} {
+  const apiKey = getLlmApiKey();
+  return {
+    provider: getLlmProvider(),
+    baseUrl: getLlmBaseUrl() ?? null,
+    model: getLlmModel(),
+    hasApiKey: Boolean(apiKey),
+    keyPrefix: apiKey ? apiKey.slice(0, 4) : null,
+  };
 }
 
 /** Base URL прокси, напр. https://apinet.cloud/v1 */
