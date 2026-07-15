@@ -411,7 +411,7 @@ function buildPlannedFreeMoneyItem(
     return null;
   }
 
-  const detailItems: NonNullable<TodayOverviewItem["details"]> = plannedFreeMoney.breakdown
+  const detailItems: TodayOverviewItem["details"] = plannedFreeMoney.breakdown
     ? [
         {
           label: locale === "ru" ? "Сейчас в кошельке" : "Available now",
