@@ -47,6 +47,41 @@ const MONTH_LONG_EN = [
   "December",
 ] as const;
 
+const MONTH_LONG_RU = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+] as const;
+
+const WEEKDAY_SHORT_RU = [
+  "Вс",
+  "Пн",
+  "Вт",
+  "Ср",
+  "Чт",
+  "Пт",
+  "Сб",
+] as const;
+
+const WEEKDAY_SHORT_EN = [
+  "Sun",
+  "Mon",
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+] as const;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function parseIsoDateParts(dateStr: string): { y: number; mo: number; d: number } | null {
@@ -171,4 +206,21 @@ export function formatTransactionDate(dateStr: string, locale: Locale): string {
   const mo = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return formatIsoDate(`${y}-${mo}-${day}`, locale);
+}
+
+export function formatHumanDateLong(dateStr: string, locale: Locale): string {
+  const parts = parseIsoDateParts(dateStr);
+  if (!parts) return formatTransactionDate(dateStr, locale);
+  const { y, mo, d } = parts;
+  if (locale === "en") {
+    return `${MONTH_LONG_EN[mo - 1]} ${d}, ${y}`;
+  }
+  return `${d} ${MONTH_LONG_RU[mo - 1]} ${y}`;
+}
+
+export function formatWeekdayShort(dateStr: string, locale: Locale): string {
+  const parts = parseIsoDateParts(dateStr);
+  if (!parts) return "";
+  const weekday = new Date(parts.y, parts.mo - 1, parts.d, 12, 0, 0, 0).getDay();
+  return locale === "en" ? WEEKDAY_SHORT_EN[weekday] : WEEKDAY_SHORT_RU[weekday];
 }

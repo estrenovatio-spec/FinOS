@@ -977,7 +977,7 @@ test("stale forecast event id falls back to the date", () => {
 
   assert.equal(view.selectedDate, "2026-07-27");
   assert.equal(view.selectedEventId, null);
-  assert.match(view.message ?? "", /дата, на которой прогноз уходит в минус/);
+  assert.match(view.message ?? "", /денег по прогнозу уже может не хватить/);
 });
 
 test("missing focused date quietly falls back to the regular forecast view", () => {

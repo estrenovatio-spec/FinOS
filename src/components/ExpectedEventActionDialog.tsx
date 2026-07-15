@@ -406,10 +406,10 @@ export function ExpectedEventActionDialog({
             <DialogTitle>
               {event?.kind === "income"
                 ? locale === "ru"
-                  ? "Что сделать, если доход не пришёл?"
+                  ? "Что сделать, если деньги ещё не пришли?"
                   : "What should happen if the income did not arrive?"
                 : locale === "ru"
-                  ? "Что сделать, если платёж не оплачен?"
+                  ? "Что сделать, если платёж ещё не оплачен?"
                   : "What should happen if the payment was not made?"}
             </DialogTitle>
           </DialogHeader>
@@ -419,10 +419,10 @@ export function ExpectedEventActionDialog({
               <p className="text-sm text-muted-foreground">
                 {event.kind === "income"
                   ? locale === "ru"
-                    ? `Ожидалось «${event.title}» на ${formatTransactionDate(event.occurrenceDate, locale)}.`
+                    ? `Мы ждали «${event.title}» ${formatTransactionDate(event.occurrenceDate, locale)}.`
                     : `Expected "${event.title}" on ${formatTransactionDate(event.occurrenceDate, locale)}.`
                   : locale === "ru"
-                    ? `Ожидался платёж «${event.title}» на ${formatTransactionDate(event.date, locale)}.`
+                    ? `Платёж «${event.title}» ожидался ${formatTransactionDate(event.date, locale)}.`
                     : `Expected payment "${event.title}" on ${formatTransactionDate(event.date, locale)}.`}
               </p>
 

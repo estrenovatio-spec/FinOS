@@ -95,10 +95,10 @@ export function buildSafeUntil(ctx: DecisionCoreContext): DecisionSafeUntil {
   if (!forecast.nextIncomeDate && safeSpending.status === "unconfirmed_income") {
     return {
       status: "unknown",
-      title: locale === "ru" ? "Доход не подтверждён" : "Income is not confirmed",
+      title: locale === "ru" ? "Доход ещё не пришёл" : "Income has not arrived yet",
       note:
         locale === "ru"
-          ? "Плановая дата дохода уже наступила, но поступление не записано, поэтому прогноз его не учитывает."
+          ? "Дата ожидаемого дохода уже прошла. Отметьте поступление или перенесите это ожидание."
           : "The planned income date has already arrived, but the receipt was not recorded, so the forecast does not count it.",
       isReady: false,
       needsSetup: true,

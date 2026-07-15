@@ -79,20 +79,20 @@ export function buildMainAction(
         type: "resolve_income_delay",
         title:
           locale === "ru"
-            ? "Доход не подтверждён"
-            : "Income is not confirmed",
+            ? "Доход ещё не пришёл"
+            : "Income has not arrived yet",
         text:
           locale === "ru"
-            ? `Запишите фактическое поступление ${decision.title.toLowerCase()} — ${rub(decision.amount, locale)}.`
-            : `Record the actual ${decision.title} receipt — ${rub(decision.amount, locale)}.`,
+            ? `${decision.title} ожидался на ${formatDayMonth(decision.dueDate, locale)}: ${rub(decision.amount, locale)}.`
+            : `${decision.title} was expected on ${formatDayMonth(decision.dueDate, locale)}: ${rub(decision.amount, locale)}.`,
         description:
           locale === "ru"
             ? `Ожидался ${formatDayMonth(decision.dueDate, locale)}.`
             : `It was expected on ${formatDayMonth(decision.dueDate, locale)}.`,
         reason:
           locale === "ru"
-            ? "Прогноз учитывает этот доход как план, но текущий баланс его не содержит."
-            : "The forecast still treats this income as planned, while the current balance does not include it.",
+            ? "Если деньги уже пришли, отметьте это. Если нет, перенесите дату или отмените только это ожидание."
+            : "If the money has arrived, confirm it. Otherwise move the date or cancel only this expected occurrence.",
         amount: decision.amount,
         dueDate: decision.dueDate,
         relatedEntityId: decision.incomeSourceId,
@@ -115,7 +115,7 @@ export function buildMainAction(
             : "Income is expected today",
         text:
           locale === "ru"
-            ? `Подтвердите поступление ${decision.title.toLowerCase()} — ${rub(decision.amount, locale)}.`
+            ? `${decision.title} должен прийти сегодня: ${rub(decision.amount, locale)}.`
             : `Confirm the ${decision.title} receipt — ${rub(decision.amount, locale)}.`,
         description:
           locale === "ru"
@@ -123,7 +123,7 @@ export function buildMainAction(
             : decision.title,
         reason:
           locale === "ru"
-            ? "Прогноз уже учитывает этот доход как план, но текущий баланс его не включает."
+            ? "Когда деньги придут, отметьте это. Если не придут, можно перенести дату или отменить только это ожидание."
             : "The forecast already includes this income as planned, but the current balance does not.",
         amount: decision.amount,
         dueDate: decision.dueDate,

@@ -164,7 +164,7 @@ function buildHeroTitle(mainAction: DecisionMainAction, locale: Locale): string 
     case "confirm_income":
       return locale === "ru" ? "Сегодня ожидается доход" : "Income is expected today";
     case "resolve_income_delay":
-      return locale === "ru" ? "Доход не подтверждён" : "Income is not confirmed";
+      return locale === "ru" ? "Доход ещё не пришёл" : "Income has not arrived yet";
     case "complete_balance_setup":
       return locale === "ru" ? "Укажите, сколько денег сейчас" : "Set your current balance";
     case "complete_required_expenses_setup":
@@ -280,8 +280,8 @@ function buildHeroReason(
         : "The forecast already counts this income as planned, but the current balance does not include it yet.";
     case "resolve_income_delay":
       return locale === "ru"
-        ? "Прогноз всё ещё опирается на этот доход как на план. Подтвердите факт или измените дату."
-        : "The forecast still relies on this income as planned. Confirm it or move the date.";
+        ? "Мы всё ещё ждём эти деньги в плане. Если они не пришли, можно перенести дату или отменить только это ожидание."
+        : "This income is still expected in the plan. If it has not arrived, move the date or cancel only this occurrence.";
     case "complete_balance_setup":
       return locale === "ru"
         ? "Это отправная точка для прогноза."

@@ -26,17 +26,17 @@ import type { Locale } from "@/types";
 function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   switch (source) {
     case "pending_transaction":
-      return locale === "ru" ? "Операция" : "Transaction";
+      return locale === "ru" ? "Ожидается" : "Expected";
     case "recurring":
-      return locale === "ru" ? "Регулярное" : "Recurring";
+      return locale === "ru" ? "Регулярный платёж" : "Recurring payment";
     case "debt_payment":
-      return locale === "ru" ? "Долг" : "Debt";
+      return locale === "ru" ? "Платёж по долгу" : "Debt payment";
     case "income_source":
-      return locale === "ru" ? "Ожидаемый доход" : "Expected income";
+      return locale === "ru" ? "Ожидается" : "Expected";
     case "confirmed_transaction":
-      return locale === "ru" ? "Полученный доход" : "Received income";
+      return locale === "ru" ? "Деньги уже пришли" : "Received";
     case "essential_budget":
-      return locale === "ru" ? "Повседневные траты" : "Everyday spending";
+      return locale === "ru" ? "Плановые повседневные траты" : "Everyday spending";
   }
 }
 
@@ -48,7 +48,7 @@ function plannedIncomeStateLabel(event: ForecastEvent, locale: Locale): string |
     case "due_today":
       return locale === "ru" ? "Ожидается сегодня" : "Expected today";
     case "overdue_unconfirmed":
-      return locale === "ru" ? "Не подтверждён" : "Not confirmed";
+      return locale === "ru" ? "Ещё не пришло" : "Still not received";
     default:
       return null;
   }
@@ -120,13 +120,13 @@ export function FocusedForecastCard({
           <div className="flex items-center gap-2">
             <CalendarClock className="h-4 w-4 text-primary" />
             <p className="text-sm font-semibold text-foreground">
-              {locale === "ru" ? "Контекст прогноза" : "Forecast context"}
+              {locale === "ru" ? "Что будет с деньгами" : "What happens next"}
             </p>
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
             {view.message ??
               (locale === "ru"
-                ? "Здесь показана та же прогнозная линия, на которую опирается экран «Сегодня»."
+                ? "Здесь показан тот же прогноз денег, который использует экран «Сегодня»."
                 : "This uses the same forecast line that powers Today.")}
           </p>
         </div>

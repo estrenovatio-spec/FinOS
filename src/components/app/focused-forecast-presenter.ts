@@ -27,15 +27,15 @@ function focusReasonText(focus: ForecastFocus, locale: Locale): string {
   switch (focus.reason) {
     case "current_deficit":
       return locale === "ru"
-        ? "Дефицит уже начался. Ниже показано, как прогноз развивается дальше."
+        ? "Деньги уже проседают. Ниже видно, что именно происходит дальше."
         : "The deficit has already started. The forecast below shows what happens next.";
     case "future_deficit":
       return locale === "ru"
-        ? "Это дата, на которой прогноз уходит в минус."
+        ? "На этой дате денег по прогнозу уже может не хватить."
         : "This is the date where the forecast turns negative.";
     case "reserve_required":
       return locale === "ru"
-        ? "Здесь становится видно, почему резерв нужен заранее."
+        ? "Здесь видно, почему эти деньги лучше заранее не тратить."
         : "This is where the reserve becomes necessary.";
   }
 }
@@ -71,7 +71,7 @@ export function buildFocusedForecastView(
         : explanation && explanation.date === selectedGroup.date
           ? explanation.title
           : locale === "ru"
-            ? `Почему FIN OS привёл вас на ${formatTransactionDate(selectedGroup.date, locale)}`
+            ? `Почему FIN OS показывает именно ${formatTransactionDate(selectedGroup.date, locale)}`
             : `Why FIN OS brought you to ${formatTransactionDate(selectedGroup.date, locale)}`,
     contextSummary:
       selectedGroup == null

@@ -4,7 +4,14 @@ import { ChevronLeft, ChevronRight, Goal, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatIsoDate, formatTransactionDate, formatTransactionDateShort } from "@/lib/format-date";
+import {
+  formatHumanDateLong,
+  formatIsoDate,
+  formatTransactionDate,
+  formatTransactionDateShort,
+  formatWeekdayShort,
+  getLocalTodayIsoDate,
+} from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
 import { getForecastDays } from "@/lib/decision-core/forecast-days";
@@ -25,15 +32,15 @@ const WEEKDAY_LABELS: Record<Locale, string[]> = {
 function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   switch (source) {
     case "pending_transaction":
-      return locale === "ru" ? "Операция" : "Transaction";
+      return locale === "ru" ? "Ожидается" : "Expected";
     case "recurring":
       return locale === "ru" ? "Регулярный платёж" : "Recurring payment";
     case "debt_payment":
       return locale === "ru" ? "Платёж по долгу" : "Debt payment";
     case "income_source":
-      return locale === "ru" ? "Ожидаемый доход" : "Expected income";
+      return locale === "ru" ? "Ожидается" : "Expected";
     case "confirmed_transaction":
-      return locale === "ru" ? "Подтверждённый доход" : "Confirmed income";
+      return locale === "ru" ? "Деньги уже пришли" : "Already received";
     case "essential_budget":
       return locale === "ru" ? "Плановые повседневные траты" : "Planned everyday spending";
   }
@@ -47,10 +54,70 @@ function plannedIncomeStateLabel(event: ForecastEvent, locale: Locale): string |
     case "due_today":
       return locale === "ru" ? "Ожидается сегодня" : "Expected today";
     case "overdue_unconfirmed":
-      return locale === "ru" ? "Доход ещё не подтверждён" : "Income is not confirmed yet";
+      return locale === "ru" ? "Ещё не пришло" : "Still not received";
     default:
       return null;
   }
+}
+
+function eventAccent(event: ForecastEvent, locale: Locale): { badge: string; label: string; tone: string } {
+  if (event.source === "income_source") {
+    if (event.plannedIncomeStatus === "overdue_unconfirmed") {
+      return {
+        badge: "🟠",
+        label: locale === "ru" ? "Ещё не пришло" : "Still not received",
+        tone: "text-amber-700",
+      };
+    }
+    return {
+      badge: "🟡",
+      label:
+        event.plannedIncomeStatus === "due_today"
+          ? locale === "ru"
+            ? "Ожидается сегодня"
+            : "Expected today"
+          : locale === "ru"
+            ? "Ожидается"
+            : "Expected",
+      tone: "text-amber-700",
+    };
+  }
+
+  if (event.source === "confirmed_transaction" && event.amount > 0) {
+    return {
+      badge: "🟢",
+      label: locale === "ru" ? "Доход" : "Income",
+      tone: "text-emerald-700",
+    };
+  }
+
+  if (event.source === "essential_budget") {
+    return {
+      badge: "🟡",
+      label: locale === "ru" ? "План на день" : "Planned spending",
+      tone: "text-amber-700",
+    };
+  }
+
+  return event.amount > 0
+    ? {
+        badge: "🟢",
+        label: locale === "ru" ? "Доход" : "Income",
+        tone: "text-emerald-700",
+      }
+    : {
+        badge: event.source === "debt_payment" ? "🔴" : "🔴",
+        label: locale === "ru" ? "Платёж" : "Payment",
+        tone: "text-rose-700",
+      };
+}
+
+function groupEventsForDay(events: ForecastEvent[]) {
+  return {
+    incomes: events.filter((event) => event.amount > 0 && event.source !== "income_source"),
+    expected: events.filter((event) => event.source === "income_source"),
+    expenses: events.filter((event) => event.amount < 0),
+  };
 }
 
 export function ForecastCalendarView({
@@ -107,6 +174,7 @@ export function ForecastCalendarView({
   }, [months.length]);
 
   const month = months[monthIndex] ?? null;
+  const todayIso = getLocalTodayIsoDate();
 
   useEffect(() => {
     if (!month) {
@@ -165,12 +233,12 @@ export function ForecastCalendarView({
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {locale === "ru" ? "Календарь прогноза" : "Forecast calendar"}
+              {locale === "ru" ? "Календарь денег" : "Money calendar"}
             </p>
             <p className="text-xs text-muted-foreground">
               {locale === "ru"
-                ? "По дням видно ожидаемые доходы, платежи, плановые траты и итоговый баланс."
-                : "See expected income, payments, planned spending, and end-of-day balance by day."}
+                ? "Здесь видно, что будет происходить с деньгами в ближайшие дни."
+                : "See what will happen to your money over the next days."}
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -198,7 +266,12 @@ export function ForecastCalendarView({
         </div>
 
         <div className="space-y-3">
-          <p className="text-base font-semibold text-foreground">{month.label}</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-base font-semibold text-foreground">{month.label}</p>
+            <p className="text-xs text-muted-foreground">
+              {locale === "ru" ? "< Листайте по месяцам >" : "< Browse months >"}
+            </p>
+          </div>
 
           <div className="hidden grid-cols-7 gap-2 md:grid">
             {WEEKDAY_LABELS[locale].map((label) => (
@@ -221,7 +294,12 @@ export function ForecastCalendarView({
                   ].join(" ")}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-semibold text-foreground">{day.dayNumber}</span>
+                    <div>
+                      <span className="text-sm font-semibold text-foreground">{day.dayNumber}</span>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatWeekdayShort(day.date, locale)}
+                      </p>
+                    </div>
                     {day.isDeficit ? <TriangleAlert className="h-4 w-4 text-rose-600" /> : null}
                   </div>
                   <div className="mt-2 space-y-1 text-xs">
@@ -233,7 +311,7 @@ export function ForecastCalendarView({
                     ) : null}
                     {day.endBalance != null ? (
                       <p className="text-muted-foreground">
-                        {locale === "ru" ? "Баланс:" : "Balance:"} {formatMoney(day.endBalance, locale)} ₽
+                        {locale === "ru" ? "После дня:" : "After day:"} {formatMoney(day.endBalance, locale)} ₽
                       </p>
                     ) : null}
                     {day.goals.length > 0 ? (
@@ -267,14 +345,24 @@ export function ForecastCalendarView({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
-                        {formatTransactionDateShort(day.date, locale)}
-                      </p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-xl font-semibold leading-none text-foreground">
+                          {day.dayNumber}
+                        </p>
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            {formatWeekdayShort(day.date, locale)}
+                          </p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatTransactionDateShort(day.date, locale)}
+                          </p>
+                        </div>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {day.eventsCount > 0
                           ? locale === "ru"
-                            ? `${day.eventsCount} событий`
-                            : `${day.eventsCount} events`
+                            ? `${day.eventsCount} движений`
+                            : `${day.eventsCount} money events`
                           : locale === "ru"
                             ? "Без движений"
                             : "No movement"}
@@ -299,12 +387,16 @@ export function ForecastCalendarView({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-foreground">
-                  {formatTransactionDate(selectedDate, locale)}
+                  {formatHumanDateLong(selectedDate, locale)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {locale === "ru"
-                    ? "Доходы, платежи и плановые траты этого дня"
-                    : "Income, payments, and planned spending for this day"}
+                    ? selectedDate === todayIso
+                      ? "Сегодня"
+                      : "Что произойдёт с деньгами в этот день"
+                    : selectedDate === todayIso
+                      ? "Today"
+                      : "What happens to your money on this day"}
                 </p>
               </div>
               {selectedDay?.endBalance != null ? (
@@ -313,7 +405,7 @@ export function ForecastCalendarView({
                     {formatMoney(selectedDay.endBalance, locale)} ₽
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {locale === "ru" ? "Баланс в конце дня" : "End-of-day balance"}
+                    {locale === "ru" ? "Баланс после дня" : "Balance after the day"}
                   </p>
                 </div>
               ) : null}
@@ -340,7 +432,7 @@ export function ForecastCalendarView({
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
                     <p className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Баланс в начале дня" : "Start balance"}
+                      {locale === "ru" ? "Сколько было утром" : "Start of day"}
                     </p>
                     <p className="mt-1 text-sm font-semibold text-foreground">
                       {formatMoney(selectedDay.startBalance, locale)} ₽
@@ -348,7 +440,7 @@ export function ForecastCalendarView({
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
                     <p className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Баланс в конце дня" : "End balance"}
+                      {locale === "ru" ? "Сколько останется после дня" : "End of day"}
                     </p>
                     <p className="mt-1 text-sm font-semibold text-foreground">
                       {formatMoney(selectedDay.endBalance, locale)} ₽
@@ -356,32 +448,68 @@ export function ForecastCalendarView({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  {selectedDay.events.map((event) => {
-                    const income = event.amount > 0;
-                    return (
-                      <div key={event.id} className="rounded-lg border border-border/60 bg-background/70 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">{event.title}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {sourceLabel(event.source, locale)}
-                            </p>
-                            {plannedIncomeStateLabel(event, locale) ? (
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {plannedIncomeStateLabel(event, locale)}
-                              </p>
-                            ) : null}
-                          </div>
-                          <p className={["text-sm font-semibold", income ? "text-emerald-600" : "text-rose-600"].join(" ")}>
-                            {income ? "+" : "−"}
-                            {formatMoney(Math.abs(event.amount), locale)} ₽
+                {(() => {
+                  const grouped = groupEventsForDay(selectedDay.events);
+                  const sections = [
+                    {
+                      key: "expected",
+                      title: locale === "ru" ? "Ожидается" : "Expected",
+                      events: grouped.expected,
+                    },
+                    {
+                      key: "income",
+                      title: locale === "ru" ? "Доходы" : "Income",
+                      events: grouped.incomes,
+                    },
+                    {
+                      key: "expense",
+                      title: locale === "ru" ? "Расходы" : "Expenses",
+                      events: grouped.expenses,
+                    },
+                  ].filter((section) => section.events.length > 0);
+
+                  return (
+                    <div className="space-y-3">
+                      {sections.map((section) => (
+                        <div key={section.key} className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            {section.title}
                           </p>
+                          {section.events.map((event) => {
+                            const income = event.amount > 0;
+                            const accent = eventAccent(event, locale);
+                            return (
+                              <div key={event.id} className="rounded-lg border border-border/60 bg-background/70 p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className={["text-xs font-medium", accent.tone].join(" ")}>
+                                      {accent.badge} {accent.label}
+                                    </p>
+                                    <p className="mt-1 truncate text-sm font-medium text-foreground">
+                                      {event.title}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      {sourceLabel(event.source, locale)}
+                                    </p>
+                                    {plannedIncomeStateLabel(event, locale) ? (
+                                      <p className="mt-0.5 text-xs text-muted-foreground">
+                                        {plannedIncomeStateLabel(event, locale)}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <p className={["text-sm font-semibold", income ? "text-emerald-600" : "text-rose-600"].join(" ")}>
+                                    {income ? "+" : "−"}
+                                    {formatMoney(Math.abs(event.amount), locale)} ₽
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {explanation?.date === selectedDate ? (
                   <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -396,8 +524,8 @@ export function ForecastCalendarView({
             ) : (
               <div className="rounded-xl border border-dashed border-border/70 bg-background/70 p-3 text-sm text-muted-foreground">
                 {locale === "ru"
-                  ? "На эту дату нет движений по прогнозу."
-                  : "There is no forecast activity for this date."}
+                  ? "На эту дату пока ничего не запланировано."
+                  : "Nothing is planned for this date yet."}
               </div>
             )}
 

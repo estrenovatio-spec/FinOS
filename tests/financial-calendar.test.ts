@@ -198,8 +198,12 @@ test("calendar view offers month navigation and day details with Edit plan deep 
     "utf8",
   );
 
-  assert.match(source, /Календарь прогноза/);
+  assert.match(source, /Календарь денег/);
   assert.match(source, /setMonthIndex/);
-  assert.match(source, /formatTransactionDate\(selectedDate, locale\)/);
+  assert.match(source, /formatHumanDateLong\(selectedDate, locale\)/);
+  assert.match(source, /Что произойдёт с деньгами в этот день/);
+  assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
+  assert.match(source, /Баланс после дня/);
+  assert.match(source, /🟡/);
   assert.match(source, /Изменить план/);
 });
