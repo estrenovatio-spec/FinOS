@@ -1227,11 +1227,17 @@ test("Today and recurring pending cards use the shared confirm and skip workflow
     path.join(process.cwd(), "src/components/PendingRecurringCard.tsx"),
     "utf8",
   );
+  const i18nSource = fs.readFileSync(
+    path.join(process.cwd(), "src/lib/i18n.ts"),
+    "utf8",
+  );
 
   assert.match(todaySource, /<ExpectedEventActionDialog/);
   assert.match(todaySource, /onSecondaryAction=/);
   assert.match(recurringSource, /<ExpectedEventActionDialog/);
   assert.match(recurringSource, /Не оплатил/);
+  assert.doesNotMatch(i18nSource, /Если уже внесли вручную — «Пропустить»/);
+  assert.match(i18nSource, /напомнить завтра/i);
 });
 
 test("setActualCash replaces the current balance instead of adding to it", () => {
