@@ -415,7 +415,7 @@ test("Today overview shows only current balance and planned free money", () => {
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
   assert.equal(allowed, undefined);
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.equal(planned?.label, "По плану свободно");
+  assert.equal(planned?.label, "Свободные деньги");
   assert.equal(planned?.subtitle, "до 13.08.2026");
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.equal(planned?.layout, "wide");
@@ -577,7 +577,7 @@ test("planned free money breakdown arithmetic stays explicit", () => {
       "Другие обязательные платежи",
       "Плановые расходы",
       "Другие обязательные расходы",
-      "По плану свободно",
+      "Свободные деньги",
     ],
   );
   assert.equal(planned?.details?.at(-1)?.value, "2 500 ₽");

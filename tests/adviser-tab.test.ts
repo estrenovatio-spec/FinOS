@@ -34,6 +34,12 @@ test("Adviser screen now starts from a dedicated questions hub with contextual p
   assert.match(aiAnalysisTab, /О чём можно спросить/);
   assert.match(aiAnalysisTab, /buildAdvisorContext/);
   assert.match(aiAnalysisTab, /Ваш вопрос/);
+  assert.match(aiAnalysisTab, /sendAdvisorQuestion/);
+  assert.match(aiAnalysisTab, /fetch\("\/api\/advisor-question"/);
+  assert.match(aiAnalysisTab, /event\.key === "Enter" && !event\.shiftKey/);
+  assert.match(aiAnalysisTab, /Отправить →/);
+  assert.match(aiAnalysisTab, /Анализирую ваши финансы\.\.\./);
+  assert.match(aiAnalysisTab, /Не удалось получить ответ/);
   assert.match(aiAnalysisTab, /Открыть разбор на 7 дней/);
   assert.match(aiAnalysisTab, /Открыть разбор на 30 дней/);
 });

@@ -14,6 +14,7 @@ import { t } from "@/lib/i18n";
 import { useHouseholdBalances, useStore, useViewerMappedTransactions } from "@/store/useStore";
 
 type AiSubTab = "questions" | "mission" | "weekly" | "monthly";
+type AdvisorMessage = { role: "user" | "assistant"; content: string };
 
 type AiAnalysisTabProps = {
   active: boolean;
@@ -35,6 +36,9 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
   const transactions = useViewerMappedTransactions(false);
   const [subTab, setSubTab] = useState<AiSubTab>(reportsOnly ? "weekly" : "questions");
   const [draftQuestion, setDraftQuestion] = useState("");
+  const [messages, setMessages] = useState<AdvisorMessage[]>([]);
+  const [sendingQuestion, setSendingQuestion] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
   const today = getLocalTodayIsoDate();
 
   const decision = useMemo(
@@ -87,6 +91,54 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
     locale === "ru"
       ? `Прогноз сейчас смотрит до ${formatIsoDate(decision.forecast.horizonEndDate, locale)}.`
       : `The forecast currently looks through ${formatIsoDate(decision.forecast.horizonEndDate, locale)}.`;
+
+  async function sendAdvisorQuestion() {
+    const question = draftQuestion.trim();
+    if (!question || sendingQuestion) return;
+
+    const nextMessages = [...messages, { role: "user" as const, content: question }];
+    setMessages(nextMessages);
+    setDraftQuestion("");
+    setQuestionError(null);
+    setSendingQuestion(true);
+
+    try {
+      const response = await fetch("/api/advisor-question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locale,
+          question,
+          messages,
+          context: {
+            cards: advisorContext.cards,
+            periodNote,
+            periodEndDate: decision.forecast.horizonEndDate,
+          },
+        }),
+      });
+
+      const json = (await response.json()) as { success?: boolean; reply?: string; error?: string };
+      if (!response.ok || !json.reply) {
+        setQuestionError(
+          locale === "ru"
+            ? "Не удалось получить ответ. Попробуйте ещё раз."
+            : "Could not get an answer. Please try again.",
+        );
+        return;
+      }
+
+      setMessages([...nextMessages, { role: "assistant", content: json.reply }]);
+    } catch {
+      setQuestionError(
+        locale === "ru"
+          ? "Не удалось получить ответ. Проверьте интернет и попробуйте снова."
+          : "Could not get an answer. Check your connection and try again.",
+      );
+    } finally {
+      setSendingQuestion(false);
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -206,8 +258,57 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
                   ? "Например: если зарплата задержится на неделю, где начнутся проблемы?"
                   : "For example: if my salary is delayed by a week, where will problems start?"
               }
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void sendAdvisorQuestion();
+                }
+              }}
               className="mt-3 min-h-28 w-full rounded-xl border border-border/70 bg-muted/20 px-3 py-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
             />
+            <div className="mt-3 flex justify-end">
+              <Button
+                type="button"
+                onClick={() => void sendAdvisorQuestion()}
+                disabled={sendingQuestion || draftQuestion.trim().length === 0}
+              >
+                {locale === "ru" ? "Отправить →" : "Send →"}
+              </Button>
+            </div>
+            {questionError ? (
+              <p className="mt-2 text-sm text-destructive">{questionError}</p>
+            ) : null}
+            {messages.length > 0 || sendingQuestion ? (
+              <div className="mt-4 space-y-3 rounded-xl border border-border/70 bg-muted/20 p-3">
+                {messages.map((message, index) => (
+                  <div
+                    key={`${message.role}-${index}`}
+                    className={[
+                      "rounded-xl px-3 py-2 text-sm",
+                      message.role === "user"
+                        ? "bg-background text-foreground"
+                        : "bg-primary/5 text-foreground",
+                    ].join(" ")}
+                  >
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">
+                      {message.role === "user"
+                        ? locale === "ru"
+                          ? "Ваш вопрос"
+                          : "Your question"
+                        : locale === "ru"
+                          ? "Ответ советника"
+                          : "Advisor reply"}
+                    </p>
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  </div>
+                ))}
+                {sendingQuestion ? (
+                  <div className="rounded-xl bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
+                    {locale === "ru" ? "Анализирую ваши финансы..." : "Analyzing your finances..."}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <Button
                 type="button"

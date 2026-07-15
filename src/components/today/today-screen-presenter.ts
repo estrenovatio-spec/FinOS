@@ -411,7 +411,7 @@ function buildPlannedFreeMoneyItem(
 
   return {
     id: "planned-free-money",
-    label: locale === "ru" ? "По плану свободно" : "Planned free money",
+    label: locale === "ru" ? "Свободные деньги" : "Free money",
     subtitle:
       locale === "ru"
         ? `до ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`
@@ -462,7 +462,7 @@ function buildPlannedFreeMoneyItem(
             tone: "negative",
           },
           {
-            label: locale === "ru" ? "По плану свободно" : "Planned free money",
+            label: locale === "ru" ? "Свободные деньги" : "Free money",
             value: moneyValue(plannedFreeMoney.breakdown.plannedFreeMoney, locale) ?? "",
             tone: "total",
           },

@@ -7,10 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   formatHumanDateLong,
   formatIsoDate,
-  formatTransactionDate,
-  formatTransactionDateShort,
   formatWeekdayShort,
   getLocalTodayIsoDate,
+  normalizeIsoDate,
 } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
@@ -21,6 +20,7 @@ import type {
   ForecastDay,
   ForecastEvent,
 } from "@/lib/decision-core/types";
+import type { PlannedFreeMoneyView } from "@/lib/free-money";
 import type { Locale } from "@/types";
 import type { SavingsGoal } from "@/types/planning";
 
@@ -115,12 +115,33 @@ function groupEventsForDay(events: ForecastEvent[]) {
   };
 }
 
+export function selectCalendarDay(current: string | null, tappedDate: string): string {
+  const normalized = normalizeIsoDate(tappedDate) ?? tappedDate;
+  return normalized;
+}
+
+function resolveDisplayedEndBalance(args: {
+  date: string;
+  forecastDay: ForecastDay | null;
+  periodFreeMoney?: PlannedFreeMoneyView;
+}): number | null {
+  if (
+    args.periodFreeMoney?.amount != null &&
+    args.periodFreeMoney.periodEndDate != null &&
+    args.periodFreeMoney.periodEndDate === args.date
+  ) {
+    return args.periodFreeMoney.amount;
+  }
+  return args.forecastDay?.endBalance ?? null;
+}
+
 export function ForecastCalendarView({
   locale,
   forecast,
   startDate,
   goals,
   explanation,
+  periodFreeMoney,
   onOpenPlan,
 }: {
   locale: Locale;
@@ -128,6 +149,7 @@ export function ForecastCalendarView({
   startDate: string;
   goals: SavingsGoal[];
   explanation?: DecisionConstraintExplanation | null;
+  periodFreeMoney?: PlannedFreeMoneyView;
   onOpenPlan?: (params: { section: "recurring" | "limits" | "debts" | "goals"; entityId?: string | null }) => void;
 }) {
   const months = useMemo(
@@ -246,6 +268,11 @@ export function ForecastCalendarView({
               .map((day) => {
                 const isOpen = selectedDate === day.date;
                 const forecastDay = daysByDate.get(day.date) ?? null;
+                const displayedEndBalance = resolveDisplayedEndBalance({
+                  date: day.date,
+                  forecastDay,
+                  periodFreeMoney,
+                });
                 const dayGoals = goalMap.get(day.date) ?? [];
                 const grouped = forecastDay ? groupEventsForDay(forecastDay.events) : null;
                 const sections =
@@ -304,8 +331,9 @@ export function ForecastCalendarView({
                   >
                     <button
                       type="button"
-                      onClick={() => setSelectedDate((current) => (current === day.date ? null : day.date))}
+                      onClick={() => setSelectedDate((current) => selectCalendarDay(current, day.date))}
                       className="w-full px-4 py-3 text-left"
+                      aria-pressed={isOpen}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -342,9 +370,9 @@ export function ForecastCalendarView({
                             {day.expenseTotal > 0 ? (
                               <p className="font-medium text-rose-600">−{formatMoney(day.expenseTotal, locale)} ₽</p>
                             ) : null}
-                            {day.endBalance != null ? (
+                            {displayedEndBalance != null ? (
                               <p className="mt-1 text-muted-foreground">
-                                {locale === "ru" ? "После дня" : "After day"}: {formatMoney(day.endBalance, locale)} ₽
+                                {locale === "ru" ? "В конце дня" : "End of day"}: {formatMoney(displayedEndBalance, locale)} ₽
                               </p>
                             ) : null}
                           </div>
@@ -392,10 +420,10 @@ export function ForecastCalendarView({
                               </div>
                               <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
                                 <p className="text-xs text-muted-foreground">
-                                  {locale === "ru" ? "Баланс после дня" : "After the day"}
+                                  {locale === "ru" ? "В конце дня" : "End of day"}
                                 </p>
                                 <p className="mt-1 text-sm font-semibold text-foreground">
-                                  {formatMoney(forecastDay.endBalance, locale)} ₽
+                                  {formatMoney(displayedEndBalance ?? forecastDay.endBalance, locale)} ₽
                                 </p>
                               </div>
                             </div>

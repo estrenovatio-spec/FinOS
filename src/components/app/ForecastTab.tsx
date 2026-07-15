@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import type { ForecastFocus } from "@/lib/forecast-focus";
+import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   useHouseholdBalances,
@@ -71,6 +72,41 @@ export function ForecastTab({
       locale,
       moneySetup,
       recurringTransactions,
+      today,
+      transactions,
+    ],
+  );
+  const periodFreeMoney = useMemo(
+    () =>
+      calculatePlannedFreeMoneyUntilPeriodEnd(
+        {
+          locale,
+          today,
+          forecastHorizonMonths,
+          categories,
+          transactions,
+          householdFilter,
+          recurringTransactions,
+          debts,
+          moneySetup,
+          categoryBudgets,
+          budgetMonthStartDay,
+          balances,
+        },
+        snapshot,
+      ),
+    [
+      balances,
+      budgetMonthStartDay,
+      categories,
+      categoryBudgets,
+      debts,
+      forecastHorizonMonths,
+      householdFilter,
+      locale,
+      moneySetup,
+      recurringTransactions,
+      snapshot,
       today,
       transactions,
     ],
@@ -153,6 +189,7 @@ export function ForecastTab({
           startDate={today}
           goals={savingsGoals}
           explanation={snapshot.constraintExplanation}
+          periodFreeMoney={periodFreeMoney}
           onOpenPlan={onOpenPlan}
         />
       )}
