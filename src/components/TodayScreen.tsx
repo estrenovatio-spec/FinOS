@@ -382,8 +382,7 @@ export function TodayScreen({
       <div className="sticky bottom-20 z-20 pt-2">
         <Button
           type="button"
-          variant={view.showQuickAddHint ? "outline" : "secondary"}
-          className="h-12 w-full rounded-xl text-base font-semibold"
+          className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-primary-foreground shadow-lg hover:bg-primary/90"
           onClick={() => {
             setActionError(null);
             setQuickAddOpen(true);
