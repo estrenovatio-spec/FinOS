@@ -6,12 +6,14 @@ import type { AccessSummaryPublic, SubscriptionPublic } from "@/lib/payments/typ
 import type { ReferralProfilePublic } from "@/lib/referrals/service";
 import { isValidSubscriptionPublic } from "@/lib/billing/subscription-shape";
 import type { InitialSyncDecision, SyncBootstrapStatus } from "@/lib/cloud/initial-sync";
+import type { UserPlan } from "@/lib/ai/model-router";
 
 interface CloudState {
   token: string | null;
   household: HouseholdPublic | null;
   authEmail: string | null;
   authMethod: "telegram" | "email" | null;
+  userPlan: UserPlan;
   /** Текущий пользователь в облаке (Telegram → User.id) */
   cloudUserId: string | null;
   householdMemberUserIds: string[];
@@ -51,6 +53,7 @@ interface CloudState {
     email?: string | null;
     authMethod?: "telegram" | "email" | null;
   }) => void;
+  setUserPlan: (userPlan: UserPlan) => void;
   setSubscription: (subscription: SubscriptionPublic | null) => void;
   setAccessSummary: (accessSummary: AccessSummaryPublic | null) => void;
   setReferralsEnabled: (enabled: boolean) => void;
@@ -97,6 +100,7 @@ export const useCloudStore = create<CloudState>()(
       household: null,
       authEmail: null,
       authMethod: null,
+      userPlan: "free",
       cloudUserId: null,
       householdMemberUserIds: [],
       balanceOffsets: {},
@@ -128,6 +132,7 @@ export const useCloudStore = create<CloudState>()(
           authEmail: email ?? null,
           authMethod: authMethod ?? null,
         }),
+      setUserPlan: (userPlan) => set({ userPlan }),
       setLastWriteError: (lastWriteError) => set({ lastWriteError }),
       setSubscription: (subscription) => set({ subscription }),
       setAccessSummary: (accessSummary) => set({ accessSummary }),
@@ -245,6 +250,7 @@ export const useCloudStore = create<CloudState>()(
           household: null,
           authEmail: null,
           authMethod: null,
+          userPlan: "free",
           cloudUserId: null,
           householdMemberUserIds: [],
           balanceOffsets: {},
@@ -274,6 +280,7 @@ export const useCloudStore = create<CloudState>()(
           household: null,
           authEmail: null,
           authMethod: null,
+          userPlan: "free",
           cloudUserId: null,
           householdMemberUserIds: [],
           lastSyncedAt: null,
@@ -295,7 +302,7 @@ export const useCloudStore = create<CloudState>()(
     }),
     {
       name: "voicebudget-cloud",
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
         const state = persisted as CloudState;
         let next = state;
@@ -361,14 +368,21 @@ export const useCloudStore = create<CloudState>()(
             lastInitialSyncDecision: null,
           };
         }
+        if (version < 10) {
+          next = {
+            ...next,
+            userPlan: "free",
+          };
+        }
         next = {
           ...next,
           authEmail: next.authEmail ?? null,
-            authMethod: next.authMethod ?? null,
-            pendingTransactionUpdateIds: next.pendingTransactionUpdateIds ?? {},
-            syncBootstrapStatus: next.syncBootstrapStatus ?? "idle",
-            lastInitialSyncDecision: next.lastInitialSyncDecision ?? null,
-          };
+          authMethod: next.authMethod ?? null,
+          userPlan: next.userPlan ?? "free",
+          pendingTransactionUpdateIds: next.pendingTransactionUpdateIds ?? {},
+          syncBootstrapStatus: next.syncBootstrapStatus ?? "idle",
+          lastInitialSyncDecision: next.lastInitialSyncDecision ?? null,
+        };
         return next;
       },
       onRehydrateStorage: () => () => {

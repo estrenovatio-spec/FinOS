@@ -12,6 +12,7 @@ import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { formatHumanDateLong, getLocalTodayIsoDate } from "@/lib/format-date";
 import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import { t } from "@/lib/i18n";
+import { useCloudStore } from "@/store/useCloudStore";
 import { useHouseholdBalances, useStore, useViewerMappedTransactions } from "@/store/useStore";
 
 type AiSubTab = "questions" | "mission" | "weekly" | "monthly";
@@ -33,6 +34,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
   const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
   const householdFilter = useStore((s) => s.householdFilter);
   const savingsGoals = useStore((s) => s.savingsGoals);
+  const userPlan = useCloudStore((s) => s.userPlan);
   const balances = useHouseholdBalances();
   const transactions = useViewerMappedTransactions(false);
   const [subTab, setSubTab] = useState<AiSubTab>(reportsOnly ? "weekly" : "questions");
@@ -155,6 +157,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locale,
+          userPlan,
           question,
           messages,
           context: {

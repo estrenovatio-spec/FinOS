@@ -6,6 +6,8 @@ import {
   getPlainTextLlmClient,
   isLlmConfigured,
 } from "@/lib/llm";
+import { getAdvisorSystemPrompt } from "@/lib/ai/advisor-system-prompt";
+import { resolveAdvisorModel } from "@/lib/ai/model-router";
 
 export const maxDuration = 60;
 
@@ -22,6 +24,7 @@ const cardSchema = z.object({
 
 const bodySchema = z.object({
   locale: z.enum(["ru", "en"]),
+  userPlan: z.enum(["free", "standard", "pro"]).default("free"),
   question: z.string().min(1).max(1000),
   messages: z.array(messageSchema).max(12).default([]),
   context: z.object({
@@ -31,40 +34,6 @@ const bodySchema = z.object({
   }),
 });
 
-function systemPrompt(locale: "ru" | "en", cards: Array<{ label: string; value: string; note: string }>, periodNote?: string) {
-  const contextLines = cards
-    .map((card) => `- ${card.label}: ${card.value}. ${card.note}`)
-    .join("\n");
-
-  if (locale === "ru") {
-    return [
-      "Ты финансовый советник внутри FIN OS.",
-      "Отвечай простым человеческим языком, без упоминаний модели, ИИ, алгоритмов и внутренних терминов.",
-      "Опирайся только на переданный финансовый контекст.",
-      "Если данных не хватает, честно скажи, чего именно не хватает.",
-      "Давай короткий практичный ответ: сначала вывод, потом 2-4 пункта объяснения или следующего шага.",
-      periodNote ? `Период: ${periodNote}` : "",
-      "Контекст пользователя:",
-      contextLines,
-    ]
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  return [
-    "You are the in-app financial advisor inside FIN OS.",
-    "Use plain human language and do not mention AI, models, or internal system terms.",
-    "Rely only on the provided financial context.",
-    "If context is insufficient, clearly say what is missing.",
-    "Keep the answer practical: first the conclusion, then 2-4 short points.",
-    periodNote ? `Period: ${periodNote}` : "",
-    "User context:",
-    contextLines,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 export async function POST(request: NextRequest) {
   try {
     const json: unknown = await request.json();
@@ -73,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "invalid_request" }, { status: 400 });
     }
 
-    const { locale, question, messages, context } = parsed.data;
+    const { locale, userPlan, question, messages, context } = parsed.data;
 
     const fallbackReply =
       locale === "ru"
@@ -91,10 +60,15 @@ export async function POST(request: NextRequest) {
 
     try {
       const completion = await createPlainTextChatCompletion(client, {
+        model: resolveAdvisorModel(userPlan),
         messages: [
           {
             role: "system",
-            content: systemPrompt(locale, context.cards, context.periodNote),
+            content: getAdvisorSystemPrompt({
+              locale,
+              cards: context.cards,
+              periodNote: context.periodNote,
+            }),
           },
           ...messages.map((message) => ({
             role: message.role,
