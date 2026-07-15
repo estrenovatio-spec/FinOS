@@ -1,5 +1,6 @@
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { resolveMoneySetupIncomeSources } from "@/lib/money-setup";
+import { isExpectedEventVisibleToday } from "@/lib/expected-events";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
 import { buildConstraintExplanation } from "@/lib/decision-core/constraint-explanation";
@@ -42,6 +43,8 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     moneySetup: state.moneySetup,
     categoryBudgets: state.categoryBudgets,
     budgetMonthStartDay: state.budgetMonthStartDay,
+    expectedEventReminderStates:
+      state.expectedEventReminderStates ?? state.moneySetup.expectedEventReminderStates,
     availableNow,
     safeSpending,
     resolvedIncomeSources: resolveMoneySetupIncomeSources({
@@ -87,7 +90,12 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     (transaction) =>
       transaction.confirmed === false &&
       transaction.type === "expense" &&
-      transaction.date.slice(0, 10) < ctx.today,
+      transaction.date.slice(0, 10) < ctx.today &&
+      isExpectedEventVisibleToday(
+        `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
+        ctx.expectedEventReminderStates,
+        ctx.today,
+      ),
   );
   const status = buildStatus({
     locale: ctx.locale,
@@ -99,7 +107,13 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     requiredFloor: getRequiredFloor(ctx),
     hasOverduePayments,
     hasIncomeToConfirm: ctx.resolvedIncomeSources.some(
-      (source) => source.status === "due_today" || source.status === "overdue_unconfirmed",
+      (source) =>
+        (source.status === "due_today" || source.status === "overdue_unconfirmed") &&
+        isExpectedEventVisibleToday(
+          `income:${source.id}:${source.occurrenceDate}`,
+          ctx.expectedEventReminderStates,
+          ctx.today,
+        ),
     ),
   });
   const mainAction = buildMainAction(primaryDecision, ctx, nextRisk);

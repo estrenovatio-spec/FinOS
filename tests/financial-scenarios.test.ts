@@ -21,6 +21,7 @@ function makeState(overrides: Partial<DecisionCoreState> = {}): DecisionCoreStat
       requiredRecurringIds: [],
       hasNoRequiredFixedExpenses: false,
       essentialCategoryIds: ["groceries"],
+      expectedEventReminderStates: [],
       updatedAt: null,
       incomeSources: [],
     },

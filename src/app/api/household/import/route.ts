@@ -92,6 +92,15 @@ const moneySetupSchema = z.object({
   requiredRecurringIds: z.array(z.string()),
   hasNoRequiredFixedExpenses: z.boolean().optional().default(false),
   essentialCategoryIds: z.array(z.string()),
+  expectedEventReminderStates: z
+    .array(
+      z.object({
+        eventKey: z.string(),
+        remindOn: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
   updatedAt: z.string().nullable(),
 });
 
@@ -168,6 +177,8 @@ export async function POST(req: NextRequest) {
             incomeSources: body.moneySetup.incomeSources ?? [],
             hasNoRequiredFixedExpenses:
               body.moneySetup.hasNoRequiredFixedExpenses ?? false,
+            expectedEventReminderStates:
+              body.moneySetup.expectedEventReminderStates ?? [],
           }
         : undefined,
       replaceTransactions: body.replaceTransactions === true,

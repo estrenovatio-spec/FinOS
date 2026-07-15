@@ -214,6 +214,7 @@ interface StoreState {
   addExpectedEventHistory: (entry: ExpectedEventHistoryEntry) => void;
   addExpectedEventReminder: (reminder: ExpectedEventReminder) => void;
   removeExpectedEventReminder: (id: string) => void;
+  removeExpectedEventReminderByEventKey: (eventKey: string) => void;
   /** Период для статистики; null = текущий отчётный месяц */
   statsPeriodOverride: { from: string; to: string } | null;
   setStatsPeriodRange: (from: string, to: string) => void;
@@ -614,12 +615,20 @@ export const useStore = create<StoreState>()(
         set((state) => ({
           expectedEventReminders: [
             reminder,
-            ...state.expectedEventReminders.filter((item) => item.id !== reminder.id),
+            ...state.expectedEventReminders.filter(
+              (item) => item.eventKey !== reminder.eventKey,
+            ),
           ].slice(0, 50),
         })),
       removeExpectedEventReminder: (id) =>
         set((state) => ({
           expectedEventReminders: state.expectedEventReminders.filter((item) => item.id !== id),
+        })),
+      removeExpectedEventReminderByEventKey: (eventKey) =>
+        set((state) => ({
+          expectedEventReminders: state.expectedEventReminders.filter(
+            (item) => item.eventKey !== eventKey,
+          ),
         })),
       statsPeriodOverride: null,
       setStatsPeriodRange: (from, to) =>

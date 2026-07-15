@@ -4,7 +4,10 @@ import path from "node:path";
 import test from "node:test";
 import {
   cancelIncomeOccurrenceInSetup,
+  clearExpectedEventReminderInSetup,
+  isExpectedEventVisibleToday,
   rescheduleIncomeSourceInSetup,
+  setExpectedEventReminderInSetup,
   shouldSuggestRecurringAmountUpdate,
 } from "@/lib/expected-events";
 import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
@@ -122,6 +125,49 @@ test("recurring amount suggestion appears only when the actual amount differs by
   assert.equal(shouldSuggestRecurringAmountUpdate(24000, 26000), false);
   assert.equal(shouldSuggestRecurringAmountUpdate(24000, 27000), true);
   assert.equal(shouldSuggestRecurringAmountUpdate(10000, 8800), true);
+});
+
+test("snoozing an expected event stores one stable reminder entry and hides it only until the requested day", () => {
+  const setup = setExpectedEventReminderInSetup(
+    emptyMoneySetup(),
+    "income:salary-main:2026-07-06",
+    "2026-07-16",
+  );
+  const updated = setExpectedEventReminderInSetup(
+    setup,
+    "income:salary-main:2026-07-06",
+    "2026-07-17",
+  );
+
+  assert.deepEqual(updated.expectedEventReminderStates, [
+    {
+      eventKey: "income:salary-main:2026-07-06",
+      remindOn: "2026-07-17",
+    },
+  ]);
+  assert.equal(
+    isExpectedEventVisibleToday(
+      "income:salary-main:2026-07-06",
+      updated.expectedEventReminderStates,
+      "2026-07-16",
+    ),
+    false,
+  );
+  assert.equal(
+    isExpectedEventVisibleToday(
+      "income:salary-main:2026-07-06",
+      updated.expectedEventReminderStates,
+      "2026-07-17",
+    ),
+    true,
+  );
+  assert.deepEqual(
+    clearExpectedEventReminderInSetup(
+      updated,
+      "income:salary-main:2026-07-06",
+    ).expectedEventReminderStates,
+    [],
+  );
 });
 
 test("expected event dialog uses human labels and keeps the confirmation form restricted", () => {

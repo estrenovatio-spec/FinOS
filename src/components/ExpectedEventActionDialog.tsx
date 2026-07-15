@@ -18,10 +18,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import {
   cancelIncomeOccurrenceInSetup,
+  clearExpectedEventReminderInSetup,
   expectedEventDate,
   expectedEventKey,
   nextLocalIsoDate,
   rescheduleIncomeSourceInSetup,
+  setExpectedEventReminderInSetup,
   shouldSuggestRecurringAmountUpdate,
   type ExpectedEvent,
 } from "@/lib/expected-events";
@@ -99,6 +101,9 @@ export function ExpectedEventActionDialog({
   const dismissPendingTransaction = useStore((s) => s.dismissPendingTransaction);
   const addExpectedEventHistory = useStore((s) => s.addExpectedEventHistory);
   const addExpectedEventReminder = useStore((s) => s.addExpectedEventReminder);
+  const removeExpectedEventReminderByEventKey = useStore(
+    (s) => s.removeExpectedEventReminderByEventKey,
+  );
   const transactions = useTransactions();
   const { toast } = useToast();
 
@@ -160,6 +165,12 @@ export function ExpectedEventActionDialog({
     });
   }
 
+  function clearReminderState(targetEvent: ExpectedEvent) {
+    const eventKey = expectedEventKey(targetEvent);
+    removeExpectedEventReminderByEventKey(eventKey);
+    setMoneySetup(clearExpectedEventReminderInSetup(moneySetup, eventKey));
+  }
+
   function maybeSuggestRecurringAmountUpdate(actualAmount: number) {
     if (!event) return;
     if (event.kind === "income") {
@@ -196,6 +207,7 @@ export function ExpectedEventActionDialog({
   function handleConfirmSaved(result: TransactionDialogSaveResult) {
     if (!event) return;
 
+    clearReminderState(event);
     appendHistory("confirmed", { amount: result.amount, resultingDate: result.date });
 
     if (event.kind === "income") {
@@ -220,9 +232,10 @@ export function ExpectedEventActionDialog({
   function handleSnoozeUntilTomorrow() {
     if (!event) return;
     const remindOn = nextLocalIsoDate(getLocalTodayIsoDate());
+    const eventKey = expectedEventKey(event);
     addExpectedEventReminder({
-      id: `${expectedEventKey(event)}:tomorrow`,
-      eventKey: expectedEventKey(event),
+      id: `${eventKey}:tomorrow`,
+      eventKey,
       kind: event.kind,
       title: event.title,
       amount: event.amount,
@@ -230,11 +243,12 @@ export function ExpectedEventActionDialog({
       remindOn,
       createdAt: new Date().toISOString(),
     });
+    setMoneySetup(setExpectedEventReminderInSetup(moneySetup, eventKey, remindOn));
     appendHistory("snoozed_until_tomorrow", { resultingDate: remindOn });
     toast(
       locale === "ru"
-        ? `Напомним завтра · ${formatTransactionDate(remindOn, locale)}`
-        : `We will remind you tomorrow · ${formatTransactionDate(remindOn, locale)}`,
+        ? `Напомним завтра\n${formatTransactionDate(remindOn, locale)}`
+        : `We will remind you tomorrow\n${formatTransactionDate(remindOn, locale)}`,
       "success",
     );
     onOpenChange(false);
@@ -251,8 +265,17 @@ export function ExpectedEventActionDialog({
     if (event.kind === "income") {
       if (skipChoice === "reschedule" && rescheduleDate) {
         setMoneySetup(
-          rescheduleIncomeSourceInSetup(moneySetup, event.incomeSourceId, rescheduleDate, locale),
+          clearExpectedEventReminderInSetup(
+            rescheduleIncomeSourceInSetup(
+              moneySetup,
+              event.incomeSourceId,
+              rescheduleDate,
+              locale,
+            ),
+            expectedEventKey(event),
+          ),
         );
+        removeExpectedEventReminderByEventKey(expectedEventKey(event));
         appendHistory("rescheduled", { resultingDate: rescheduleDate });
         toast(
           locale === "ru"
@@ -262,13 +285,17 @@ export function ExpectedEventActionDialog({
         );
       } else if (skipChoice === "cancel") {
         setMoneySetup(
-          cancelIncomeOccurrenceInSetup(
-            moneySetup,
-            event.incomeSourceId,
-            event.occurrenceDate,
-            locale,
+          clearExpectedEventReminderInSetup(
+            cancelIncomeOccurrenceInSetup(
+              moneySetup,
+              event.incomeSourceId,
+              event.occurrenceDate,
+              locale,
+            ),
+            expectedEventKey(event),
           ),
         );
+        removeExpectedEventReminderByEventKey(expectedEventKey(event));
         appendHistory("cancelled");
         toast(
           locale === "ru" ? "Ожидание отменено" : "Expected event cancelled",
@@ -284,6 +311,7 @@ export function ExpectedEventActionDialog({
       if (recurringItem) {
         updateRecurring(recurringItem.id, { nextRunDate: rescheduleDate });
       }
+      clearReminderState(event);
       appendHistory("rescheduled", { resultingDate: rescheduleDate });
       toast(
         locale === "ru"
@@ -301,6 +329,7 @@ export function ExpectedEventActionDialog({
       } else {
         deleteTransaction(event.transactionId);
       }
+      clearReminderState(event);
       appendHistory("cancelled");
       toast(
         locale === "ru" ? "Ожидание отменено" : "Expected event cancelled",

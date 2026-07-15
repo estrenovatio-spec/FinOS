@@ -139,6 +139,8 @@ function buildContext(state: DecisionCoreState): DecisionCoreContext {
     moneySetup: state.moneySetup,
     categoryBudgets: state.categoryBudgets,
     budgetMonthStartDay: state.budgetMonthStartDay,
+    expectedEventReminderStates:
+      state.expectedEventReminderStates ?? state.moneySetup.expectedEventReminderStates,
     availableNow,
     resolvedIncomeSources: resolveMoneySetupIncomeSources({
       moneySetup: state.moneySetup,
@@ -2425,6 +2427,97 @@ test("rescheduling an overdue payment removes the old overdue hero state and mov
     paymentEvents.some((event) => event.date === "2026-07-16" && event.amount === -50000),
     true,
   );
+});
+
+test("snoozed overdue income is hidden today without changing the forecast date, and returns tomorrow", () => {
+  const baseMoneySetup = {
+    ...emptyMoneySetup(),
+    incomeSources: [
+      {
+        id: "salary-july",
+        label: "Зарплата",
+        expectedDate: "2026-07-06",
+        expectedAmount: 50000,
+        kind: "salary" as const,
+        recurrence: "once" as const,
+        isPrimary: true,
+      },
+    ],
+    expectedEventReminderStates: [
+      {
+        eventKey: "income:salary-july:2026-07-06",
+        remindOn: "2026-07-16",
+      },
+    ],
+  };
+
+  const hiddenToday = evaluate(
+    buildState({
+      today: "2026-07-15",
+      balances: { all: 10000, me: 10000, partner: 0 },
+      moneySetup: baseMoneySetup,
+    }),
+  );
+  const visibleTomorrow = evaluate(
+    buildState({
+      today: "2026-07-16",
+      balances: { all: 10000, me: 10000, partner: 0 },
+      moneySetup: baseMoneySetup,
+    }),
+  );
+
+  const hiddenForecastEvent = hiddenToday.ctx.forecast.events.find(
+    (event) => event.incomeOccurrenceDate === "2026-07-06",
+  );
+  const visibleForecastEvent = visibleTomorrow.ctx.forecast.events.find(
+    (event) => event.incomeOccurrenceDate === "2026-07-06",
+  );
+
+  assert.notEqual(hiddenToday.result.mainAction.type, "resolve_income_delay");
+  assert.equal(hiddenForecastEvent?.date, "2026-07-15");
+  assert.equal(visibleTomorrow.result.mainAction.type, "resolve_income_delay");
+  assert.equal(visibleForecastEvent?.date, "2026-07-16");
+});
+
+test("snoozed overdue payment is hidden today without changing the forecast date, and returns tomorrow", () => {
+  const baseState = buildState({
+    today: "2026-07-15",
+    balances: { all: 60000, me: 60000, partner: 0 },
+    transactions: [
+      tx({
+        id: "rent-july",
+        amount: 50000,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-10",
+        note: "Аренда",
+        confirmed: false,
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      expectedEventReminderStates: [
+        {
+          eventKey: "expense:rent-july:2026-07-10",
+          remindOn: "2026-07-16",
+        },
+      ],
+    },
+  });
+
+  const hiddenToday = evaluate(baseState);
+  const visibleTomorrow = evaluate({
+    ...baseState,
+    today: "2026-07-16",
+  });
+
+  const hiddenPendingTx = hiddenToday.ctx.transactions.find((tx) => tx.id === "rent-july");
+  const visiblePendingTx = visibleTomorrow.ctx.transactions.find((tx) => tx.id === "rent-july");
+
+  assert.notEqual(hiddenToday.result.mainAction.type, "overdue_payment");
+  assert.equal(hiddenPendingTx?.date, "2026-07-10");
+  assert.equal(visibleTomorrow.result.mainAction.type, "pay_overdue");
+  assert.equal(visiblePendingTx?.date, "2026-07-10");
 });
 
 test("monthly income uses the last available day for shorter months", () => {

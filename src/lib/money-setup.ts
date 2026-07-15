@@ -47,6 +47,11 @@ export interface ResolvedMoneySetupIncomeSource extends MoneySetupIncomeSource {
   isLegacy?: boolean;
 }
 
+export interface ExpectedEventReminderState {
+  eventKey: string;
+  remindOn: string;
+}
+
 export interface MoneySetup {
   nextIncomeDate: string | null;
   expectedIncomeAmount: number | null;
@@ -55,6 +60,7 @@ export interface MoneySetup {
   requiredRecurringIds: string[];
   hasNoRequiredFixedExpenses: boolean;
   essentialCategoryIds: string[];
+  expectedEventReminderStates: ExpectedEventReminderState[];
   updatedAt: string | null;
 }
 
@@ -67,6 +73,7 @@ export function emptyMoneySetup(): MoneySetup {
     requiredRecurringIds: [],
     hasNoRequiredFixedExpenses: false,
     essentialCategoryIds: [],
+    expectedEventReminderStates: [],
     updatedAt: null,
   };
 }
@@ -144,6 +151,25 @@ function asIncomeSources(value: unknown): MoneySetupIncomeSource[] {
   return [...deduped.values()];
 }
 
+function asExpectedEventReminderStates(
+  value: unknown,
+): ExpectedEventReminderState[] {
+  if (!Array.isArray(value)) return [];
+
+  const deduped = new Map<string, ExpectedEventReminderState>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Partial<ExpectedEventReminderState>;
+    const eventKey =
+      typeof raw.eventKey === "string" ? raw.eventKey.trim() : "";
+    const remindOn =
+      typeof raw.remindOn === "string" ? raw.remindOn.trim() : "";
+    if (!eventKey || !remindOn) continue;
+    deduped.set(eventKey, { eventKey, remindOn });
+  }
+  return [...deduped.values()];
+}
+
 export function normalizeMoneySetup(raw: unknown): MoneySetup {
   const empty = emptyMoneySetup();
   if (!raw || typeof raw !== "object") return empty;
@@ -165,6 +191,9 @@ export function normalizeMoneySetup(raw: unknown): MoneySetup {
     requiredRecurringIds: asStringArray(setup.requiredRecurringIds),
     hasNoRequiredFixedExpenses: Boolean(setup.hasNoRequiredFixedExpenses),
     essentialCategoryIds: asStringArray(setup.essentialCategoryIds),
+    expectedEventReminderStates: asExpectedEventReminderStates(
+      (setup as { expectedEventReminderStates?: unknown }).expectedEventReminderStates,
+    ),
     updatedAt:
       typeof setup.updatedAt === "string" && setup.updatedAt.trim()
         ? setup.updatedAt
@@ -186,6 +215,7 @@ export function pruneMoneySetupIds(
     hasNoRequiredFixedExpenses:
       setup.requiredRecurringIds.length > 0 ? false : setup.hasNoRequiredFixedExpenses,
     essentialCategoryIds: setup.essentialCategoryIds.filter((id) => categoryIds.has(id)),
+    expectedEventReminderStates: setup.expectedEventReminderStates,
   };
 }
 

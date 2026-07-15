@@ -6,6 +6,7 @@ import type {
   PrimaryDecision,
 } from "@/lib/decision-core/types";
 import { getRequiredFloor } from "@/lib/decision-core/constraint-point";
+import { isExpectedEventVisibleToday } from "@/lib/expected-events";
 
 type ResolvePrimaryDecisionInput = {
   ctx: DecisionCoreContext;
@@ -48,6 +49,13 @@ function resolveMissingData(ctx: DecisionCoreContext, safeUntil: DecisionSafeUnt
 function pickIncomeConfirmationDecision(ctx: DecisionCoreContext): PrimaryDecision | null {
   const overdue = ctx.resolvedIncomeSources
     .filter((source) => source.status === "overdue_unconfirmed")
+    .filter((source) =>
+      isExpectedEventVisibleToday(
+        `income:${source.id}:${source.occurrenceDate}`,
+        ctx.expectedEventReminderStates,
+        ctx.today,
+      ),
+    )
     .sort((left, right) => (left.expectedDate ?? "").localeCompare(right.expectedDate ?? ""))[0];
   if (overdue && overdue.expectedAmount && overdue.expectedDate) {
     return {
@@ -61,6 +69,13 @@ function pickIncomeConfirmationDecision(ctx: DecisionCoreContext): PrimaryDecisi
 
   const dueToday = ctx.resolvedIncomeSources
     .filter((source) => source.status === "due_today")
+    .filter((source) =>
+      isExpectedEventVisibleToday(
+        `income:${source.id}:${source.occurrenceDate}`,
+        ctx.expectedEventReminderStates,
+        ctx.today,
+      ),
+    )
     .sort((left, right) => left.id.localeCompare(right.id))[0];
   if (dueToday && dueToday.expectedAmount && dueToday.expectedDate) {
     return {
@@ -86,7 +101,12 @@ export function resolvePrimaryDecision(
         (transaction) =>
           transaction.confirmed === false &&
           transaction.type === "expense" &&
-          transaction.date.slice(0, 10) < ctx.today,
+          transaction.date.slice(0, 10) < ctx.today &&
+          isExpectedEventVisibleToday(
+            `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
+            ctx.expectedEventReminderStates,
+            ctx.today,
+          ),
       )
       .sort((left, right) => {
         if (left.date !== right.date) return left.date.localeCompare(right.date);

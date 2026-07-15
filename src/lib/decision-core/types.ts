@@ -1,5 +1,6 @@
 import type { SafeSpendingResult, SafeSpendingStatus } from "@/lib/safe-spending";
 import type {
+  ExpectedEventReminderState,
   MoneySetup,
   MoneySetupIncomeSourceStatus,
   ResolvedMoneySetupIncomeSource,
@@ -194,6 +195,7 @@ export type DecisionCoreState = {
   moneySetup: MoneySetup;
   categoryBudgets: CategoryBudget[];
   budgetMonthStartDay: number;
+  expectedEventReminderStates?: ExpectedEventReminderState[];
   balances: {
     all: number;
     me: number;
@@ -213,6 +215,7 @@ export type DecisionCoreContext = {
   moneySetup: MoneySetup;
   categoryBudgets: CategoryBudget[];
   budgetMonthStartDay: number;
+  expectedEventReminderStates: ExpectedEventReminderState[];
   availableNow: number;
   resolvedIncomeSources: ResolvedMoneySetupIncomeSource[];
   safeSpending: SafeSpendingResult;

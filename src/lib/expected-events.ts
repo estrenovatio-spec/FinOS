@@ -2,6 +2,7 @@ import { advanceRecurringDate } from "@/lib/planning/analytics";
 import {
   listConfiguredIncomeSources,
   type MoneySetup,
+  type ExpectedEventReminderState,
   type MoneySetupIncomeSource,
   type MoneySetupIncomeSourceStatus,
 } from "@/lib/money-setup";
@@ -84,6 +85,16 @@ function rebuildLegacyFields(
     nextIncomeDate: primary?.expectedDate ?? null,
     expectedIncomeAmount: primary?.expectedAmount ?? null,
   };
+}
+
+function upsertReminderState(
+  reminders: ExpectedEventReminderState[],
+  nextReminder: ExpectedEventReminderState,
+): ExpectedEventReminderState[] {
+  return [
+    nextReminder,
+    ...reminders.filter((item) => item.eventKey !== nextReminder.eventKey),
+  ];
 }
 
 export function materializeIncomeSources(
@@ -196,6 +207,42 @@ export function expectedEventKey(event: ExpectedEvent): string {
   return event.kind === "income"
     ? `income:${event.incomeSourceId}:${event.occurrenceDate}`
     : `expense:${event.transactionId}:${event.date}`;
+}
+
+export function setExpectedEventReminderInSetup(
+  setup: MoneySetup,
+  eventKey: string,
+  remindOn: string,
+): MoneySetup {
+  return {
+    ...setup,
+    expectedEventReminderStates: upsertReminderState(
+      setup.expectedEventReminderStates,
+      { eventKey, remindOn },
+    ),
+  };
+}
+
+export function clearExpectedEventReminderInSetup(
+  setup: MoneySetup,
+  eventKey: string,
+): MoneySetup {
+  return {
+    ...setup,
+    expectedEventReminderStates: setup.expectedEventReminderStates.filter(
+      (item) => item.eventKey !== eventKey,
+    ),
+  };
+}
+
+export function isExpectedEventVisibleToday(
+  eventKey: string,
+  reminderStates: ExpectedEventReminderState[] | undefined,
+  today: string,
+): boolean {
+  const reminder = reminderStates?.find((item) => item.eventKey === eventKey);
+  if (!reminder) return true;
+  return today >= reminder.remindOn;
 }
 
 export function nextLocalIsoDate(dateIso: string): string {

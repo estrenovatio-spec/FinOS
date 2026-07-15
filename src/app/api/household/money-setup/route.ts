@@ -23,6 +23,15 @@ const moneySetupSchema = z.object({
   requiredRecurringIds: z.array(z.string()),
   hasNoRequiredFixedExpenses: z.boolean().optional().default(false),
   essentialCategoryIds: z.array(z.string()),
+  expectedEventReminderStates: z
+    .array(
+      z.object({
+        eventKey: z.string(),
+        remindOn: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
   updatedAt: z.string().nullable(),
 });
 
