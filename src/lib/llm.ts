@@ -15,6 +15,7 @@ export function getLlmApiKey(): string | undefined {
 }
 
 const XINGHU_BASE = "https://xinghuapi.com/v1";
+const APINET_BASE = "https://apinet.cloud/v1";
 
 function llmProvider(): string | undefined {
   return envFirst("LLM_PROVIDER")?.toLowerCase();
@@ -26,11 +27,12 @@ export function getLlmProvider(): string {
   return getLlmBaseUrl() ? "custom" : "openai";
 }
 
-/** Base URL прокси, напр. https://xinghuapi.com/v1 */
+/** Base URL прокси, напр. https://apinet.cloud/v1 */
 export function getLlmBaseUrl(): string | undefined {
   const explicit = envFirst("LLM_BASE_URL", "OPENAI_BASE_URL");
   if (explicit) return explicit.replace(/\/$/, "");
   if (llmProvider() === "xinghu") return XINGHU_BASE;
+  if (llmProvider() === "apinet") return APINET_BASE;
   return undefined;
 }
 
@@ -51,7 +53,7 @@ export function getLlmClient(): OpenAI | null {
   });
 }
 
-/** Клиент для STT — без повторов, длинный таймаут (прокси xinghu медленный) */
+/** Клиент для STT — без повторов, длинный таймаут для внешних прокси */
 export function getSttClient(): OpenAI | null {
   const apiKey = getLlmApiKey();
   if (!apiKey) return null;
@@ -65,14 +67,17 @@ export function getSttClient(): OpenAI | null {
   });
 }
 
-/** Модель: LLM_MODEL / OPENAI_MODEL, иначе gemini для прокси или gpt-4o-mini для OpenAI */
+/** Модель: LLM_MODEL / OPENAI_MODEL, иначе дефолт по провайдеру */
 export function getLlmModel(): string {
   const explicit = envFirst("LLM_MODEL", "OPENAI_MODEL");
   if (explicit) return explicit;
   if (llmProvider() === "xinghu" || getLlmBaseUrl() === XINGHU_BASE) {
     return "gemini-2.5-flash";
   }
-  if (getLlmBaseUrl()) return "gemini-2.5-flash";
+  if (llmProvider() === "apinet" || getLlmBaseUrl() === APINET_BASE) {
+    return "gpt-4o-mini";
+  }
+  if (getLlmBaseUrl()) return "gpt-4o-mini";
   return "gpt-4o-mini";
 }
 
@@ -85,7 +90,7 @@ export function getSttModel(): string {
 
 /**
  * response_format json_object — у официального OpenAI по умолчанию.
- * У прокси (xinghu и т.п.) часто не работает — тогда только промпт «JSON only».
+ * У некоторых прокси может не работать — тогда только промпт «JSON only».
  */
 export function shouldUseJsonResponseFormat(): boolean {
   const flag = envFirst("LLM_JSON_FORMAT");

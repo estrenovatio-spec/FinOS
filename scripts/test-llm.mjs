@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Локальная проверка xinghu / LLM:
- *   LLM_API_KEY=sk-... LLM_BASE_URL=https://xinghuapi.com/v1 LLM_MODEL=gemini-2.5-pro-all node scripts/test-llm.mjs
+ * Локальная проверка apinet / LLM:
+ *   LLM_API_KEY=sk-... LLM_BASE_URL=https://apinet.cloud/v1 LLM_MODEL=gpt-4o-mini node scripts/test-llm.mjs
  */
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
@@ -18,14 +18,14 @@ if (existsSync(envPath)) {
 
 const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
 const baseUrl = (process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || "").replace(/\/$/, "");
-const model = process.env.LLM_MODEL || process.env.OPENAI_MODEL || "gemini-2.5-pro-all";
+const model = process.env.LLM_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 if (!apiKey) {
   console.error("Нет LLM_API_KEY в .env.local");
   process.exit(1);
 }
 if (!baseUrl) {
-  console.error("Нет LLM_BASE_URL — для xinghu нужно https://xinghuapi.com/v1");
+  console.error("Нет LLM_BASE_URL — например https://apinet.cloud/v1");
   process.exit(1);
 }
 

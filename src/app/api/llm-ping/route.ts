@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({
       ok: false,
       error: "no_api_key",
-      hint: "Задайте LLM_API_KEY и LLM_BASE_URL=https://xinghuapi.com/v1 на Vercel",
+      hint: "Задайте LLM_API_KEY, LLM_BASE_URL и LLM_MODEL на Vercel.",
     });
   }
 
@@ -21,7 +21,7 @@ export async function GET() {
     return NextResponse.json({
       ok: false,
       error: "missing_base_url",
-      hint: "Ключ xinghu не работает без LLM_BASE_URL=https://xinghuapi.com/v1",
+      hint: "Задайте LLM_BASE_URL, например https://apinet.cloud/v1.",
       model,
     });
   }
@@ -64,7 +64,7 @@ export async function GET() {
       error: message,
       baseUrl,
       model,
-      hint: "Проверьте ключ, баланс на xinghu и имя модели LLM_MODEL",
+      hint: "Проверьте ключ, баланс/квоту у провайдера и имя модели LLM_MODEL.",
     });
   }
 }
