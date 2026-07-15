@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { buildAdvisorContext } from "@/lib/advisor-context";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
-import { formatIsoDate, getLocalTodayIsoDate } from "@/lib/format-date";
+import { formatHumanDateLong, getLocalTodayIsoDate } from "@/lib/format-date";
+import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import { t } from "@/lib/i18n";
 import { useHouseholdBalances, useStore, useViewerMappedTransactions } from "@/store/useStore";
 
@@ -73,6 +74,42 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
     ],
   );
 
+  const plannedFreeMoney = useMemo(
+    () =>
+      calculatePlannedFreeMoneyUntilPeriodEnd(
+        {
+          locale,
+          today,
+          forecastHorizonMonths,
+          categories,
+          transactions,
+          householdFilter,
+          recurringTransactions,
+          debts,
+          moneySetup,
+          categoryBudgets,
+          budgetMonthStartDay,
+          balances,
+        },
+        decision,
+      ),
+    [
+      balances,
+      budgetMonthStartDay,
+      categories,
+      categoryBudgets,
+      decision,
+      debts,
+      forecastHorizonMonths,
+      householdFilter,
+      locale,
+      moneySetup,
+      recurringTransactions,
+      today,
+      transactions,
+    ],
+  );
+
   const advisorContext = useMemo(
     () =>
       buildAdvisorContext({
@@ -83,14 +120,24 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
         goals: savingsGoals,
         debts,
         categoryBudgets,
+        plannedFreeMoney,
       }),
-    [balances.me, categoryBudgets, decision, debts, locale, recurringTransactions, savingsGoals],
+    [
+      balances.me,
+      categoryBudgets,
+      decision,
+      debts,
+      locale,
+      plannedFreeMoney,
+      recurringTransactions,
+      savingsGoals,
+    ],
   );
 
   const periodNote =
     locale === "ru"
-      ? `Прогноз сейчас смотрит до ${formatIsoDate(decision.forecast.horizonEndDate, locale)}.`
-      : `The forecast currently looks through ${formatIsoDate(decision.forecast.horizonEndDate, locale)}.`;
+      ? `Здесь учитывается, сколько можно потратить до ${formatHumanDateLong(plannedFreeMoney.periodEndDate ?? decision.forecast.horizonEndDate, locale)}.`
+      : `This shows how much you can spend until ${formatHumanDateLong(plannedFreeMoney.periodEndDate ?? decision.forecast.horizonEndDate, locale)}.`;
 
   async function sendAdvisorQuestion() {
     const question = draftQuestion.trim();
@@ -227,7 +274,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {locale === "ru"
-                    ? "Эти вопросы уже опираются на баланс, прогноз, цели, лимиты и регулярные платежи."
+                    ? "Эти вопросы уже опираются на текущие деньги, сумму на траты, цели, лимиты и регулярные платежи."
                     : "These starter questions already rely on your balance, forecast, goals, limits, and recurring payments."}
                 </p>
               </div>

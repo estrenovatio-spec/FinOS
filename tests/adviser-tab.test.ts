@@ -44,10 +44,11 @@ test("Adviser screen now starts from a dedicated questions hub with contextual p
   assert.match(aiAnalysisTab, /Открыть разбор на 30 дней/);
 });
 
-test("Advisor context builder prepares cards for balance, forecast, goals, recurring and limits", () => {
+test("Advisor context builder prepares cards for balance, free money, forecast, goals, recurring and limits", () => {
   const advisorContext = readFileSync("src/lib/advisor-context.ts", "utf8");
 
   assert.match(advisorContext, /id: "balance"/);
+  assert.match(advisorContext, /id: "free_money"/);
   assert.match(advisorContext, /id: "forecast"/);
   assert.match(advisorContext, /id: "goals"/);
   assert.match(advisorContext, /id: "recurring"/);

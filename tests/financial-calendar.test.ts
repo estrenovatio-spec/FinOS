@@ -3,7 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
-import { resolveCalendarSelectionState, selectCalendarDay } from "@/components/app/ForecastCalendarView";
+import {
+  formatMoneyEventsCountLabel,
+  resolveCalendarSelectionState,
+  selectCalendarDay,
+} from "@/components/app/ForecastCalendarView";
 import type { BalanceForecast } from "@/lib/decision-core/types";
 
 function makeForecast(partial?: Partial<BalanceForecast>): BalanceForecast {
@@ -205,6 +209,8 @@ test("calendar view uses inline accordion details instead of a detached details 
   assert.match(source, /onSelectedDateChange\(selectCalendarDay\(selectedDate, day\.date\)\)/);
   assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
+  assert.match(source, /aria-hidden="true"/);
+  assert.match(source, /pointer-events-none h-4 w-4 text-muted-foreground transition-transform/);
   assert.match(source, /В конце дня/);
   assert.match(source, /🟡/);
   assert.match(source, /Изменить план/);
@@ -214,6 +220,16 @@ test("calendar view uses inline accordion details instead of a detached details 
 test("calendar day selection keeps the exact tapped ISO date", () => {
   assert.equal(selectCalendarDay("2026-07-15", "2026-07-16"), "2026-07-16");
   assert.equal(selectCalendarDay(null, "2026-07-16"), "2026-07-16");
+  assert.equal(selectCalendarDay("2026-07-16", "2026-07-16"), null);
+});
+
+test("calendar formats Russian money-event counts with the right ending", () => {
+  assert.equal(formatMoneyEventsCountLabel(1, "ru"), "1 движение по деньгам");
+  assert.equal(formatMoneyEventsCountLabel(2, "ru"), "2 движения по деньгам");
+  assert.equal(formatMoneyEventsCountLabel(5, "ru"), "5 движений по деньгам");
+  assert.equal(formatMoneyEventsCountLabel(21, "ru"), "21 движение по деньгам");
+  assert.equal(formatMoneyEventsCountLabel(24, "ru"), "24 движения по деньгам");
+  assert.equal(formatMoneyEventsCountLabel(11, "ru"), "11 движений по деньгам");
 });
 
 test("calendar keeps the user-selected date after data rerender", () => {

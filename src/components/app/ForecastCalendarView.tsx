@@ -120,8 +120,36 @@ type CalendarSelectionStateArgs = {
   monthDays: Array<{ date: string; isCurrentMonth: boolean; hasEvents: boolean; goals: Array<unknown> }>;
 };
 
-export function selectCalendarDay(current: string | null, tappedDate: string): string {
+function formatRussianMoneyEventsCount(count: number): string {
+  const abs = Math.abs(Math.trunc(count));
+  const mod100 = abs % 100;
+  const mod10 = abs % 10;
+
+  if (mod100 >= 11 && mod100 <= 14) {
+    return `${count} движений по деньгам`;
+  }
+  if (mod10 === 1) {
+    return `${count} движение по деньгам`;
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return `${count} движения по деньгам`;
+  }
+  return `${count} движений по деньгам`;
+}
+
+export function formatMoneyEventsCountLabel(count: number, locale: Locale): string {
+  if (locale === "ru") {
+    return formatRussianMoneyEventsCount(count);
+  }
+  return `${count} money events`;
+}
+
+export function selectCalendarDay(current: string | null, tappedDate: string): string | null {
+  const normalizedCurrent = normalizeIsoDate(current);
   const normalized = normalizeIsoDate(tappedDate) ?? tappedDate;
+  if (normalizedCurrent === normalized) {
+    return null;
+  }
   return normalized;
 }
 
@@ -136,7 +164,7 @@ export function resolveCalendarSelectionState({
   return null;
 }
 
-function resolveDisplayedEndBalance(args: {
+export function resolveDisplayedEndBalance(args: {
   date: string;
   forecastDay: ForecastDay | null;
   periodFreeMoney?: PlannedFreeMoneyView;
@@ -376,9 +404,7 @@ export function ForecastCalendarView({
                                   ? locale === "ru"
                                     ? "Сегодня"
                                     : "Today"
-                                  : locale === "ru"
-                                    ? `${day.eventsCount} движений по деньгам`
-                                    : `${day.eventsCount} money events`}
+                                  : formatMoneyEventsCountLabel(day.eventsCount, locale)}
                               </p>
                             </div>
                           </div>
@@ -400,8 +426,9 @@ export function ForecastCalendarView({
                           <div className="mt-0.5 flex flex-col items-end gap-2">
                             {day.isDeficit ? <TriangleAlert className="h-4 w-4 text-rose-600" /> : null}
                             <ChevronDown
+                              aria-hidden="true"
                               className={[
-                                "h-4 w-4 text-muted-foreground transition-transform",
+                                "pointer-events-none h-4 w-4 text-muted-foreground transition-transform",
                                 isOpen ? "rotate-180" : "",
                               ].join(" ")}
                             />

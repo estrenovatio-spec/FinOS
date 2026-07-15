@@ -1,11 +1,13 @@
 import type { DecisionCoreSnapshot } from "@/lib/decision-core/types";
 import { formatIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import type { PlannedFreeMoneyView } from "@/lib/free-money";
+import { buildPlannedFreeMoneySummary } from "@/lib/planned-free-money-presenter";
 import type { Locale } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
 
 export type AdvisorContextCard = {
-  id: "balance" | "forecast" | "goals" | "recurring" | "limits";
+  id: "balance" | "free_money" | "forecast" | "goals" | "recurring" | "limits";
   label: string;
   value: string;
   note: string;
@@ -24,6 +26,7 @@ export function buildAdvisorContext(args: {
   goals: SavingsGoal[];
   debts: DebtItem[];
   categoryBudgets: CategoryBudget[];
+  plannedFreeMoney?: PlannedFreeMoneyView;
 }): AdvisorContextView {
   const recurringExpenses = args.recurringTransactions.filter(
     (item) => item.enabled && item.type === "expense",
@@ -34,6 +37,7 @@ export function buildAdvisorContext(args: {
   const activeGoals = args.goals.length;
   const activeBudgets = args.categoryBudgets.filter((budget) => budget.monthlyLimit > 0).length;
   const riskDate = args.decision.forecast.firstDeficitDate ?? args.decision.nextRisk?.date ?? null;
+  const freeMoneySummary = buildPlannedFreeMoneySummary(args.locale, args.plannedFreeMoney);
 
   const cards: AdvisorContextCard[] = [
     {
@@ -44,6 +48,21 @@ export function buildAdvisorContext(args: {
         args.locale === "ru"
           ? "Советник отталкивается от текущего остатка."
           : "The advisor starts from your current balance.",
+    },
+    {
+      id: "free_money",
+      label:
+        freeMoneySummary?.subtitle != null
+          ? `${freeMoneySummary.label} ${freeMoneySummary.subtitle}`
+          : args.locale === "ru"
+            ? "Можно потратить"
+            : "Free money",
+      value: freeMoneySummary?.value ?? (args.locale === "ru" ? "0 ₽" : "0 RUB"),
+      note:
+        freeMoneySummary?.caption ??
+        (args.locale === "ru"
+          ? "Советник использует тот же расчёт, что и Today."
+          : "The advisor uses the same calculation as Today."),
     },
     {
       id: "forecast",
@@ -76,7 +95,7 @@ export function buildAdvisorContext(args: {
     },
     {
       id: "recurring",
-      label: args.locale === "ru" ? "Регулярные операции" : "Recurring items",
+      label: args.locale === "ru" ? "Регулярные платежи и доходы" : "Recurring items",
       value:
         args.locale === "ru"
           ? `${recurringExpenses} платежей · ${recurringIncome} доходов`

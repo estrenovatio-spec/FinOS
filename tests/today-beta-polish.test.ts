@@ -415,8 +415,8 @@ test("Today overview shows only current balance and planned free money", () => {
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
   assert.equal(allowed, undefined);
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.equal(planned?.label, "Свободные деньги");
-  assert.equal(planned?.subtitle, "до 13.08.2026");
+  assert.equal(planned?.label, "Можно потратить");
+  assert.equal(planned?.subtitle, "до 13 августа 2026");
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.equal(planned?.layout, "wide");
   assert.equal(planned?.details?.at(-1)?.value, "11 592 ₽");
@@ -466,7 +466,7 @@ test("planned free money card uses digital dates and keeps breakdown details", (
   });
 
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.equal(planned?.subtitle, "до 13.08.2026");
+  assert.equal(planned?.subtitle, "до 13 августа 2026");
   assert.equal(planned?.details?.[0]?.label, "Сейчас в кошельке");
   assert.equal(planned?.details?.[1]?.value, "+5 000 ₽");
   assert.equal(planned?.details?.[2]?.label, "Регулярные платежи");
@@ -524,7 +524,7 @@ test("planned free money copy explains recurring-income plan without using narro
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
   assert.equal(view.overviewItems.find((item) => item.id === "allowed"), undefined);
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
-  assert.match(planned?.caption ?? "", /регулярные доходы придут по плану/i);
+  assert.match(planned?.caption ?? "", /ожидаемые доходы придут по плану/i);
   assert.match(planned?.caption ?? "", /не подтверждено/i);
 });
 
@@ -572,12 +572,12 @@ test("planned free money breakdown arithmetic stays explicit", () => {
     planned?.details?.map((item) => item.label),
     [
       "Сейчас в кошельке",
-      "Регулярные доходы",
+      "Ожидаемые доходы",
       "Регулярные платежи",
       "Другие обязательные платежи",
-      "Плановые расходы",
+      "Базовые расходы по лимитам",
       "Другие обязательные расходы",
-      "Свободные деньги",
+      "Можно потратить",
     ],
   );
   assert.equal(planned?.details?.at(-1)?.value, "2 500 ₽");

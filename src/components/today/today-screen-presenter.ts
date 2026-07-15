@@ -8,6 +8,7 @@ import type {
 } from "@/lib/decision-core/types";
 import { formatMoney } from "@/lib/format-money";
 import type { FreeMoneyView, PlannedFreeMoneyView } from "@/lib/free-money";
+import { buildPlannedFreeMoneySummary } from "@/lib/planned-free-money-presenter";
 import type { Locale } from "@/types";
 
 type TodayStatusTone = "calm" | "risk" | "action" | "setup";
@@ -405,26 +406,17 @@ function buildPlannedFreeMoneyItem(
   locale: Locale,
   plannedFreeMoney?: PlannedFreeMoneyView,
 ): TodayOverviewItem | null {
-  if (!plannedFreeMoney || plannedFreeMoney.amount == null || !plannedFreeMoney.periodEndDate) {
+  const summary = buildPlannedFreeMoneySummary(locale, plannedFreeMoney);
+  if (!summary || !plannedFreeMoney) {
     return null;
   }
 
   return {
     id: "planned-free-money",
-    label: locale === "ru" ? "Свободные деньги" : "Free money",
-    subtitle:
-      locale === "ru"
-        ? `до ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`
-        : `until ${formatDayMonth(plannedFreeMoney.periodEndDate, locale)}`,
-    value: rub(plannedFreeMoney.amount, locale) ?? (locale === "ru" ? "0 ₽" : "0 RUB"),
-    caption:
-      locale === "ru"
-        ? plannedFreeMoney.includesUnconfirmedIncome
-          ? "После всех платежей и плановых расходов, если регулярные доходы придут по плану. Поступление ещё не подтверждено."
-          : "После всех платежей и плановых расходов, если регулярные доходы придут по плану."
-        : plannedFreeMoney.includesUnconfirmedIncome
-          ? "After all payments and planned spending, if recurring income arrives as planned. The income is not confirmed yet."
-          : "After all payments and planned spending, if recurring income arrives as planned.",
+    label: summary.label,
+    subtitle: summary.subtitle,
+    value: summary.value,
+    caption: summary.caption,
     layout: "wide",
     details: plannedFreeMoney.breakdown
       ? [
@@ -434,7 +426,7 @@ function buildPlannedFreeMoneyItem(
             tone: "neutral",
           },
           {
-            label: locale === "ru" ? "Регулярные доходы" : "Recurring income",
+            label: locale === "ru" ? "Ожидаемые доходы" : "Recurring income",
             value: `+${moneyValue(plannedFreeMoney.breakdown.expectedRecurringIncome, locale) ?? ""}`,
             tone: "positive",
           },
@@ -452,7 +444,7 @@ function buildPlannedFreeMoneyItem(
             tone: "negative",
           },
           {
-            label: locale === "ru" ? "Плановые расходы" : "Planned spending",
+            label: locale === "ru" ? "Базовые расходы по лимитам" : "Planned spending",
             value: `-${moneyValue(plannedFreeMoney.breakdown.essentialPlannedSpending, locale) ?? ""}`,
             tone: "negative",
           },
@@ -462,7 +454,7 @@ function buildPlannedFreeMoneyItem(
             tone: "negative",
           },
           {
-            label: locale === "ru" ? "Свободные деньги" : "Free money",
+            label: locale === "ru" ? "Можно потратить" : "Available to spend",
             value: moneyValue(plannedFreeMoney.breakdown.plannedFreeMoney, locale) ?? "",
             tone: "total",
           },

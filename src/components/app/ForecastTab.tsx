@@ -8,6 +8,7 @@ import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import type { ForecastFocus } from "@/lib/forecast-focus";
 import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
+import { buildPlannedFreeMoneySummary } from "@/lib/planned-free-money-presenter";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   useHouseholdBalances,
@@ -112,6 +113,10 @@ export function ForecastTab({
     ],
   );
   const horizonMonths = snapshot.forecast.horizonMonths ?? forecastHorizonMonths;
+  const periodFreeMoneySummary = useMemo(
+    () => buildPlannedFreeMoneySummary(locale, periodFreeMoney),
+    [locale, periodFreeMoney],
+  );
   const [viewMode, setViewMode] = useState<"line" | "calendar">("line");
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
   const planLink = useMemo(() => {
@@ -176,6 +181,24 @@ export function ForecastTab({
           {locale === "ru" ? "Календарь" : "Calendar"}
         </Button>
       </div>
+      {periodFreeMoneySummary ? (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/80">
+            {periodFreeMoneySummary.label}
+          </p>
+          {periodFreeMoneySummary.subtitle ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {periodFreeMoneySummary.subtitle}
+            </p>
+          ) : null}
+          <p className="mt-2 text-2xl font-semibold text-foreground">
+            {periodFreeMoneySummary.value}
+          </p>
+          <p className="mt-1 text-xs leading-snug text-muted-foreground">
+            {periodFreeMoneySummary.caption}
+          </p>
+        </div>
+      ) : null}
       {viewMode === "line" ? (
         <FocusedForecastCard
           locale={locale}
