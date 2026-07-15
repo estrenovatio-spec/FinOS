@@ -8,6 +8,7 @@ import { WeeklyAnalysisTab } from "@/components/WeeklyAnalysisTab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { buildAdvisorContext } from "@/lib/advisor-context";
+import { buildAdvisorQuestionBrief } from "@/lib/ai/question-classifier";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { formatHumanDateLong, getLocalTodayIsoDate } from "@/lib/format-date";
 import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
@@ -144,6 +145,26 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
   async function sendAdvisorQuestion() {
     const question = draftQuestion.trim();
     if (!question || sendingQuestion) return;
+    const advisorState = {
+      locale,
+      today,
+      forecastHorizonMonths,
+      categories,
+      transactions,
+      householdFilter,
+      recurringTransactions,
+      debts,
+      moneySetup,
+      categoryBudgets,
+      budgetMonthStartDay,
+      balances,
+    } as const;
+    const questionBrief = buildAdvisorQuestionBrief({
+      locale,
+      question,
+      state: advisorState,
+      plannedFreeMoneyAmount: plannedFreeMoney.amount ?? 0,
+    });
 
     const nextMessages = [...messages, { role: "user" as const, content: question }];
     setMessages(nextMessages);
@@ -164,6 +185,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
             cards: advisorContext.cards,
             periodNote,
             periodEndDate: decision.forecast.horizonEndDate,
+            questionGuide: questionBrief.promptGuide,
           },
         }),
       });

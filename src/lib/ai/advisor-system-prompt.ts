@@ -12,6 +12,7 @@ export function getAdvisorSystemPrompt(args: {
   locale: "ru" | "en";
   cards: AdvisorPromptCard[];
   periodNote?: string;
+  questionGuide?: string | null;
 }): string {
   const contextLines = buildContextLines(args.cards);
 
@@ -38,6 +39,7 @@ export function getAdvisorSystemPrompt(args: {
       "2. ...",
       "3. ...",
       args.periodNote ? `Горизонт ответа: ${args.periodNote}` : "",
+      args.questionGuide ? `Подсказка для этого вопроса:\n${args.questionGuide}` : "",
       "Финансовый контекст:",
       contextLines,
     ]
@@ -67,6 +69,7 @@ export function getAdvisorSystemPrompt(args: {
     "2. ...",
     "3. ...",
     args.periodNote ? `Answer horizon: ${args.periodNote}` : "",
+    args.questionGuide ? `Question-specific guidance:\n${args.questionGuide}` : "",
     "Financial context:",
     contextLines,
   ]

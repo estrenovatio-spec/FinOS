@@ -31,6 +31,7 @@ const bodySchema = z.object({
     cards: z.array(cardSchema).max(8),
     periodNote: z.string().max(200).optional(),
     periodEndDate: z.string().optional(),
+    questionGuide: z.string().max(4000).optional(),
   }),
 });
 
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
               locale,
               cards: context.cards,
               periodNote: context.periodNote,
+              questionGuide: context.questionGuide,
             }),
           },
           ...messages.map((message) => ({
