@@ -81,7 +81,7 @@ test("confirm_payment uses the existing idempotent payment confirmation flow", a
 
   const before = decisionCore(initialState);
   assert.equal(before.mainAction.command.type, "confirm_payment");
-  assert.equal(getMainActionButtonLabel(before.mainAction.command, "ru"), "Отметить оплаченным");
+  assert.equal(getMainActionButtonLabel(before.mainAction.command, "ru"), "Оплатил");
   assert.equal(before.todayPayments.length, 1);
 
   let transactions = initialState.transactions;
@@ -229,7 +229,7 @@ test("confirm_income_source opens the confirmation flow with the planned payload
     plannedAmount: 120000,
     status: "due_today",
   });
-  assert.equal(getMainActionButtonLabel(command, "ru"), "Подтвердить поступление");
+  assert.equal(getMainActionButtonLabel(command, "ru"), "Получил");
 });
 
 test("unknown command is safely rejected and cannot cause a money mutation", async () => {

@@ -1,6 +1,9 @@
 "use client";
 
-import { Ban, Check, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ExpectedEventActionDialog } from "@/components/ExpectedEventActionDialog";
+import type { ExpectedEvent } from "@/lib/expected-events";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/categories";
@@ -16,19 +19,17 @@ import {
 } from "@/lib/cloud/viewer-identity";
 import { mapTransactionsForViewer } from "@/lib/transaction-owner";
 import { useCloudStore } from "@/store/useCloudStore";
-import { useMemo } from "react";
 
 export function PendingRecurringCard() {
   const locale = useStore((s) => s.locale);
   const transactions = useTransactions();
   const categories = useCategories();
   const recurringTransactions = useStore((s) => s.recurringTransactions);
-  const confirmPending = useStore((s) => s.confirmPendingTransaction);
-  const dismissPending = useStore((s) => s.dismissPendingTransaction);
-  const skipPending = useStore((s) => s.skipPendingTransaction);
   const cloudUserId = useCloudStore((s) => s.cloudUserId);
   const token = useCloudStore((s) => s.token);
   const storedMemberIds = useCloudStore((s) => s.householdMemberUserIds);
+  const [expectedEvent, setExpectedEvent] = useState<ExpectedEvent | null>(null);
+  const [dialogMode, setDialogMode] = useState<"confirm" | "skip">("confirm");
 
   const pending = useMemo(() => {
     const viewerUserId = decodeUserIdFromHouseholdToken(token) ?? cloudUserId ?? null;
@@ -45,70 +46,83 @@ export function PendingRecurringCard() {
   if (pending.length === 0) return null;
 
   return (
-    <Card className="border-amber-500/50 bg-amber-500/5">
-      <CardHeader className="pb-2 pt-3">
-        <CardTitle className="text-base font-semibold">
-          {t(locale, "recurringPendingTitle")}
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">{t(locale, "recurringPendingHint")}</p>
-      </CardHeader>
-      <CardContent className="space-y-1.5 pb-3">
-        {pending.map((tx) => {
-          const meta = formatTransactionDate(tx.date, locale);
-          const category = getCategoryLabel(tx.categoryId, categories, locale);
-          const recurring = tx.recurringId
-            ? recurringTransactions.find((r) => r.id === tx.recurringId)
-            : undefined;
-          const title = recurring
-            ? recurringDisplayName(recurring, category)
-            : category;
-          return (
-            <div
-              key={tx.id}
-              className="grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-1.5 rounded-md border border-amber-500/30 bg-background/80 p-2.5 text-sm"
-            >
-              <p className="min-w-0 truncate font-medium leading-tight">{title}</p>
-              <p className="justify-self-end whitespace-nowrap text-sm font-semibold tabular-nums leading-none">
-                −{formatMoney(tx.amount, locale)}
-              </p>
-              <p className="min-w-0 truncate text-xs leading-snug text-muted-foreground tabular-nums">
-                {meta}
-              </p>
-              <div className="flex flex-wrap justify-end gap-1.5 justify-self-end">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 shrink-0 px-2.5 text-xs"
-                  onClick={() => confirmPending(tx.id)}
-                >
-                  <Check className="mr-1 h-3.5 w-3.5 shrink-0" />
-                  {t(locale, "recurringPendingConfirm")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 shrink-0 px-2.5 text-xs"
-                  onClick={() => skipPending(tx.id)}
-                >
-                  <Ban className="mr-1 h-3.5 w-3.5 shrink-0" />
-                  {t(locale, "recurringPendingSkip")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 shrink-0 px-2.5 text-xs"
-                  onClick={() => dismissPending(tx.id)}
-                >
-                  <X className="mr-1 h-3.5 w-3.5 shrink-0" />
-                  {t(locale, "recurringPendingDismiss")}
-                </Button>
+    <>
+      <Card className="border-amber-500/50 bg-amber-500/5">
+        <CardHeader className="pb-2 pt-3">
+          <CardTitle className="text-base font-semibold">
+            {t(locale, "recurringPendingTitle")}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">{t(locale, "recurringPendingHint")}</p>
+        </CardHeader>
+        <CardContent className="space-y-1.5 pb-3">
+          {pending.map((tx) => {
+            const meta = formatTransactionDate(tx.date, locale);
+            const category = getCategoryLabel(tx.categoryId, categories, locale);
+            const recurring = tx.recurringId
+              ? recurringTransactions.find((r) => r.id === tx.recurringId)
+              : undefined;
+            const title = recurring
+              ? recurringDisplayName(recurring, category)
+              : category;
+            const event: ExpectedEvent = {
+              kind: "expense",
+              transactionId: tx.id,
+              title,
+              amount: tx.amount,
+              date: tx.date,
+            };
+            return (
+              <div
+                key={tx.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-1.5 rounded-md border border-amber-500/30 bg-background/80 p-2.5 text-sm"
+              >
+                <p className="min-w-0 truncate font-medium leading-tight">{title}</p>
+                <p className="justify-self-end whitespace-nowrap text-sm font-semibold tabular-nums leading-none">
+                  −{formatMoney(tx.amount, locale)}
+                </p>
+                <p className="min-w-0 truncate text-xs leading-snug text-muted-foreground tabular-nums">
+                  {meta}
+                </p>
+                <div className="flex flex-wrap justify-end gap-1.5 justify-self-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 shrink-0 px-2.5 text-xs"
+                    onClick={() => {
+                      setExpectedEvent(event);
+                      setDialogMode("confirm");
+                    }}
+                  >
+                    <Check className="mr-1 h-3.5 w-3.5 shrink-0" />
+                    {locale === "ru" ? "Оплатил" : "Paid"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0 px-2.5 text-xs"
+                    onClick={() => {
+                      setExpectedEvent(event);
+                      setDialogMode("skip");
+                    }}
+                  >
+                    {locale === "ru" ? "Не оплатил" : "Not paid"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <ExpectedEventActionDialog
+        open={expectedEvent != null}
+        mode={dialogMode}
+        event={expectedEvent}
+        onOpenChange={(open) => {
+          if (!open) setExpectedEvent(null);
+        }}
+      />
+    </>
   );
 }

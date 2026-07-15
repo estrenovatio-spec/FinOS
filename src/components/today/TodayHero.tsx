@@ -18,11 +18,13 @@ export function TodayHero({
   actionBusy,
   actionError,
   onAction,
+  onSecondaryAction,
 }: {
   hero: TodayHeroView;
   actionBusy: boolean;
   actionError: string | null;
   onAction: () => void;
+  onSecondaryAction?: (() => void) | null;
 }) {
   const StatusIcon =
     hero.tone === "calm"
@@ -63,9 +65,26 @@ export function TodayHero({
         </div>
 
         {hero.ctaLabel ? (
-          <Button type="button" className="w-full" onClick={onAction} disabled={actionBusy}>
-            {hero.ctaLabel}
-          </Button>
+          hero.secondaryCtaLabel ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" className="w-full" onClick={onAction} disabled={actionBusy}>
+                {hero.ctaLabel}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={onSecondaryAction ?? undefined}
+                disabled={actionBusy}
+              >
+                {hero.secondaryCtaLabel}
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" className="w-full" onClick={onAction} disabled={actionBusy}>
+              {hero.ctaLabel}
+            </Button>
+          )
         ) : null}
 
         {actionError ? (

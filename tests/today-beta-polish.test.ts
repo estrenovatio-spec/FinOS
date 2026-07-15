@@ -182,6 +182,43 @@ test("hero shows executable CTA for income setup", () => {
   assert.match(view.hero.reason ?? "", /нельзя точно сказать/);
 });
 
+test("expected income hero shows confirm and skip actions", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "confirm_income",
+        title: "Сегодня ожидается доход",
+        text: "Ожидается поступление",
+        description: "Подтвердите факт или пропустите ожидание.",
+        reason: "Прогноз уже учитывает этот доход как план.",
+        amount: 24000,
+        dueDate: "2026-07-14",
+        relatedEntityId: "salary-main",
+        priority: "high",
+        command: {
+          type: "confirm_income_source",
+          incomeSourceId: "salary-main",
+          incomeTitle: "Зарплата",
+          plannedDate: "2026-07-14",
+          plannedAmount: 24000,
+          status: "due_today",
+        },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-14",
+      expectedIncomeAmount: 24000,
+    },
+    balances: { all: 40000, me: 40000, partner: 0 },
+  });
+
+  assert.equal(view.hero.ctaLabel, "Получил");
+  assert.equal(view.hero.secondaryCtaLabel, "Не пришёл");
+});
+
 test("hero without urgent action does not show forced CTA", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),
@@ -1179,6 +1216,22 @@ test("Settings tab now renders real app settings instead of services or business
   assert.match(source, /<SettingsDialogNav open onOpenChange=\{\(\) => \{\}\} \/>/);
   assert.doesNotMatch(source, /<MoreTab/);
   assert.doesNotMatch(source, /<BusinessTab/);
+});
+
+test("Today and recurring pending cards use the shared confirm and skip workflow", () => {
+  const todaySource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/TodayScreen.tsx"),
+    "utf8",
+  );
+  const recurringSource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/PendingRecurringCard.tsx"),
+    "utf8",
+  );
+
+  assert.match(todaySource, /<ExpectedEventActionDialog/);
+  assert.match(todaySource, /onSecondaryAction=/);
+  assert.match(recurringSource, /<ExpectedEventActionDialog/);
+  assert.match(recurringSource, /Не оплатил/);
 });
 
 test("setActualCash replaces the current balance instead of adding to it", () => {

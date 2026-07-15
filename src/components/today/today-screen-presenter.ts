@@ -20,6 +20,7 @@ export type TodayHeroView = {
   due: string | null;
   reason: string | null;
   ctaLabel: string | null;
+  secondaryCtaLabel: string | null;
   isEmptyState: boolean;
 };
 
@@ -340,9 +341,14 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
           ? "Это отправная точка для прогноза."
           : "This is the starting point for the forecast.",
       ctaLabel: locale === "ru" ? "Указать остаток" : "Set balance",
+      secondaryCtaLabel: null,
       isEmptyState: true,
     };
   }
+
+  const showSkipAction =
+    decision.mainAction.command.type === "confirm_payment" ||
+    decision.mainAction.command.type === "confirm_income_source";
 
   return {
     statusLabel: status.label,
@@ -357,6 +363,15 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
     due: buildHeroDue(decision, locale),
     reason: buildHeroReason(decision, locale, currentBalance != null),
     ctaLabel: getMainActionButtonLabel(decision.mainAction.command, locale),
+    secondaryCtaLabel: showSkipAction
+      ? locale === "ru"
+        ? decision.mainAction.command.type === "confirm_income_source"
+          ? "Не пришёл"
+          : "Не оплатил"
+        : decision.mainAction.command.type === "confirm_income_source"
+          ? "Did not arrive"
+          : "Not paid"
+      : null,
     isEmptyState: false,
   };
 }

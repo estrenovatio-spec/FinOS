@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { ExpectedEventActionDialog } from "@/components/ExpectedEventActionDialog";
 import { QuickAddOperationDialog } from "@/components/today/QuickAddOperationDialog";
-import {
-  TransactionEditDialog,
-  type TransactionDialogDraft,
-} from "@/components/TransactionEditDialog";
 import { TodayHero } from "@/components/today/TodayHero";
 import { TodayOverview } from "@/components/today/TodayOverview";
 import { TodayRatesCard } from "@/components/today/TodayRatesCard";
@@ -21,8 +18,10 @@ import { useToast } from "@/components/ui/toast";
 import type { AppTabId } from "@/lib/app-bottom-nav";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
+import { formatTransactionDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
+import type { ExpectedEvent } from "@/lib/expected-events";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   calculateFreeMoneyUntilPeriodEnd,
@@ -64,9 +63,9 @@ export function TodayScreen({
     MoneySetupInitialSection | null
   >(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [incomeConfirmationDraft, setIncomeConfirmationDraft] =
-    useState<TransactionDialogDraft | null>(null);
-  const [incomeConfirmationOpen, setIncomeConfirmationOpen] = useState(false);
+  const [expectedEvent, setExpectedEvent] = useState<ExpectedEvent | null>(null);
+  const [expectedEventMode, setExpectedEventMode] = useState<"confirm" | "skip">("confirm");
+  const [expectedEventOpen, setExpectedEventOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -193,6 +192,41 @@ export function TodayScreen({
     balances,
   });
 
+  function openExpectedEventWorkflow(
+    nextEvent: ExpectedEvent,
+    mode: "confirm" | "skip",
+  ) {
+    setExpectedEvent(nextEvent);
+    setExpectedEventMode(mode);
+    setExpectedEventOpen(true);
+  }
+
+  function resolveMainActionExpectedEvent(): ExpectedEvent | null {
+    const command = decision.mainAction.command;
+    if (command.type === "confirm_income_source") {
+      return {
+        kind: "income",
+        incomeSourceId: command.incomeSourceId,
+        occurrenceDate: command.plannedDate,
+        title: command.incomeTitle,
+        amount: command.plannedAmount,
+        status: command.status,
+      };
+    }
+    if (command.type === "confirm_payment") {
+      const payment = decision.todayPayments.find((item) => item.id === command.paymentId);
+      if (!payment) return null;
+      return {
+        kind: "expense",
+        transactionId: payment.id,
+        title: payment.title,
+        amount: payment.amount,
+        date: payment.date,
+      };
+    }
+    return null;
+  }
+
   async function handleMainAction() {
     if (actionBusy) return;
 
@@ -206,6 +240,12 @@ export function TodayScreen({
 
     if (decision.mainAction.command.type === "none") return;
 
+    const expectedAction = resolveMainActionExpectedEvent();
+    if (expectedAction) {
+      openExpectedEventWorkflow(expectedAction, "confirm");
+      return;
+    }
+
     setActionBusy(true);
     const result = await executeMainActionCommand(decision.mainAction.command, {
       confirmPendingTransaction,
@@ -217,38 +257,17 @@ export function TodayScreen({
         setQuickAddOpen(true);
       },
       openIncomeConfirmation: (params) => {
-        setIncomeConfirmationDraft({
-          amount: params.plannedAmount,
-          type: "income",
-          categoryId: "salary",
-          currency: "RUB",
-          note: params.incomeTitle,
-          date:
-            params.status === "due_today"
-              ? today
-              : params.plannedDate,
-          incomeSourceId: params.incomeSourceId,
-          incomeOccurrenceDate: params.plannedDate,
-          title:
-            locale === "ru"
-              ? "Подтвердить доход"
-              : "Confirm income",
-          subtitle:
-            params.status === "overdue_unconfirmed" && locale === "ru"
-              ? `Ожидался ${params.plannedDate}`
-              : params.status === "overdue_unconfirmed"
-                ? `Expected on ${params.plannedDate}`
-                : params.incomeTitle,
-          submitLabel:
-            locale === "ru"
-              ? "Сохранить поступление"
-              : "Save income",
-          sourceEditLabel:
-            locale === "ru"
-              ? "Изменить сумму или дату"
-              : "Edit amount or date",
-        });
-        setIncomeConfirmationOpen(true);
+        openExpectedEventWorkflow(
+          {
+            kind: "income",
+            incomeSourceId: params.incomeSourceId,
+            occurrenceDate: params.plannedDate,
+            title: params.incomeTitle,
+            amount: params.plannedAmount,
+            status: params.status,
+          },
+          "confirm",
+        );
       },
       navigateToTab: onNavigateToTab,
     });
@@ -283,6 +302,13 @@ export function TodayScreen({
         actionBusy={actionBusy}
         actionError={actionError}
         onAction={handleMainAction}
+        onSecondaryAction={() => {
+          const expectedAction = resolveMainActionExpectedEvent();
+          if (expectedAction) {
+            setActionError(null);
+            openExpectedEventWorkflow(expectedAction, "skip");
+          }
+        }}
       />
 
       <TodayOverview
@@ -299,9 +325,33 @@ export function TodayScreen({
               {view.payments.items.map((payment) => (
                 <TodayPaymentRow
                   key={payment.id}
-                  id={payment.id}
                   title={payment.title}
                   amount={payment.amount}
+                  date={payment.date}
+                  onConfirm={() =>
+                    openExpectedEventWorkflow(
+                      {
+                        kind: "expense",
+                        transactionId: payment.id,
+                        title: payment.title,
+                        amount: payment.amount,
+                        date: payment.date,
+                      },
+                      "confirm",
+                    )
+                  }
+                  onSkip={() =>
+                    openExpectedEventWorkflow(
+                      {
+                        kind: "expense",
+                        transactionId: payment.id,
+                        title: payment.title,
+                        amount: payment.amount,
+                        date: payment.date,
+                      },
+                      "skip",
+                    )
+                  }
                 />
               ))}
             </div>
@@ -317,21 +367,15 @@ export function TodayScreen({
         showTrigger={false}
       />
 
-      <TransactionEditDialog
-        transaction={null}
-        draft={incomeConfirmationDraft}
-        open={incomeConfirmationOpen}
+      <ExpectedEventActionDialog
+        open={expectedEventOpen}
+        mode={expectedEventMode}
+        event={expectedEvent}
         onOpenChange={(nextOpen) => {
-          setIncomeConfirmationOpen(nextOpen);
+          setExpectedEventOpen(nextOpen);
           if (!nextOpen) {
-            setIncomeConfirmationDraft(null);
+            setExpectedEvent(null);
           }
-        }}
-        onRequestSourceEdit={() => {
-          setIncomeConfirmationOpen(false);
-          setIncomeConfirmationDraft(null);
-          setMoneySetupSection("income");
-          setMoneySetupOpen(true);
         }}
       />
 
@@ -360,28 +404,36 @@ export function TodayScreen({
 }
 
 function TodayPaymentRow({
-  id,
   title,
   amount,
+  date,
+  onConfirm,
+  onSkip,
 }: {
-  id: string;
   title: string;
   amount: number;
+  date: string;
+  onConfirm: () => void;
+  onSkip: () => void;
 }) {
   const locale = useStore((s) => s.locale);
-  const confirmPendingTransaction = useStore((s) => s.confirmPendingTransaction);
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/80 p-3">
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-foreground">{title}</p>
         <p className="text-xs text-muted-foreground">
-          {formatMoney(amount, locale)} {locale === "ru" ? "₽" : "RUB"}
+          {formatMoney(amount, locale)} {locale === "ru" ? "₽" : "RUB"} · {formatTransactionDate(date, locale)}
         </p>
       </div>
-      <Button type="button" size="sm" onClick={() => confirmPendingTransaction(id)}>
-        {locale === "ru" ? "Оплачено" : "Paid"}
-      </Button>
+      <div className="flex shrink-0 gap-2">
+        <Button type="button" size="sm" onClick={onConfirm}>
+          {locale === "ru" ? "Оплатил" : "Paid"}
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onSkip}>
+          {locale === "ru" ? "Не оплатил" : "Not paid"}
+        </Button>
+      </div>
     </div>
   );
 }

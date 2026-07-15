@@ -50,12 +50,30 @@ export type TransactionDialogDraft = ParsedTransaction & {
   sourceEditLabel?: string | null;
 };
 
+export interface TransactionDialogSaveResult {
+  transactionId: string;
+  amount: number;
+  date: string;
+  comment: string;
+  type: TxType;
+  categoryId: string;
+  incomeSourceId?: string | null;
+  incomeOccurrenceDate?: string | null;
+}
+
 interface TransactionEditDialogProps {
   transaction: Transaction | null;
   draft?: TransactionDialogDraft | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRequestSourceEdit?: (() => void) | null;
+  dialogTitle?: string | null;
+  dialogSubtitle?: string | null;
+  submitLabel?: string | null;
+  forceConfirmOnSave?: boolean;
+  hideDelete?: boolean;
+  fieldMode?: "full" | "expected_event";
+  onDidSave?: ((result: TransactionDialogSaveResult) => void) | null;
 }
 
 export function TransactionEditDialog({
@@ -64,6 +82,13 @@ export function TransactionEditDialog({
   open,
   onOpenChange,
   onRequestSourceEdit = null,
+  dialogTitle = null,
+  dialogSubtitle = null,
+  submitLabel = null,
+  forceConfirmOnSave = false,
+  hideDelete = false,
+  fieldMode = "full",
+  onDidSave = null,
 }: TransactionEditDialogProps) {
   const locale = useStore((s) => s.locale);
   const userName = useStore((s) => s.userName);
@@ -96,6 +121,7 @@ export function TransactionEditDialog({
   const [comment, setComment] = useState("");
   const editSessionKeyRef = useRef<string | null>(null);
   const createMode = !transaction && Boolean(draft);
+  const expectedEventMode = fieldMode === "expected_event";
 
   useEffect(() => {
     if (!open) {
@@ -275,8 +301,18 @@ export function TransactionEditDialog({
         if (odometer != null) {
           syncVehicleFromTransaction(linkedTransaction.id);
         }
+        onDidSave?.({
+          transactionId: linkedTransaction.id,
+          amount: roundedAmount,
+          date: nextDate,
+          comment,
+          type: txType,
+          categoryId,
+          incomeSourceId: draft.incomeSourceId,
+          incomeOccurrenceDate: draft.incomeOccurrenceDate,
+        });
       } else {
-        addTransaction({
+        const createdId = addTransaction({
           amount: roundedAmount,
           type: txType,
           categoryId,
@@ -290,12 +326,24 @@ export function TransactionEditDialog({
           ...(showVehicleFields ? { odometerKm: odometer, vehicleId: vid } : {}),
           ...(showFuelLiters ? { fuelLiters: liters } : {}),
         });
+        onDidSave?.({
+          transactionId: createdId,
+          amount: roundedAmount,
+          date: nextDate,
+          comment,
+          type: txType,
+          categoryId,
+          incomeSourceId: draft.incomeSourceId,
+          incomeOccurrenceDate: draft.incomeOccurrenceDate,
+        });
       }
     } else if (transaction) {
       updateTransaction(transaction.id, {
         amount: roundedAmount,
         type: txType,
         categoryId,
+        date,
+        confirmed: forceConfirmOnSave ? true : undefined,
         owner: spender?.owner,
         createdBy: spender?.createdBy,
         note: comment,
@@ -306,6 +354,14 @@ export function TransactionEditDialog({
       if (odometer != null) {
         syncVehicleFromTransaction(transaction.id);
       }
+      onDidSave?.({
+        transactionId: transaction.id,
+        amount: roundedAmount,
+        date,
+        comment,
+        type: txType,
+        categoryId,
+      });
     }
     clearCachedRecommendations();
     onOpenChange(false);
@@ -325,7 +381,7 @@ export function TransactionEditDialog({
   const canSave =
     Number.isFinite(parsedAmount) &&
     parsedAmount > 0 &&
-    (!createMode || Boolean(date)) &&
+    ((expectedEventMode && Boolean(date)) || !createMode || Boolean(date)) &&
     categoryId.length > 0 &&
     typeCategories.some((c) => c.id === categoryId);
 
@@ -334,38 +390,42 @@ export function TransactionEditDialog({
       <DialogContent className="flex max-h-[calc(var(--tg-viewport-height,100dvh)-1rem)] w-[calc(100vw-1rem)] max-w-sm flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(90dvh,42rem)]">
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-10 text-left">
           <DialogTitle>
-            {createMode
-              ? draft?.title ?? (locale === "ru" ? "Подтвердить доход" : "Confirm income")
-              : t(locale, "txEditTitle")}
+            {dialogTitle ??
+              (createMode
+                ? draft?.title ?? (locale === "ru" ? "Подтвердить доход" : "Confirm income")
+                : t(locale, "txEditTitle"))}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            {createMode
-              ? draft?.subtitle ?? formatTransactionDate(date, locale)
-              : formatTransactionDate(transaction?.date ?? "", locale)}
+            {dialogSubtitle ??
+              (createMode
+                ? draft?.subtitle ?? formatTransactionDate(date, locale)
+                : formatTransactionDate(date || (transaction?.date ?? ""), locale))}
           </p>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 [-webkit-overflow-scrolling:touch]">
-          <div className="space-y-1">
-            <span className="text-sm font-medium">{t(locale, "txType")}</span>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={txType === "expense" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => handleTypeChange("expense")}
-              >
-                {t(locale, "expense")}
-              </Button>
-              <Button
-                type="button"
-                variant={txType === "income" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => handleTypeChange("income")}
-              >
-                {t(locale, "income")}
-              </Button>
+          {!expectedEventMode ? (
+            <div className="space-y-1">
+              <span className="text-sm font-medium">{t(locale, "txType")}</span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={txType === "expense" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => handleTypeChange("expense")}
+                >
+                  {t(locale, "expense")}
+                </Button>
+                <Button
+                  type="button"
+                  variant={txType === "income" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => handleTypeChange("income")}
+                >
+                  {t(locale, "income")}
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
           <div className="space-y-1">
             <label className="text-sm font-medium" htmlFor="tx-amount">
               {t(locale, "txAmount")}
@@ -380,10 +440,10 @@ export function TransactionEditDialog({
             />
           </div>
           <div className="space-y-1">
-            {createMode ? (
+            {createMode || expectedEventMode ? (
               <>
                 <label className="text-sm font-medium" htmlFor="tx-date">
-                  {locale === "ru" ? "Дата поступления" : "Receipt date"}
+                  {locale === "ru" ? "Дата" : "Date"}
                 </label>
                 <Input
                   id="tx-date"
@@ -409,24 +469,26 @@ export function TransactionEditDialog({
             />
             <p className="text-[11px] leading-tight text-muted-foreground">{t(locale, "txCommentHint")}</p>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="tx-category">
-              {t(locale, "txCategory")}
-            </label>
-            <select
-              id="tx-category"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {typeCategories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {getCategoryLabel(cat.id, categories, locale)}
-                </option>
-              ))}
-            </select>
-          </div>
-          {showVehicleFields ? (
+          {!expectedEventMode ? (
+            <div className="space-y-1">
+              <label className="text-sm font-medium" htmlFor="tx-category">
+                {t(locale, "txCategory")}
+              </label>
+              <select
+                id="tx-category"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {typeCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {getCategoryLabel(cat.id, categories, locale)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {!expectedEventMode && showVehicleFields ? (
             <div className="space-y-1">
               {vehicles.length > 1 ? (
                 <>
@@ -473,7 +535,7 @@ export function TransactionEditDialog({
               ) : null}
             </div>
           ) : null}
-          {txType === "income" && savingsGoals.length > 0 ? (
+          {!expectedEventMode && txType === "income" && savingsGoals.length > 0 ? (
             <div className="space-y-1.5 rounded-md border border-dashed p-2.5">
               <p className="text-sm font-medium">{t(locale, "txGoal")}</p>
               <select
@@ -502,7 +564,7 @@ export function TransactionEditDialog({
               ) : null}
             </div>
           ) : null}
-          {hasPartnerBudget(partnerName, partnerKeywords) && (
+          {!expectedEventMode && hasPartnerBudget(partnerName, partnerKeywords) && (
             <div className="space-y-1">
               <label className="text-sm font-medium" htmlFor="tx-owner">
                 {t(locale, "txOwner")}
@@ -528,9 +590,10 @@ export function TransactionEditDialog({
               {t(locale, "cancel")}
             </Button>
             <Button type="button" className="flex-1" disabled={!canSave} onClick={handleSave}>
-              {createMode
-                ? draft?.submitLabel ?? (locale === "ru" ? "Сохранить" : "Save")
-                : t(locale, "confirm")}
+              {submitLabel ??
+                (createMode
+                  ? draft?.submitLabel ?? (locale === "ru" ? "Сохранить" : "Save")
+                  : t(locale, "confirm"))}
             </Button>
           </div>
           {createMode && onRequestSourceEdit ? (
@@ -546,7 +609,7 @@ export function TransactionEditDialog({
               </Button>
             </div>
           ) : null}
-          {!createMode ? (
+          {!createMode && !hideDelete ? (
             <div className="border-t pt-2">
               <Button
                 type="button"

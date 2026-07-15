@@ -110,6 +110,10 @@ import {
 } from "@/lib/ai-memory";
 import { clearCachedMonthlyAnalysis } from "@/lib/storage";
 import type {
+  ExpectedEventHistoryEntry,
+  ExpectedEventReminder,
+} from "@/lib/expected-events";
+import type {
   BudgetOwner,
   HouseholdFilter,
   Locale,
@@ -205,6 +209,11 @@ interface StoreState {
   budgetMonthStartDay: number;
   dailySafeSpendingSnapshot: DailySafeSpendingSnapshot | null;
   setDailySafeSpendingSnapshot: (snapshot: DailySafeSpendingSnapshot | null) => void;
+  expectedEventHistory: ExpectedEventHistoryEntry[];
+  expectedEventReminders: ExpectedEventReminder[];
+  addExpectedEventHistory: (entry: ExpectedEventHistoryEntry) => void;
+  addExpectedEventReminder: (reminder: ExpectedEventReminder) => void;
+  removeExpectedEventReminder: (id: string) => void;
   /** Период для статистики; null = текущий отчётный месяц */
   statsPeriodOverride: { from: string; to: string } | null;
   setStatsPeriodRange: (from: string, to: string) => void;
@@ -226,6 +235,7 @@ interface StoreState {
       amount?: number;
       categoryId?: string;
       date?: string;
+      confirmed?: boolean;
       owner?: BudgetOwner;
       createdBy?: string | null;
       type?: TxType;
@@ -594,6 +604,23 @@ export const useStore = create<StoreState>()(
       dailySafeSpendingSnapshot: null,
       setDailySafeSpendingSnapshot: (dailySafeSpendingSnapshot) =>
         set({ dailySafeSpendingSnapshot }),
+      expectedEventHistory: [],
+      expectedEventReminders: [],
+      addExpectedEventHistory: (entry) =>
+        set((state) => ({
+          expectedEventHistory: [entry, ...state.expectedEventHistory].slice(0, 100),
+        })),
+      addExpectedEventReminder: (reminder) =>
+        set((state) => ({
+          expectedEventReminders: [
+            reminder,
+            ...state.expectedEventReminders.filter((item) => item.id !== reminder.id),
+          ].slice(0, 50),
+        })),
+      removeExpectedEventReminder: (id) =>
+        set((state) => ({
+          expectedEventReminders: state.expectedEventReminders.filter((item) => item.id !== id),
+        })),
       statsPeriodOverride: null,
       setStatsPeriodRange: (from, to) =>
         set({ statsPeriodOverride: { from, to } }),
@@ -1012,6 +1039,7 @@ export const useStore = create<StoreState>()(
               amount,
               categoryId,
               date: patch.date ?? tx.date,
+              confirmed: patch.confirmed ?? tx.confirmed,
               type,
               owner,
               note,
@@ -1050,6 +1078,7 @@ export const useStore = create<StoreState>()(
             amount: after.amount,
             categoryId: after.categoryId,
             date: after.date,
+            confirmed: after.confirmed,
             owner: after.owner,
             createdBy: after.createdBy,
             type: after.type,
@@ -2015,8 +2044,39 @@ export const useStore = create<StoreState>()(
                     "string"
                       ? (raw.dailySafeSpendingSnapshot as { updatedAt: string }).updatedAt
                       : new Date().toISOString(),
-                }
+                  }
               : null,
+          expectedEventHistory: Array.isArray(raw.expectedEventHistory)
+            ? (raw.expectedEventHistory as ExpectedEventHistoryEntry[])
+                .filter(
+                  (item) =>
+                    item &&
+                    typeof item.id === "string" &&
+                    typeof item.eventKey === "string" &&
+                    (item.kind === "income" || item.kind === "expense") &&
+                    typeof item.title === "string" &&
+                    typeof item.originalDate === "string" &&
+                    typeof item.action === "string" &&
+                    typeof item.createdAt === "string",
+                )
+                .slice(0, 100)
+            : [],
+          expectedEventReminders: Array.isArray(raw.expectedEventReminders)
+            ? (raw.expectedEventReminders as ExpectedEventReminder[])
+                .filter(
+                  (item) =>
+                    item &&
+                    typeof item.id === "string" &&
+                    typeof item.eventKey === "string" &&
+                    (item.kind === "income" || item.kind === "expense") &&
+                    typeof item.title === "string" &&
+                    typeof item.originalDate === "string" &&
+                    typeof item.remindOn === "string" &&
+                    typeof item.createdAt === "string" &&
+                    typeof item.amount === "number",
+                )
+                .slice(0, 50)
+            : [],
           statsPeriodOverride:
             raw.statsPeriodOverride &&
             typeof raw.statsPeriodOverride === "object" &&

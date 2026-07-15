@@ -57,7 +57,7 @@ export function getMainActionButtonLabel(
 ): string | null {
   switch (command.type) {
     case "confirm_payment":
-      return locale === "ru" ? "Отметить оплаченным" : "Mark as paid";
+      return locale === "ru" ? "Оплатил" : "Paid";
     case "open_money_setup":
       if (command.scope === "balance") {
         return locale === "ru" ? "Указать остаток" : "Set balance";
@@ -72,13 +72,7 @@ export function getMainActionButtonLabel(
         ? "Настроить плановые расходы"
         : "Set planned spending";
     case "confirm_income_source":
-      return command.status === "overdue_unconfirmed"
-        ? locale === "ru"
-          ? "Записать фактическую сумму"
-          : "Record actual amount"
-        : locale === "ru"
-          ? "Подтвердить поступление"
-          : "Confirm receipt";
+      return locale === "ru" ? "Получил" : "Received";
     case "open_forecast":
       return locale === "ru" ? "Открыть прогноз" : "Open forecast";
     case "open_recurring_operations":
