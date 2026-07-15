@@ -89,31 +89,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
 
-    const completion = await createPlainTextChatCompletion(client, {
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt(locale, context.cards, context.periodNote),
-        },
-        ...messages.map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        {
-          role: "user",
-          content: question,
-        },
-      ],
-      temperature: 0.4,
-      max_tokens: 700,
-    });
+    try {
+      const completion = await createPlainTextChatCompletion(client, {
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt(locale, context.cards, context.periodNote),
+          },
+          ...messages.map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+        temperature: 0.4,
+        max_tokens: 700,
+      });
 
-    const reply = extractPlainTextFromLlmContent(completion.choices[0]?.message?.content);
-    if (!reply) {
+      const reply = extractPlainTextFromLlmContent(completion.choices[0]?.message?.content);
+      if (!reply) {
+        return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
+      }
+
+      return NextResponse.json({ success: true, reply });
+    } catch (error) {
+      console.warn("[advisor-question] llm fallback", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message : "unknown",
+      });
       return NextResponse.json({ success: true, reply: fallbackReply, fallback: true });
     }
-
-    return NextResponse.json({ success: true, reply });
   } catch {
     return NextResponse.json({ error: "advisor_question_failed" }, { status: 500 });
   }
