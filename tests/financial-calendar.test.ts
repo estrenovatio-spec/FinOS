@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
-import { selectCalendarDay } from "@/components/app/ForecastCalendarView";
+import { resolveCalendarSelectionState, selectCalendarDay } from "@/components/app/ForecastCalendarView";
 import type { BalanceForecast } from "@/lib/decision-core/types";
 
 function makeForecast(partial?: Partial<BalanceForecast>): BalanceForecast {
@@ -202,7 +202,8 @@ test("calendar view uses inline accordion details instead of a detached details 
   assert.match(source, /Календарь денег/);
   assert.match(source, /setMonthIndex/);
   assert.match(source, /selectedDate === day\.date/);
-  assert.match(source, /onClick=\{\(\) => setSelectedDate/);
+  assert.match(source, /setHasUserSelectedDate\(true\)/);
+  assert.match(source, /selectCalendarDay\(current, day\.date\)/);
   assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
   assert.match(source, /В конце дня/);
@@ -214,4 +215,29 @@ test("calendar view uses inline accordion details instead of a detached details 
 test("calendar day selection keeps the exact tapped ISO date", () => {
   assert.equal(selectCalendarDay("2026-07-15", "2026-07-16"), "2026-07-16");
   assert.equal(selectCalendarDay(null, "2026-07-16"), "2026-07-16");
+});
+
+test("calendar keeps the user-selected date after data rerender", () => {
+  const monthDays = [
+    { date: "2026-07-15", isCurrentMonth: true, hasEvents: true, goals: [] },
+    { date: "2026-07-16", isCurrentMonth: true, hasEvents: true, goals: [] },
+  ];
+
+  assert.equal(
+    resolveCalendarSelectionState({
+      currentSelectedDate: null,
+      monthDays,
+      hasUserSelectedDate: false,
+    }),
+    "2026-07-15",
+  );
+
+  assert.equal(
+    resolveCalendarSelectionState({
+      currentSelectedDate: "2026-07-16",
+      monthDays,
+      hasUserSelectedDate: true,
+    }),
+    "2026-07-16",
+  );
 });

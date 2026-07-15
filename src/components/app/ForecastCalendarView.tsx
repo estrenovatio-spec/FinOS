@@ -115,9 +115,39 @@ function groupEventsForDay(events: ForecastEvent[]) {
   };
 }
 
+type CalendarSelectionStateArgs = {
+  currentSelectedDate: string | null;
+  monthDays: Array<{ date: string; isCurrentMonth: boolean; hasEvents: boolean; goals: Array<unknown> }>;
+  hasUserSelectedDate: boolean;
+};
+
 export function selectCalendarDay(current: string | null, tappedDate: string): string {
   const normalized = normalizeIsoDate(tappedDate) ?? tappedDate;
   return normalized;
+}
+
+export function resolveCalendarSelectionState({
+  currentSelectedDate,
+  monthDays,
+  hasUserSelectedDate,
+}: CalendarSelectionStateArgs): string | null {
+  const visibleMonthDays = monthDays.filter((day) => day.isCurrentMonth);
+  const firstMeaningfulDay =
+    visibleMonthDays.find((day) => day.hasEvents || day.goals.length > 0)?.date ??
+    visibleMonthDays[0]?.date ??
+    null;
+
+  if (!firstMeaningfulDay) return null;
+
+  if (
+    hasUserSelectedDate &&
+    currentSelectedDate &&
+    visibleMonthDays.some((day) => day.date === currentSelectedDate)
+  ) {
+    return currentSelectedDate;
+  }
+
+  return firstMeaningfulDay;
 }
 
 function resolveDisplayedEndBalance(args: {
@@ -185,6 +215,7 @@ export function ForecastCalendarView({
 
   const [monthIndex, setMonthIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [hasUserSelectedDate, setHasUserSelectedDate] = useState(false);
 
   useEffect(() => {
     setMonthIndex(0);
@@ -198,12 +229,14 @@ export function ForecastCalendarView({
       setSelectedDate(null);
       return;
     }
-    const firstMeaningfulDay =
-      month.days.find((day) => day.isCurrentMonth && (day.hasEvents || day.goals.length > 0)) ??
-      month.days.find((day) => day.isCurrentMonth) ??
-      null;
-    setSelectedDate(firstMeaningfulDay?.date ?? null);
-  }, [month]);
+    setSelectedDate((currentSelectedDate) =>
+      resolveCalendarSelectionState({
+        currentSelectedDate,
+        monthDays: month.days,
+        hasUserSelectedDate,
+      }),
+    );
+  }, [hasUserSelectedDate, month]);
 
   if (!month) {
     return (
@@ -237,7 +270,10 @@ export function ForecastCalendarView({
               variant="outline"
               size="icon"
               className="h-9 w-9"
-              onClick={() => setMonthIndex((value) => Math.max(0, value - 1))}
+              onClick={() => {
+                setHasUserSelectedDate(false);
+                setMonthIndex((value) => Math.max(0, value - 1));
+              }}
               disabled={monthIndex === 0}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -247,7 +283,10 @@ export function ForecastCalendarView({
               variant="outline"
               size="icon"
               className="h-9 w-9"
-              onClick={() => setMonthIndex((value) => Math.min(months.length - 1, value + 1))}
+              onClick={() => {
+                setHasUserSelectedDate(false);
+                setMonthIndex((value) => Math.min(months.length - 1, value + 1));
+              }}
               disabled={monthIndex >= months.length - 1}
             >
               <ChevronRight className="h-4 w-4" />
@@ -331,7 +370,10 @@ export function ForecastCalendarView({
                   >
                     <button
                       type="button"
-                      onClick={() => setSelectedDate((current) => selectCalendarDay(current, day.date))}
+                      onClick={() => {
+                        setHasUserSelectedDate(true);
+                        setSelectedDate((current) => selectCalendarDay(current, day.date));
+                      }}
                       className="w-full px-4 py-3 text-left"
                       aria-pressed={isOpen}
                     >
