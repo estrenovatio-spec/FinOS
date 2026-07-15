@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { calculateBalanceAtDate } from "@/lib/decision-core/forecast-days";
 import { buildTodayScreenView } from "@/components/today/today-screen-presenter";
 import { getDefaultCategories } from "@/lib/categories";
 import { decisionCoreSnapshot, type DecisionCoreState } from "@/lib/decision-core";
@@ -111,4 +112,85 @@ test("Forecast tab and Today presenter both rely on the shared planned-free-mone
 
   assert.match(forecastTab, /buildPlannedFreeMoneySummary/);
   assert.match(todayPresenter, /buildPlannedFreeMoneySummary/);
+});
+
+test("one scenario gives the same planned result in Today, Forecast period end, Calendar period end and Adviser", () => {
+  const state = makeState({
+    balances: { all: 0, me: 0, partner: 0 },
+    moneySetup: {
+      ...emptyMoneySetup(),
+      incomeSources: [
+        {
+          id: "sale",
+          label: "Продажа",
+          expectedDate: "2026-07-20",
+          expectedAmount: 10000,
+          kind: "other",
+          recurrence: "once",
+          intervalMonths: 1,
+          dayOfMonth: 20,
+          endDate: null,
+          isPrimary: true,
+        },
+      ],
+    },
+    transactions: [
+      {
+        id: "expense-1",
+        amount: 3000,
+        type: "expense",
+        categoryId: "other",
+        currency: "RUB",
+        note: "Покупка",
+        date: "2026-07-31",
+        owner: "me",
+        confirmed: false,
+        goalId: null,
+        goalAmount: null,
+        recurringId: null,
+        odometerKm: null,
+        fuelLiters: null,
+        vehicleId: null,
+        transferPairId: null,
+        businessTxId: null,
+      },
+    ],
+  });
+
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  const summary = buildPlannedFreeMoneySummary("ru", plannedFreeMoney);
+  const todayView = buildTodayScreenView({
+    decision: snapshot,
+    locale: "ru",
+    transactionCount: state.transactions.length,
+    moneySetup: state.moneySetup,
+    balances: state.balances,
+    plannedFreeMoney,
+  });
+  const advisorContext = buildAdvisorContext({
+    locale: "ru",
+    currentBalance: state.balances.me,
+    decision: snapshot,
+    recurringTransactions: state.recurringTransactions,
+    goals: [],
+    debts: state.debts,
+    categoryBudgets: state.categoryBudgets,
+    plannedFreeMoney,
+  });
+
+  assert.equal(plannedFreeMoney.amount, 7000);
+  assert.equal(summary?.value, "7 000 ₽");
+  assert.equal(
+    todayView.overviewItems.find((item) => item.id === "planned-free-money")?.value,
+    "7 000 ₽",
+  );
+  assert.equal(
+    calculateBalanceAtDate(snapshot.forecast, plannedFreeMoney.periodEndDate ?? ""),
+    7000,
+  );
+  assert.equal(
+    advisorContext.cards.find((card) => card.id === "free_money")?.value,
+    "7 000 ₽",
+  );
 });

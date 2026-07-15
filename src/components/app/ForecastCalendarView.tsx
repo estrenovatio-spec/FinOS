@@ -264,11 +264,6 @@ export function ForecastCalendarView({
             <p className="text-sm font-semibold text-foreground">
               {locale === "ru" ? "Календарь денег" : "Money calendar"}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {locale === "ru"
-                ? "Здесь видно, что будет происходить с деньгами в ближайшие дни."
-                : "See what will happen to your money over the next days."}
-            </p>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -514,8 +509,8 @@ export function ForecastCalendarView({
             {selectedDate == null ? (
               <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
                 {locale === "ru"
-                  ? "Выберите день, чтобы посмотреть движение денег"
-                  : "Choose a day to see what happens to your money."}
+                  ? "Выберите день, чтобы увидеть доходы и расходы"
+                  : "Choose a day to see income and expenses."}
               </div>
             ) : null}
           </div>

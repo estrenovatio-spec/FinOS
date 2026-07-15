@@ -310,7 +310,7 @@ test("planned free money includes recurring income from the current period", () 
   assert.equal(result.includesUnconfirmedIncome, false);
 });
 
-test("planned free money does not include one-off expected income", () => {
+test("planned free money includes one-off expected income inside the current period plan", () => {
   const state = makeState({
     moneySetup: {
       ...makeState().moneySetup,
@@ -351,8 +351,9 @@ test("planned free money does not include one-off expected income", () => {
 
   const actual = calculateFreeMoneyUntilPeriodEnd(state, snapshot);
   const planned = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
-  assert.equal(actual.amount, planned.amount);
-  assert.equal(planned.breakdown?.expectedRecurringIncome, 0);
+  assert.equal(actual.amount, 45754);
+  assert.equal(planned.amount, 69754);
+  assert.equal(planned.breakdown?.expectedRecurringIncome, 24000);
 });
 
 test("planned free money decreases one-to-one after optional spending", () => {

@@ -248,7 +248,7 @@ test("calendar view uses inline accordion details instead of a detached details 
   );
 
   assert.match(source, /Календарь денег/);
-  assert.match(source, /Выберите день, чтобы посмотреть движение денег/);
+  assert.match(source, /Выберите день, чтобы увидеть доходы и расходы/);
   assert.match(source, /selectedDate === day\.date/);
   assert.match(source, /onSelectedDateChange\(selectCalendarDay\(selectedDate, day\.date\)\)/);
   assert.match(source, /calculateBalanceAtDate/);
