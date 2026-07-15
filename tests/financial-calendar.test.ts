@@ -200,10 +200,9 @@ test("calendar view uses inline accordion details instead of a detached details 
   );
 
   assert.match(source, /Календарь денег/);
-  assert.match(source, /setMonthIndex/);
+  assert.match(source, /Выберите день, чтобы посмотреть движение денег/);
   assert.match(source, /selectedDate === day\.date/);
-  assert.match(source, /setHasUserSelectedDate\(true\)/);
-  assert.match(source, /selectCalendarDay\(current, day\.date\)/);
+  assert.match(source, /onSelectedDateChange\(selectCalendarDay\(selectedDate, day\.date\)\)/);
   assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
   assert.match(source, /В конце дня/);
@@ -227,16 +226,14 @@ test("calendar keeps the user-selected date after data rerender", () => {
     resolveCalendarSelectionState({
       currentSelectedDate: null,
       monthDays,
-      hasUserSelectedDate: false,
     }),
-    "2026-07-15",
+    null,
   );
 
   assert.equal(
     resolveCalendarSelectionState({
       currentSelectedDate: "2026-07-16",
       monthDays,
-      hasUserSelectedDate: true,
     }),
     "2026-07-16",
   );

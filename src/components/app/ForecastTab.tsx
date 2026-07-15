@@ -113,6 +113,7 @@ export function ForecastTab({
   );
   const horizonMonths = snapshot.forecast.horizonMonths ?? forecastHorizonMonths;
   const [viewMode, setViewMode] = useState<"line" | "calendar">("line");
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
   const planLink = useMemo(() => {
     const focusedEvent =
       focus?.eventId != null
@@ -190,6 +191,8 @@ export function ForecastTab({
           goals={savingsGoals}
           explanation={snapshot.constraintExplanation}
           periodFreeMoney={periodFreeMoney}
+          selectedDate={calendarSelectedDate}
+          onSelectedDateChange={setCalendarSelectedDate}
           onOpenPlan={onOpenPlan}
         />
       )}

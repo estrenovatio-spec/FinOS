@@ -118,7 +118,6 @@ function groupEventsForDay(events: ForecastEvent[]) {
 type CalendarSelectionStateArgs = {
   currentSelectedDate: string | null;
   monthDays: Array<{ date: string; isCurrentMonth: boolean; hasEvents: boolean; goals: Array<unknown> }>;
-  hasUserSelectedDate: boolean;
 };
 
 export function selectCalendarDay(current: string | null, tappedDate: string): string {
@@ -129,25 +128,12 @@ export function selectCalendarDay(current: string | null, tappedDate: string): s
 export function resolveCalendarSelectionState({
   currentSelectedDate,
   monthDays,
-  hasUserSelectedDate,
 }: CalendarSelectionStateArgs): string | null {
   const visibleMonthDays = monthDays.filter((day) => day.isCurrentMonth);
-  const firstMeaningfulDay =
-    visibleMonthDays.find((day) => day.hasEvents || day.goals.length > 0)?.date ??
-    visibleMonthDays[0]?.date ??
-    null;
-
-  if (!firstMeaningfulDay) return null;
-
-  if (
-    hasUserSelectedDate &&
-    currentSelectedDate &&
-    visibleMonthDays.some((day) => day.date === currentSelectedDate)
-  ) {
+  if (currentSelectedDate && visibleMonthDays.some((day) => day.date === currentSelectedDate)) {
     return currentSelectedDate;
   }
-
-  return firstMeaningfulDay;
+  return null;
 }
 
 function resolveDisplayedEndBalance(args: {
@@ -172,6 +158,8 @@ export function ForecastCalendarView({
   goals,
   explanation,
   periodFreeMoney,
+  selectedDate,
+  onSelectedDateChange,
   onOpenPlan,
 }: {
   locale: Locale;
@@ -180,6 +168,8 @@ export function ForecastCalendarView({
   goals: SavingsGoal[];
   explanation?: DecisionConstraintExplanation | null;
   periodFreeMoney?: PlannedFreeMoneyView;
+  selectedDate: string | null;
+  onSelectedDateChange: (date: string | null) => void;
   onOpenPlan?: (params: { section: "recurring" | "limits" | "debts" | "goals"; entityId?: string | null }) => void;
 }) {
   const months = useMemo(
@@ -214,8 +204,6 @@ export function ForecastCalendarView({
   }, [goals]);
 
   const [monthIndex, setMonthIndex] = useState(0);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [hasUserSelectedDate, setHasUserSelectedDate] = useState(false);
 
   useEffect(() => {
     setMonthIndex(0);
@@ -226,17 +214,17 @@ export function ForecastCalendarView({
 
   useEffect(() => {
     if (!month) {
-      setSelectedDate(null);
+      onSelectedDateChange(null);
       return;
     }
-    setSelectedDate((currentSelectedDate) =>
-      resolveCalendarSelectionState({
-        currentSelectedDate,
-        monthDays: month.days,
-        hasUserSelectedDate,
-      }),
-    );
-  }, [hasUserSelectedDate, month]);
+    const resolvedDate = resolveCalendarSelectionState({
+      currentSelectedDate: selectedDate,
+      monthDays: month.days,
+    });
+    if (resolvedDate !== selectedDate) {
+      onSelectedDateChange(resolvedDate);
+    }
+  }, [month, onSelectedDateChange, selectedDate]);
 
   if (!month) {
     return (
@@ -270,10 +258,7 @@ export function ForecastCalendarView({
               variant="outline"
               size="icon"
               className="h-9 w-9"
-              onClick={() => {
-                setHasUserSelectedDate(false);
-                setMonthIndex((value) => Math.max(0, value - 1));
-              }}
+              onClick={() => setMonthIndex((value) => Math.max(0, value - 1))}
               disabled={monthIndex === 0}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -283,10 +268,7 @@ export function ForecastCalendarView({
               variant="outline"
               size="icon"
               className="h-9 w-9"
-              onClick={() => {
-                setHasUserSelectedDate(false);
-                setMonthIndex((value) => Math.min(months.length - 1, value + 1));
-              }}
+              onClick={() => setMonthIndex((value) => Math.min(months.length - 1, value + 1))}
               disabled={monthIndex >= months.length - 1}
             >
               <ChevronRight className="h-4 w-4" />
@@ -370,10 +352,7 @@ export function ForecastCalendarView({
                   >
                     <button
                       type="button"
-                      onClick={() => {
-                        setHasUserSelectedDate(true);
-                        setSelectedDate((current) => selectCalendarDay(current, day.date));
-                      }}
+                      onClick={() => onSelectedDateChange(selectCalendarDay(selectedDate, day.date))}
                       className="w-full px-4 py-3 text-left"
                       aria-pressed={isOpen}
                     >
@@ -547,6 +526,13 @@ export function ForecastCalendarView({
                   </div>
                 );
               })}
+            {selectedDate == null ? (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
+                {locale === "ru"
+                  ? "Выберите день, чтобы посмотреть движение денег"
+                  : "Choose a day to see what happens to your money."}
+              </div>
+            ) : null}
           </div>
         </div>
       </CardContent>
