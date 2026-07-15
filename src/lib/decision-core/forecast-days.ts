@@ -95,3 +95,10 @@ export function findForecastDayByDate(
 ): ForecastDay | null {
   return getForecastDays(forecast).find((day) => day.date === date) ?? null;
 }
+
+export function calculateBalanceAtDate(
+  forecast: BalanceForecast,
+  date: string,
+): number | null {
+  return findForecastDayByDate(forecast, date)?.endBalance ?? null;
+}

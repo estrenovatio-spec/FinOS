@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { resolveDisplayedEndBalance } from "@/components/app/ForecastCalendarView";
 import { buildTodayScreenView } from "@/components/today/today-screen-presenter";
 import { getDefaultCategories } from "@/lib/categories";
 import { decisionCoreSnapshot, type DecisionCoreState } from "@/lib/decision-core";
@@ -31,7 +30,7 @@ function makeState(overrides: Partial<DecisionCoreState> = {}): DecisionCoreStat
   };
 }
 
-test("planned free money stays identical across Today, Forecast, Calendar and Adviser", () => {
+test("planned free money stays identical across Today, Forecast summary and Adviser", () => {
   const state = makeState({
     moneySetup: {
       ...emptyMoneySetup(),
@@ -98,34 +97,12 @@ test("planned free money stays identical across Today, Forecast, Calendar and Ad
 
   const todayCard = todayView.overviewItems.find((item) => item.id === "planned-free-money");
   const adviserCard = advisorContext.cards.find((card) => card.id === "free_money");
-  const periodEndDay = snapshot.forecast.events.find(
-    (event) => event.date === plannedFreeMoney.periodEndDate,
-  );
-
   assert.ok(sharedSummary);
   assert.equal(plannedFreeMoney.amount, 180000);
   assert.equal(todayCard?.value, sharedSummary?.value);
   assert.equal(adviserCard?.value, sharedSummary?.value);
   assert.equal(adviserCard?.label, `${sharedSummary?.label} ${sharedSummary?.subtitle}`);
-  assert.equal(
-    resolveDisplayedEndBalance({
-      date: plannedFreeMoney.periodEndDate ?? "",
-      forecastDay:
-        plannedFreeMoney.periodEndDate == null
-          ? null
-          : {
-              date: plannedFreeMoney.periodEndDate,
-              startBalance: periodEndDay?.balanceAfter ?? 0,
-              endBalance: periodEndDay?.balanceAfter ?? 0,
-              incomeTotal: 0,
-              expenseTotal: 0,
-              netChange: 0,
-              events: [],
-            },
-      periodFreeMoney: plannedFreeMoney,
-    }),
-    plannedFreeMoney.amount,
-  );
+  assert.notEqual(plannedFreeMoney.amount, 0);
 });
 
 test("Forecast tab and Today presenter both rely on the shared planned-free-money presenter", () => {

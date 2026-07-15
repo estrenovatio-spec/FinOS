@@ -5,9 +5,11 @@ import test from "node:test";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
 import {
   formatMoneyEventsCountLabel,
+  resolveDisplayedEndBalance,
   resolveCalendarSelectionState,
   selectCalendarDay,
 } from "@/components/app/ForecastCalendarView";
+import { calculateBalanceAtDate } from "@/lib/decision-core/forecast-days";
 import type { BalanceForecast } from "@/lib/decision-core/types";
 
 function makeForecast(partial?: Partial<BalanceForecast>): BalanceForecast {
@@ -184,6 +186,47 @@ test("calendar keeps deficit markers on the day where end balance turns negative
   assert.equal(august4?.isDeficit, true);
 });
 
+test("calendar keeps end-of-day balance continuous from the previous day", () => {
+  const forecast: BalanceForecast = {
+    startBalance: 10000,
+    minBalance: 8500,
+    minBalanceDate: "2026-07-31",
+    firstDeficitDate: null,
+    nextIncomeDate: null,
+    horizonEndDate: "2026-07-31",
+    horizonMonths: 1,
+    events: [
+      {
+        id: "expense-1",
+        title: "Первый расход",
+        amount: -1000,
+        date: "2026-07-30",
+        balanceAfter: 9000,
+        source: "confirmed_transaction",
+      },
+      {
+        id: "expense-2",
+        title: "Второй расход",
+        amount: -500,
+        date: "2026-07-31",
+        balanceAfter: 8500,
+        source: "confirmed_transaction",
+      },
+    ],
+  };
+
+  assert.equal(calculateBalanceAtDate(forecast, "2026-07-30"), 9000);
+  assert.equal(calculateBalanceAtDate(forecast, "2026-07-31"), 8500);
+  assert.equal(
+    resolveDisplayedEndBalance({
+      date: "2026-07-31",
+      forecast,
+      forecastDay: null,
+    }),
+    8500,
+  );
+});
+
 test("forecast tab exposes a line and calendar switch without adding a new bottom tab", () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), "src/components/app/ForecastTab.tsx"),
@@ -194,6 +237,7 @@ test("forecast tab exposes a line and calendar switch without adding a new botto
   assert.match(source, /viewMode === "calendar"/);
   assert.match(source, /Линия/);
   assert.match(source, /Календарь/);
+  assert.match(source, /Изменить план/);
   assert.doesNotMatch(source, /id: "calendar"/);
 });
 
@@ -207,14 +251,16 @@ test("calendar view uses inline accordion details instead of a detached details 
   assert.match(source, /Выберите день, чтобы посмотреть движение денег/);
   assert.match(source, /selectedDate === day\.date/);
   assert.match(source, /onSelectedDateChange\(selectCalendarDay\(selectedDate, day\.date\)\)/);
+  assert.match(source, /calculateBalanceAtDate/);
   assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
   assert.match(source, /aria-hidden="true"/);
   assert.match(source, /pointer-events-none h-4 w-4 text-muted-foreground transition-transform/);
   assert.match(source, /В конце дня/);
   assert.match(source, /🟡/);
-  assert.match(source, /Изменить план/);
+  assert.doesNotMatch(source, /Изменить план/);
   assert.doesNotMatch(source, /Что произойдёт с деньгами в этот день/);
+  assert.doesNotMatch(source, /periodFreeMoney\.amount/);
 });
 
 test("calendar day selection keeps the exact tapped ISO date", () => {

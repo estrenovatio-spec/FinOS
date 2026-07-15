@@ -13,14 +13,13 @@ import {
 } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
-import { getForecastDays } from "@/lib/decision-core/forecast-days";
+import { calculateBalanceAtDate, getForecastDays } from "@/lib/decision-core/forecast-days";
 import type {
   BalanceForecast,
   DecisionConstraintExplanation,
   ForecastDay,
   ForecastEvent,
 } from "@/lib/decision-core/types";
-import type { PlannedFreeMoneyView } from "@/lib/free-money";
 import type { Locale } from "@/types";
 import type { SavingsGoal } from "@/types/planning";
 
@@ -166,17 +165,10 @@ export function resolveCalendarSelectionState({
 
 export function resolveDisplayedEndBalance(args: {
   date: string;
+  forecast: BalanceForecast;
   forecastDay: ForecastDay | null;
-  periodFreeMoney?: PlannedFreeMoneyView;
 }): number | null {
-  if (
-    args.periodFreeMoney?.amount != null &&
-    args.periodFreeMoney.periodEndDate != null &&
-    args.periodFreeMoney.periodEndDate === args.date
-  ) {
-    return args.periodFreeMoney.amount;
-  }
-  return args.forecastDay?.endBalance ?? null;
+  return args.forecastDay?.endBalance ?? calculateBalanceAtDate(args.forecast, args.date);
 }
 
 export function ForecastCalendarView({
@@ -185,7 +177,6 @@ export function ForecastCalendarView({
   startDate,
   goals,
   explanation,
-  periodFreeMoney,
   selectedDate,
   onSelectedDateChange,
   onOpenPlan,
@@ -195,7 +186,6 @@ export function ForecastCalendarView({
   startDate: string;
   goals: SavingsGoal[];
   explanation?: DecisionConstraintExplanation | null;
-  periodFreeMoney?: PlannedFreeMoneyView;
   selectedDate: string | null;
   onSelectedDateChange: (date: string | null) => void;
   onOpenPlan?: (params: { section: "recurring" | "limits" | "debts" | "goals"; entityId?: string | null }) => void;
@@ -319,8 +309,8 @@ export function ForecastCalendarView({
                 const forecastDay = daysByDate.get(day.date) ?? null;
                 const displayedEndBalance = resolveDisplayedEndBalance({
                   date: day.date,
+                  forecast,
                   forecastDay,
-                  periodFreeMoney,
                 });
                 const dayGoals = goalMap.get(day.date) ?? [];
                 const grouped = forecastDay ? groupEventsForDay(forecastDay.events) : null;
@@ -344,30 +334,6 @@ export function ForecastCalendarView({
                           events: grouped.expenses,
                         },
                       ].filter((section) => section.events.length > 0);
-
-                const inlinePlanLink = (() => {
-                  if (dayGoals[0]) {
-                    return { section: "goals" as const, entityId: dayGoals[0].id };
-                  }
-                  const firstEvent = forecastDay?.events[0] ?? null;
-                  if (!firstEvent) return { section: "recurring" as const, entityId: null };
-                  if (firstEvent.source === "essential_budget") {
-                    return {
-                      section: "limits" as const,
-                      entityId: firstEvent.budgetReserveItems?.[0]?.categoryId ?? null,
-                    };
-                  }
-                  if (firstEvent.source === "debt_payment") {
-                    return { section: "debts" as const, entityId: null };
-                  }
-                  if (firstEvent.source === "recurring") {
-                    return { section: "recurring" as const, entityId: firstEvent.recurringId ?? null };
-                  }
-                  if (firstEvent.source === "income_source") {
-                    return { section: "recurring" as const, entityId: firstEvent.incomeSourceId ?? null };
-                  }
-                  return { section: "recurring" as const, entityId: null };
-                })();
 
                 return (
                   <div
@@ -540,14 +506,6 @@ export function ForecastCalendarView({
                               : "Nothing is planned for this date yet."}
                           </div>
                         )}
-
-                        <button
-                          type="button"
-                          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                          onClick={() => onOpenPlan?.(inlinePlanLink)}
-                        >
-                          {locale === "ru" ? "Изменить план" : "Edit plan"}
-                        </button>
                       </div>
                     ) : null}
                   </div>

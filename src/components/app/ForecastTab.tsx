@@ -213,7 +213,6 @@ export function ForecastTab({
           startDate={today}
           goals={savingsGoals}
           explanation={snapshot.constraintExplanation}
-          periodFreeMoney={periodFreeMoney}
           selectedDate={calendarSelectedDate}
           onSelectedDateChange={setCalendarSelectedDate}
           onOpenPlan={onOpenPlan}
