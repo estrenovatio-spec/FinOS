@@ -230,6 +230,19 @@ function formatRub(amount: number): string {
   return `${new Intl.NumberFormat("ru-RU").format(Math.round(amount))} ₽`;
 }
 
+function formatIncomeStatusLabel(status: AdvisorFinancialContext["incomes"]["recurring"][number]["status"]): string {
+  switch (status) {
+    case "confirmed":
+      return "уже получен";
+    case "overdue":
+      return "ещё не пришёл";
+    case "snoozed":
+      return "напоминание отложено";
+    default:
+      return "ожидается";
+  }
+}
+
 function formatIncomeList(context: AdvisorFinancialContext): string {
   const items = [
     ...context.incomes.recurring.map((income) => ({
@@ -248,7 +261,7 @@ function formatIncomeList(context: AdvisorFinancialContext): string {
     .slice(0, 4)
     .map(
       (income) =>
-        `- ${income.title}: ${formatRub(income.amount)} (${income.date}, статус: ${income.status})`,
+        `- ${income.title}: ${formatRub(income.amount)} (${income.date}, ${formatIncomeStatusLabel(income.status)})`,
     );
   return items.length > 0 ? items.join("\n") : "- В текущем периоде ожидаемых доходов нет";
 }
@@ -351,6 +364,7 @@ function buildExpensesGuide(args: {
       `- Платежи по долгам: ${formatRub(args.context.expenses.debtPaymentsTotal)}`,
       `- Другие обязательные платежи: ${formatRub(args.context.expenses.otherMandatoryPaymentsTotal)}`,
       `- Расходы по лимитам: ${formatRub(args.context.expenses.plannedBudgetsTotal)}`,
+      "Назови максимум 3 самых сильных фактора по сумме и объясни, как каждый из них влияет на итог.",
       "Самые заметные регулярные платежи:",
       formatRecurringExpenseList(args.context),
       "Лимиты периода:",
@@ -372,6 +386,7 @@ function buildIncomeGuide(args: {
       `- Всего доходов в текущем периоде по плану: ${formatRub(args.context.incomes.currentPeriodTotal)}`,
       `- Из них ещё ожидается: ${formatRub(args.context.incomes.expectedTotal)}`,
       `- Уже подтверждено: ${formatRub(args.context.incomes.confirmedTotal)}`,
+      "Перечисляй доходы с датами и человеческим статусом, а не техническими кодами.",
       "Ожидаемые доходы:",
       formatIncomeList(args.context),
       "Если поступление просрочено, называй его неполученным или ожидаемым, а не отсутствующим.",
@@ -396,6 +411,7 @@ function buildGoalGuide(args: {
       args.context.goals.length > 0
         ? `- Уже заведено целей: ${args.context.goals.length}`
         : "- Отдельные цели пока не заведены",
+      "Если точного плана пока нет, не обещай результат и не заполняй пробелы догадками.",
       "Если пользователь не назвал срок и отдельные накопления на цель, сначала попроси эти данные.",
       "Не строй абстрактный план без срока, текущих накоплений и комфортного ежемесячного взноса.",
     ]
@@ -420,6 +436,7 @@ function buildForecastGuide(args: {
       args.context.forecast.nearestRiskExplanation
         ? `- Причина ближайшего риска: ${args.context.forecast.nearestRiskExplanation}`
         : null,
+      "Если главную причину нельзя выделить точно, так и скажи и не выдумывай объяснение.",
       "Объясняй через реальные даты и суммы из FIN OS, а не через абстрактные советы.",
     ]
       .filter(Boolean)

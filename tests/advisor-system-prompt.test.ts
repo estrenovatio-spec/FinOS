@@ -43,6 +43,7 @@ test("advisor prompt contains the fixed behavior rules and response format", () 
   assert.match(prompt, /Используй только информацию из переданного финансового контекста/);
   assert.match(prompt, /Не придумывай данные и не пересчитывай суммы самостоятельно/);
   assert.match(prompt, /Каждый важный вывод опирай на конкретные суммы, даты или статьи/);
+  assert.match(prompt, /назови не больше 3 факторов по убыванию влияния/);
   assert.match(prompt, /Ответ должен быть коротким для мобильного экрана/);
 });
 

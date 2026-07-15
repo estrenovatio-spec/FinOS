@@ -177,6 +177,7 @@ test("income brief keeps expected income visible and never says that income is m
 
   assert.match(brief.promptGuide ?? "", /Ожидаемые доходы:/);
   assert.match(brief.promptGuide ?? "", /Зарплата/);
+  assert.match(brief.promptGuide ?? "", /ожидается/);
   assert.doesNotMatch(brief.promptGuide ?? "", /у вас нет доходов/i);
 });
 
@@ -210,6 +211,7 @@ test("expenses brief cites concrete pressure points instead of generic advice", 
 
   assert.match(brief.promptGuide ?? "", /Регулярные платежи:/);
   assert.match(brief.promptGuide ?? "", /Расходы по лимитам:/);
+  assert.match(brief.promptGuide ?? "", /максимум 3 самых сильных фактора/i);
   assert.match(brief.promptGuide ?? "", /Аренда/);
   assert.doesNotMatch(brief.promptGuide ?? "", /^сократите расходы$/im);
 });
