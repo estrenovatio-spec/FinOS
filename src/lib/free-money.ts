@@ -117,47 +117,127 @@ function collectRequiredSpending(
   };
 }
 
-function sumExpectedIncome(
-  state: DecisionCoreState,
+function forecastIncomeKey(event: DecisionCoreSnapshot["forecast"]["events"][number]): string | null {
+  if (event.amount <= 0) return null;
+  if (event.source === "income_source") {
+    if (event.incomeOccurrenceId) return `income-source:${event.incomeOccurrenceId}`;
+    if (event.incomeSourceId && event.incomeOccurrenceDate) {
+      return `income-source:${event.incomeSourceId}:${event.incomeOccurrenceDate}`;
+    }
+    return `income-source:${event.title}:${event.date}:${Math.round(event.amount)}`;
+  }
+  if (event.source === "recurring" && event.recurringId) {
+    return `recurring-income:${event.recurringId}:${event.date}`;
+  }
+  if (event.source === "confirmed_transaction" || event.source === "pending_transaction") {
+    return `transaction-income:${event.id}`;
+  }
+  return `income:${event.id}`;
+}
+
+function resolvedIncomeKeys(income: ResolvedMoneySetupIncomeSource): string[] {
+  const keys = new Set<string>();
+  if (income.occurrenceId) {
+    keys.add(`income-source:${income.occurrenceId}`);
+  }
+  if (income.id && income.occurrenceDate) {
+    keys.add(`income-source:${income.id}:${income.occurrenceDate}`);
+  }
+  keys.add(
+    `income-source:${income.label}:${income.occurrenceDate}:${Math.round(income.expectedAmount ?? 0)}`,
+  );
+  return [...keys];
+}
+
+function summarizeForecastPeriod(
   snapshot: DecisionCoreSnapshot,
   periodStartDate: string,
   periodEndDate: string,
 ) {
-  const resolved = snapshot.resolvedIncomeSources ?? [];
   let expectedRecurringIncome = 0;
+  let recurringPayments = 0;
+  let otherMandatoryPayments = 0;
+  let mandatoryPayments = 0;
+  let essentialPlannedSpending = 0;
+  let otherRequiredExpenses = 0;
   let includesUnconfirmedIncome = false;
-
-  for (const income of resolved) {
-    if (!shouldCountExpectedIncome(income, periodStartDate, periodEndDate)) continue;
-    expectedRecurringIncome += Math.round(income.expectedAmount ?? 0);
-    if (income.status === "overdue_unconfirmed" || income.status === "due_today") {
-      includesUnconfirmedIncome = true;
+  const forecastIncomeKeys = new Set<string>();
+  const resolvedIncomeByKey = new Map<string, ResolvedMoneySetupIncomeSource>();
+  for (const income of snapshot.resolvedIncomeSources ?? []) {
+    for (const key of resolvedIncomeKeys(income)) {
+      resolvedIncomeByKey.set(key, income);
     }
   }
 
   for (const event of snapshot.forecast.events) {
-    if (event.source !== "recurring" || event.amount <= 0) continue;
     if (event.date < periodStartDate || event.date > periodEndDate) continue;
-    expectedRecurringIncome += Math.round(event.amount);
-    includesUnconfirmedIncome = true;
+
+    if (event.amount > 0) {
+      expectedRecurringIncome += Math.round(event.amount);
+      const incomeKey = forecastIncomeKey(event);
+      if (incomeKey) forecastIncomeKeys.add(incomeKey);
+      if (event.source === "recurring") {
+        includesUnconfirmedIncome = true;
+      } else if (event.source === "income_source") {
+        const matchedIncome = incomeKey ? resolvedIncomeByKey.get(incomeKey) : null;
+        if (
+          matchedIncome?.status === "due_today" ||
+          matchedIncome?.status === "overdue_unconfirmed"
+        ) {
+          includesUnconfirmedIncome = true;
+        }
+      }
+      continue;
+    }
+
+    if (event.source === "essential_budget") {
+      essentialPlannedSpending += -event.amount;
+      continue;
+    }
+
+    if (event.source === "debt_payment") {
+      otherMandatoryPayments += -event.amount;
+      mandatoryPayments += -event.amount;
+      continue;
+    }
+
+    if (event.source === "recurring") {
+      recurringPayments += -event.amount;
+      mandatoryPayments += -event.amount;
+      continue;
+    }
+
+    if (event.source === "confirmed_transaction" || event.source === "pending_transaction") {
+      otherMandatoryPayments += -event.amount;
+      mandatoryPayments += -event.amount;
+      continue;
+    }
+
+    otherRequiredExpenses += -event.amount;
+  }
+
+  for (const income of snapshot.resolvedIncomeSources ?? []) {
+    if (income.status === "received") continue;
+    if (income.occurrenceDate < periodStartDate || income.occurrenceDate > periodEndDate) continue;
+    const matchesForecast = resolvedIncomeKeys(income).some((key) => forecastIncomeKeys.has(key));
+    if (matchesForecast) continue;
+    const amount = Math.round(income.expectedAmount ?? 0);
+    if (amount <= 0) continue;
+    expectedRecurringIncome += amount;
+    if (income.status === "due_today" || income.status === "overdue_unconfirmed") {
+      includesUnconfirmedIncome = true;
+    }
   }
 
   return {
     expectedRecurringIncome,
+    recurringPayments,
+    otherMandatoryPayments,
+    mandatoryPayments,
+    essentialPlannedSpending,
+    otherRequiredExpenses,
     includesUnconfirmedIncome,
   };
-}
-
-function shouldCountExpectedIncome(
-  income: ResolvedMoneySetupIncomeSource,
-  periodStartDate: string,
-  periodEndDate: string,
-): boolean {
-  if (income.status === "received") return false;
-  if (income.occurrenceDate < periodStartDate || income.occurrenceDate > periodEndDate) {
-    return false;
-  }
-  return (income.expectedAmount ?? 0) > 0;
 }
 
 export function calculateFreeMoneyUntilPeriodEnd(
@@ -221,14 +301,14 @@ export function calculatePlannedFreeMoneyUntilPeriodEnd(
     state.moneySetup.useHouseholdBalance ? state.balances.all : state.balances.me,
   );
   const {
+    expectedRecurringIncome,
     recurringPayments,
     otherMandatoryPayments,
     mandatoryPayments,
     essentialPlannedSpending,
     otherRequiredExpenses,
-  } = collectRequiredSpending(state, snapshot, period.to);
-  const { expectedRecurringIncome, includesUnconfirmedIncome } = sumExpectedIncome(
-    state,
+    includesUnconfirmedIncome,
+  } = summarizeForecastPeriod(
     snapshot,
     state.today,
     period.to,
