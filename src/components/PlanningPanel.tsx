@@ -718,6 +718,7 @@ export function PlanningPanel({
     const today = todayIso();
     return recurringTransactions
       .map((item) => {
+        const originalIndex = recurringTransactions.findIndex((entry) => entry.id === item.id);
         const periodTransactions = transactions.filter(
           (tx) =>
             tx.recurringId === item.id &&
@@ -760,6 +761,7 @@ export function PlanningPanel({
           skippedInPeriod,
           relevantOccurrenceDate,
           sortDate: relevantOccurrenceDate,
+          originalIndex,
         };
       });
   }, [recurringPeriod, recurringTransactions, transactions]);
@@ -775,10 +777,9 @@ export function PlanningPanel({
         if (recurringFilter === "paid") {
           return (b.lastPaidDate ?? "").localeCompare(a.lastPaidDate ?? "");
         }
-        const priority = { pending: 0, overdue: 1, upcoming: 2, paused: 3, paid: 4 };
-        const priorityDiff = priority[a.status] - priority[b.status];
-        if (priorityDiff !== 0) return priorityDiff;
-        return a.sortDate.localeCompare(b.sortDate);
+        const dateDiff = a.sortDate.localeCompare(b.sortDate);
+        if (dateDiff !== 0) return dateDiff;
+        return a.originalIndex - b.originalIndex;
       });
   }, [recurringCardsBase, recurringFilter]);
 
