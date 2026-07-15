@@ -411,6 +411,56 @@ function buildPlannedFreeMoneyItem(
     return null;
   }
 
+  const detailItems: NonNullable<TodayOverviewItem["details"]> = plannedFreeMoney.breakdown
+    ? [
+        {
+          label: locale === "ru" ? "Сейчас в кошельке" : "Available now",
+          value: moneyValue(plannedFreeMoney.breakdown.currentActualBalance, locale) ?? "",
+          tone: "neutral",
+        },
+        {
+          label: locale === "ru" ? "Ожидаемые доходы" : "Expected income",
+          value: `+${moneyValue(plannedFreeMoney.breakdown.expectedRecurringIncome, locale) ?? ""}`,
+          tone: "positive",
+        },
+        {
+          label: locale === "ru" ? "Регулярные платежи" : "Recurring payments",
+          value: `-${moneyValue(plannedFreeMoney.breakdown.recurringPayments, locale) ?? ""}`,
+          tone: "negative",
+        },
+        {
+          label:
+            locale === "ru"
+              ? "Платежи по долгам"
+              : "Debt payments",
+          value: `-${moneyValue(plannedFreeMoney.breakdown.otherMandatoryPayments, locale) ?? ""}`,
+          tone: "negative",
+        },
+        {
+          label: locale === "ru" ? "Расходы по лимитам" : "Planned spending limits",
+          value: `-${moneyValue(plannedFreeMoney.breakdown.essentialPlannedSpending, locale) ?? ""}`,
+          tone: "negative",
+        },
+        ...(plannedFreeMoney.breakdown.otherRequiredExpenses > 0
+          ? [
+              {
+                label:
+                  locale === "ru"
+                    ? "Прочие обязательные расходы"
+                    : "Other required spending",
+                value: `-${moneyValue(plannedFreeMoney.breakdown.otherRequiredExpenses, locale) ?? ""}`,
+                tone: "negative" as const,
+              },
+            ]
+          : []),
+        {
+          label: locale === "ru" ? "Можно потратить" : "Available to spend",
+          value: moneyValue(plannedFreeMoney.breakdown.plannedFreeMoney, locale) ?? "",
+          tone: "total",
+        },
+      ]
+    : null;
+
   return {
     id: "planned-free-money",
     label: summary.label,
@@ -418,48 +468,7 @@ function buildPlannedFreeMoneyItem(
     value: summary.value,
     caption: summary.caption,
     layout: "wide",
-    details: plannedFreeMoney.breakdown
-      ? [
-          {
-            label: locale === "ru" ? "Сейчас в кошельке" : "Available now",
-            value: moneyValue(plannedFreeMoney.breakdown.currentActualBalance, locale) ?? "",
-            tone: "neutral",
-          },
-          {
-            label: locale === "ru" ? "Ожидаемые доходы" : "Recurring income",
-            value: `+${moneyValue(plannedFreeMoney.breakdown.expectedRecurringIncome, locale) ?? ""}`,
-            tone: "positive",
-          },
-          {
-            label: locale === "ru" ? "Регулярные платежи" : "Recurring payments",
-            value: `-${moneyValue(plannedFreeMoney.breakdown.recurringPayments, locale) ?? ""}`,
-            tone: "negative",
-          },
-          {
-            label:
-              locale === "ru"
-                ? "Другие обязательные платежи"
-                : "Other required payments",
-            value: `-${moneyValue(plannedFreeMoney.breakdown.otherMandatoryPayments, locale) ?? ""}`,
-            tone: "negative",
-          },
-          {
-            label: locale === "ru" ? "Базовые расходы по лимитам" : "Planned spending",
-            value: `-${moneyValue(plannedFreeMoney.breakdown.essentialPlannedSpending, locale) ?? ""}`,
-            tone: "negative",
-          },
-          {
-            label: locale === "ru" ? "Другие обязательные расходы" : "Other required spending",
-            value: `-${moneyValue(plannedFreeMoney.breakdown.otherRequiredExpenses, locale) ?? ""}`,
-            tone: "negative",
-          },
-          {
-            label: locale === "ru" ? "Можно потратить" : "Available to spend",
-            value: moneyValue(plannedFreeMoney.breakdown.plannedFreeMoney, locale) ?? "",
-            tone: "total",
-          },
-        ]
-      : null,
+    details: detailItems,
   };
 }
 

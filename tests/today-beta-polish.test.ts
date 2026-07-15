@@ -525,7 +525,7 @@ test("planned free money copy explains recurring-income plan without using narro
   assert.equal(view.overviewItems.find((item) => item.id === "allowed"), undefined);
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.match(planned?.caption ?? "", /ожидаемые доходы придут по плану/i);
-  assert.match(planned?.caption ?? "", /не подтверждено/i);
+  assert.doesNotMatch(planned?.caption ?? "", /не подтверждено/i);
 });
 
 test("planned free money breakdown arithmetic stays explicit", () => {
@@ -574,9 +574,8 @@ test("planned free money breakdown arithmetic stays explicit", () => {
       "Сейчас в кошельке",
       "Ожидаемые доходы",
       "Регулярные платежи",
-      "Другие обязательные платежи",
-      "Базовые расходы по лимитам",
-      "Другие обязательные расходы",
+      "Платежи по долгам",
+      "Расходы по лимитам",
       "Можно потратить",
     ],
   );

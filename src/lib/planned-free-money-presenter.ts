@@ -37,11 +37,7 @@ export function buildPlannedFreeMoneySummary(
     value: formatPlannedFreeMoneyAmount(plannedFreeMoney.amount, locale),
     caption:
       locale === "ru"
-        ? plannedFreeMoney.includesUnconfirmedIncome
-          ? "После обязательных платежей и базовых расходов, если ожидаемые доходы придут по плану. Поступление ещё не подтверждено."
-          : "После обязательных платежей и базовых расходов, если ожидаемые доходы придут по плану."
-        : plannedFreeMoney.includesUnconfirmedIncome
-          ? "After all payments and planned spending, if recurring income arrives as planned. The income is not confirmed yet."
-          : "After all payments and planned spending, if recurring income arrives as planned.",
+        ? "После обязательных платежей и расходов по лимитам, если ожидаемые доходы придут по плану."
+        : "After all payments and planned spending, if expected income arrives as planned.",
   };
 }
