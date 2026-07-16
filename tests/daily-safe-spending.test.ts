@@ -507,6 +507,43 @@ test("planned free money subtracts recurring expense occurrence inside the curre
   assert.equal(result.amount, 35754);
 });
 
+test("rescheduling a recurring payment inside the same period does not increase planned free money", () => {
+  const state = makeState({
+    today: "2026-07-16",
+    balances: { all: 68115, me: 68115, partner: 0 },
+  });
+  const beforeReschedule = makeSnapshot([
+    {
+      id: "recurring-mortgage-2026-07-16",
+      title: "Ипотека",
+      amount: -19000,
+      date: "2026-07-16",
+      balanceAfter: 49115,
+      source: "recurring",
+      recurringId: "mortgage-series",
+    },
+  ]);
+  const afterReschedule = makeSnapshot([
+    {
+      id: "recurring-mortgage-2026-07-18",
+      title: "Ипотека",
+      amount: -19000,
+      date: "2026-07-18",
+      balanceAfter: 49115,
+      source: "recurring",
+      recurringId: "mortgage-series",
+    },
+  ]);
+
+  const before = calculatePlannedFreeMoneyUntilPeriodEnd(state, beforeReschedule);
+  const after = calculatePlannedFreeMoneyUntilPeriodEnd(state, afterReschedule);
+
+  assert.equal(before.breakdown?.recurringPayments, 19000);
+  assert.equal(after.breakdown?.recurringPayments, 19000);
+  assert.equal(before.amount, 49115);
+  assert.equal(after.amount, 49115);
+});
+
 test("planned free money ignores recurring expense outside the current period", () => {
   const state = makeState();
   const snapshot = makeSnapshot([

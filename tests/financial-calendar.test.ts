@@ -187,6 +187,64 @@ test("calendar keeps deficit markers on the day where end balance turns negative
   assert.equal(august4?.isDeficit, true);
 });
 
+test("calendar month keeps a rescheduled mortgage payment on July 18, 2026", () => {
+  const forecast = makeForecast({
+    startBalance: 68115,
+    minBalance: 49115,
+    minBalanceDate: "2026-07-18",
+    firstDeficitDate: null,
+    nextIncomeDate: null,
+    horizonEndDate: "2026-07-31",
+    horizonMonths: 1,
+    events: [
+      {
+        id: "mortgage-july",
+        title: "Ипотека",
+        amount: -19000,
+        date: "2026-07-18",
+        balanceAfter: 49115,
+        source: "pending_transaction",
+        recurringId: "mortgage-recurring",
+      },
+    ],
+    days: [
+      {
+        date: "2026-07-18",
+        events: [
+          {
+            id: "mortgage-july",
+            title: "Ипотека",
+            amount: -19000,
+            date: "2026-07-18",
+            balanceAfter: 49115,
+            source: "pending_transaction",
+            recurringId: "mortgage-recurring",
+          },
+        ],
+        incomeTotal: 0,
+        expenseTotal: 19000,
+        netChange: -19000,
+        startBalance: 68115,
+        endBalance: 49115,
+      },
+    ],
+  });
+
+  const months = buildForecastCalendarMonths({
+    forecast,
+    startDate: "2026-07-16",
+    locale: "ru",
+  });
+
+  const july = months.find((month) => month.key === "2026-07");
+  const july18 = july?.days.find((day) => day.date === "2026-07-18");
+  assert.ok(july18);
+  assert.equal(july18?.hasEvents, true);
+  assert.equal(july18?.eventsCount, 1);
+  assert.equal(july18?.expenseTotal, 19000);
+  assert.equal(july18?.endBalance, 49115);
+});
+
 test("calendar keeps end-of-day balance continuous from the previous day", () => {
   const forecast: BalanceForecast = {
     startBalance: 10000,

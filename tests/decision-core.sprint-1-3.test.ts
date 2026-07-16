@@ -2638,6 +2638,102 @@ test("rescheduling an overdue payment removes the old overdue hero state and mov
   );
 });
 
+test("rescheduling a recurring mortgage keeps one payment on the new date without duplicating the obligation", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-16",
+      balances: { all: 68115, me: 68115, partner: 0 },
+      transactions: [
+        tx({
+          id: "mortgage-july",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-18",
+          note: "Ипотека",
+          confirmed: false,
+          recurringId: "mortgage-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          nextRunDate: "2026-07-18",
+          frequency: "monthly",
+          dayOfMonth: 16,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const mortgageEvents = scenario.ctx.forecast.events.filter(
+    (event) =>
+      (event.source === "pending_transaction" || event.source === "recurring") &&
+      event.amount === -19000,
+  );
+
+  assert.equal(
+    mortgageEvents.some((event) => event.date === "2026-07-16"),
+    false,
+  );
+  assert.equal(
+    mortgageEvents.filter((event) => event.date === "2026-07-18").length,
+    1,
+  );
+  assert.equal(mortgageEvents[0]?.source, "pending_transaction");
+});
+
+test("rescheduled recurring mortgage appears in Today on the new due date", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-18",
+      balances: { all: 68115, me: 68115, partner: 0 },
+      transactions: [
+        tx({
+          id: "mortgage-july",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-18",
+          note: "Ипотека",
+          confirmed: false,
+          recurringId: "mortgage-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          nextRunDate: "2026-07-18",
+          frequency: "monthly",
+          dayOfMonth: 16,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  assert.equal(scenario.result.todayPayments.length, 1);
+  assert.equal(scenario.result.todayPayments[0]?.title, "Ипотека");
+  assert.equal(scenario.result.todayPayments[0]?.date, "2026-07-18");
+  assert.equal(scenario.result.todayPayments[0]?.amount, 19000);
+  assert.equal(scenario.result.mainAction.type, "pay_today");
+});
+
 test("snoozed overdue income is hidden today without changing the forecast date, and returns tomorrow", () => {
   const baseMoneySetup = {
     ...emptyMoneySetup(),
