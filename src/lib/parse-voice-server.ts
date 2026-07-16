@@ -23,7 +23,10 @@ import {
 } from "@/lib/detect-owner";
 import { hasPartnerDetectionConfig } from "@/lib/detect-owner";
 import { sanitizeTransactionNote } from "@/lib/transaction-note";
-import { extractSeparatedMoneyAmounts } from "@/lib/multiple-amounts";
+import {
+  extractCompactMultiAmountInput,
+  extractSeparatedMoneyAmounts,
+} from "@/lib/multiple-amounts";
 import type { CategoryDefinition, Locale, ParsedTransaction } from "@/types";
 
 const MAX_TRANSACTIONS = 200;
@@ -119,6 +122,14 @@ function expandSeparatedAmountItems(
   fullText: string,
 ): ParsedTransaction[] {
   if (items.length !== 1) return items;
+  const compact = extractCompactMultiAmountInput(fullText);
+  if (compact && compact.amounts.length > 1) {
+    return compact.amounts.map((amount) => ({
+      ...items[0],
+      amount,
+      note: sanitizeTransactionNote(compact.label || items[0].note || fullText.slice(0, 120), amount),
+    }));
+  }
   const amounts = extractSeparatedMoneyAmounts(fullText);
   if (amounts.length <= 1) return items;
   return amounts.map((amount) => ({

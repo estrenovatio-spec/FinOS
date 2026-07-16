@@ -22,7 +22,10 @@ import {
 import { formatMoney } from "@/lib/format-money";
 import { t, ruPlural, enPlural } from "@/lib/i18n";
 import { inferParseLocale } from "@/lib/locale-infer";
-import { extractSeparatedMoneyAmounts } from "@/lib/multiple-amounts";
+import {
+  extractCompactMultiAmountInput,
+  extractSeparatedMoneyAmounts,
+} from "@/lib/multiple-amounts";
 import { parseAmountFromTranscript } from "@/lib/parse-amount";
 import { mergeTransactionComment } from "@/lib/transaction-note";
 import {
@@ -232,10 +235,16 @@ export function VoiceRecorder({
         }
       }
 
+      const compactMulti = extractCompactMultiAmountInput(value);
       const separatedAmounts = extractSeparatedMoneyAmounts(value);
       const items =
-        parsed.items.length === 1 && separatedAmounts.length > 1
-          ? separatedAmounts.map((amount) => ({ ...parsed.items[0], amount }))
+        parsed.items.length === 1 &&
+        (compactMulti?.amounts.length ?? separatedAmounts.length) > 1
+          ? (compactMulti?.amounts ?? separatedAmounts).map((amount) => ({
+              ...parsed.items[0],
+              amount,
+              note: compactMulti?.label || parsed.items[0].note,
+            }))
           : parsed.items;
 
       const extraComment = comment.trim();

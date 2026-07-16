@@ -17,7 +17,10 @@ import {
   parseAmountFromTranscript,
   resolveTransactionAmount,
 } from "@/lib/parse-amount";
-import { extractSeparatedMoneyAmounts } from "@/lib/multiple-amounts";
+import {
+  extractCompactMultiAmountInput,
+  extractSeparatedMoneyAmounts,
+} from "@/lib/multiple-amounts";
 import { isGarbageTranscript } from "@/lib/transcript-guard";
 import { ownerHintsForPrompt } from "@/lib/detect-owner";
 import { sanitizeTransactionNote } from "@/lib/transaction-note";
@@ -310,6 +313,22 @@ export function fallbackParseMany(
   categories: CategoryDefinition[] = getDefaultCategories(),
 ): ParsedTransaction[] {
   const clauses = splitTranscriptClauses(transcript);
+  const compactMulti = extractCompactMultiAmountInput(transcript);
+  if (clauses.length === 1 && compactMulti && compactMulti.amounts.length > 1) {
+    const base = fallbackParse(
+      `${compactMulti.label} ${compactMulti.amounts[0]}`,
+      locale,
+      categories,
+    );
+    if (base.amount > 0) {
+      return compactMulti.amounts.map((amount) => ({
+        ...base,
+        amount,
+        note: sanitizeTransactionNote(compactMulti.label, amount),
+      }));
+    }
+  }
+
   const separatedAmounts = extractSeparatedMoneyAmounts(transcript);
   if (clauses.length === 1 && separatedAmounts.length > 1) {
     const base = fallbackParse(transcript, locale, categories);
