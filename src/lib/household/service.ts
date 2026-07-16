@@ -1090,6 +1090,7 @@ export async function upsertCloudRecurring(
       intervalMonths: item.frequency === "monthly" ? item.intervalMonths ?? 1 : null,
       dayOfMonth: item.dayOfMonth,
       nextRunDate: item.nextRunDate,
+      endDate: item.endDate ?? null,
       enabled: item.enabled,
     },
   });

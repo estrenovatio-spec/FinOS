@@ -16,6 +16,7 @@ const bodySchema = z.object({
   intervalMonths: z.number().int().min(1).max(60).nullable().optional(),
   dayOfMonth: z.number().nullable(),
   nextRunDate: z.string(),
+  endDate: z.string().nullable().optional(),
   enabled: z.boolean(),
   skippedDates: z.array(z.string()).optional(),
 });
