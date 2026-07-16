@@ -498,6 +498,38 @@ test("recurring expense and debt payment with the same date and amount appear on
   assert.equal(sameDayPayments[0]?.paymentSource, "debt");
 });
 
+test("debt forecast events continue into future months until the debt is closed", () => {
+  const forecast = forecastFromState(
+    buildState({
+      today: "2026-07-16",
+      balances: { all: 90000, me: 90000, partner: 0 },
+      debts: [
+        debt({
+          id: "water-debt",
+          name: "ЖКХ вода трудовая",
+          balance: 21000,
+          minPayment: 5000,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const debtEvents = forecast.events.filter((event) => event.debtId === "water-debt");
+  assert.deepEqual(
+    debtEvents.map((event) => ({ date: event.date, amount: event.amount })),
+    [
+      { date: "2026-07-20", amount: -5000 },
+      { date: "2026-08-20", amount: -5000 },
+      { date: "2026-09-20", amount: -5000 },
+    ],
+  );
+});
+
 test("focus stays tied to date even when earlier events are inserted into the forecast", () => {
   const original = forecastFromState(
     buildState({

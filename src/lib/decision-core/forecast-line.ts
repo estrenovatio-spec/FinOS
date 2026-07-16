@@ -62,6 +62,11 @@ function debtPaymentKey(item: DebtItem, paymentDate: string): string {
   return `debt:${item.id}:${paymentDate}`;
 }
 
+function advanceDebtPaymentDate(paymentDate: string): string {
+  const dayOfMonth = Number.parseInt(paymentDate.slice(8, 10), 10) || 1;
+  return advanceRecurringDate(paymentDate, "monthly", dayOfMonth, 1);
+}
+
 function sortEvents(left: ForecastEvent, right: ForecastEvent) {
   if (left.date !== right.date) return left.date.localeCompare(right.date);
   if (left.amount !== right.amount) return left.amount - right.amount;
@@ -489,18 +494,23 @@ function buildFutureEssentialBudgetEvents(
 }
 
 function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): ForecastEvent[] {
-  return ctx.debts
-    .filter((item) => item.balance > 0 && item.nextPaymentDate && item.minPayment > 0)
-    .filter((item) => item.nextPaymentDate!.slice(0, 10) <= horizonEndDate)
-    .map((item: DebtItem) => {
+  const events: ForecastEvent[] = [];
+
+  for (const item of ctx.debts) {
+    if (!(item.balance > 0 && item.nextPaymentDate && item.minPayment > 0)) {
+      continue;
+    }
+
+    let remainingBalance = item.balance;
+    let scheduledDate = item.nextPaymentDate.slice(0, 10);
+
+    while (remainingBalance > 0 && scheduledDate <= horizonEndDate) {
+      const paymentAmount = Math.min(item.minPayment, remainingBalance);
       const event = {
-        id: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
+        id: debtPaymentKey(item, scheduledDate),
         title: item.name.trim(),
-        amount: -item.minPayment,
-        date:
-          item.nextPaymentDate!.slice(0, 10) < ctx.today
-            ? ctx.today
-            : item.nextPaymentDate!.slice(0, 10),
+        amount: -paymentAmount,
+        date: scheduledDate < ctx.today ? ctx.today : scheduledDate,
         balanceAfter: 0,
         source: "debt_payment" as const,
         recurringId: null,
@@ -508,16 +518,26 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
         incomeOccurrenceId: null,
         incomeOccurrenceDate: null,
         plannedIncomeStatus: null,
-        plannedDate: item.nextPaymentDate!.slice(0, 10),
+        plannedDate: scheduledDate,
         debtId: item.id,
-        paymentKey: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
-        isOverdue: item.nextPaymentDate!.slice(0, 10) < ctx.today,
+        paymentKey: debtPaymentKey(item, scheduledDate),
+        isOverdue: scheduledDate < ctx.today,
         paymentSource: "debt" as const,
         linkedEntityId: item.id,
       } satisfies ForecastEvent;
+
+      events.push(event);
       debugExpectedPaymentEvent(ctx, event, "debt_generator");
-      return event;
-    });
+      remainingBalance = Math.max(0, remainingBalance - paymentAmount);
+      if (remainingBalance <= 0) break;
+
+      const nextScheduledDate = advanceDebtPaymentDate(scheduledDate);
+      if (nextScheduledDate === scheduledDate) break;
+      scheduledDate = nextScheduledDate;
+    }
+  }
+
+  return events;
 }
 
 export function buildGeneratedExpectedPaymentEvents(

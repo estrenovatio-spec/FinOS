@@ -26,7 +26,7 @@ function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
     case "recurring":
       return locale === "ru" ? "Регулярный платёж" : "Recurring payment";
     case "debt_payment":
-      return locale === "ru" ? "Ожидается" : "Expected";
+      return locale === "ru" ? "Платёж по долгу" : "Debt payment";
     case "income_source":
       return locale === "ru" ? "Ожидается" : "Expected";
     case "confirmed_transaction":

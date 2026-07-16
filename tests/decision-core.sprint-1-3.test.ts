@@ -1718,7 +1718,7 @@ test("Overdue debt payments reduce free money and become the top Today action", 
   assert.equal(result.todayPayments[1]?.amount, 18000);
   assert.equal(
     snapshot.forecast.events.filter((event) => event.source === "debt_payment").length,
-    2,
+    8,
   );
   assert.equal(
     snapshot.forecast.events.some(
@@ -1774,6 +1774,109 @@ test("expected payment generation does not create a recurring duplicate when deb
   assert.equal(sameDateEvents[0]?.amount, -19000);
   assert.equal(sameDateEvents[0]?.date, "2026-07-16");
   assert.equal(sameDateEvents[0]?.debtId, "housing-debt");
+});
+
+test("debt forecast schedule repeats monthly until the balance is fully covered", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-16",
+      forecastHorizonMonths: 6,
+      balances: { all: 100000, me: 100000, partner: 0 },
+      debts: [
+        debt({
+          id: "water-debt",
+          name: "ЖКХ вода трудовая",
+          balance: 21000,
+          minPayment: 5000,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const events = buildGeneratedExpectedPaymentEvents(ctx, ctx.forecast.horizonEndDate).filter(
+    (event) => event.debtId === "water-debt",
+  );
+
+  assert.deepEqual(
+    events.map((event) => ({ date: event.date, plannedDate: event.plannedDate, amount: event.amount })),
+    [
+      { date: "2026-07-20", plannedDate: "2026-07-20", amount: -5000 },
+      { date: "2026-08-20", plannedDate: "2026-08-20", amount: -5000 },
+      { date: "2026-09-20", plannedDate: "2026-09-20", amount: -5000 },
+      { date: "2026-10-20", plannedDate: "2026-10-20", amount: -5000 },
+      { date: "2026-11-20", plannedDate: "2026-11-20", amount: -1000 },
+    ],
+  );
+});
+
+test("partial debt payment shrinks future schedule to the remaining balance", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-16",
+      forecastHorizonMonths: 6,
+      balances: { all: 100000, me: 100000, partner: 0 },
+      debts: [
+        debt({
+          id: "water-debt",
+          name: "ЖКХ вода трудовая",
+          balance: 14000,
+          minPayment: 5000,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const events = buildGeneratedExpectedPaymentEvents(ctx, ctx.forecast.horizonEndDate).filter(
+    (event) => event.debtId === "water-debt",
+  );
+
+  assert.deepEqual(
+    events.map((event) => ({ date: event.date, amount: event.amount })),
+    [
+      { date: "2026-07-20", amount: -5000 },
+      { date: "2026-08-20", amount: -5000 },
+      { date: "2026-09-20", amount: -4000 },
+    ],
+  );
+});
+
+test("fully paid debt disappears from future forecast events", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-16",
+      forecastHorizonMonths: 6,
+      balances: { all: 100000, me: 100000, partner: 0 },
+      debts: [
+        debt({
+          id: "closed-debt",
+          name: "ЖКХ Дмитров",
+          balance: 0,
+          minPayment: 18000,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const events = buildGeneratedExpectedPaymentEvents(ctx, ctx.forecast.horizonEndDate).filter(
+    (event) => event.debtId === "closed-debt",
+  );
+
+  assert.equal(events.length, 0);
 });
 
 test("future expected income stays in forecast before its planned date", () => {
