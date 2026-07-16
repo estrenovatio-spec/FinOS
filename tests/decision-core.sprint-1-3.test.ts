@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decisionCore } from "@/lib/decision-core";
+import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { buildAllowed } from "@/lib/decision-core/allowed";
 import { buildAvoid } from "@/lib/decision-core/avoid";
 import {
@@ -22,6 +23,7 @@ import { confirmPendingPaymentById } from "@/lib/pending-payment";
 import { buildStoredTransactionNote } from "@/lib/transaction-note";
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { getDefaultCategories } from "@/lib/categories";
+import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import type { Transaction } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction } from "@/types/planning";
 
@@ -1608,7 +1610,7 @@ test("Future recurring income can define a calm forecast horizon on its own", ()
   assert.equal(result.safeUntil.status, "no_risk_in_horizon");
 });
 
-test("Dates around midnight are normalized by local day slices", () => {
+test("Dates around midnight keep the local slice and allow overdue payments to stay visible", () => {
   const result = decisionCore(
     buildState({
       today: "2026-07-10",
@@ -1642,7 +1644,7 @@ test("Dates around midnight are normalized by local day slices", () => {
   );
 
   assert.equal(result.todayPayments.some((payment) => payment.id === "late-night"), true);
-  assert.equal(result.todayPayments.some((payment) => payment.id === "previous-night"), false);
+  assert.equal(result.todayPayments.some((payment) => payment.id === "previous-night"), true);
   assert.equal(result.mainAction.type, "pay_overdue");
 });
 
@@ -1668,6 +1670,62 @@ test("Debt that does not constrain the balance is not treated as the next risk",
   );
 
   assert.equal(result.nextRisk, null);
+});
+
+test("Overdue debt payments reduce free money and become the top Today action", () => {
+  const state = buildState({
+    today: "2026-07-16",
+    balances: { all: 50000, me: 50000, partner: 0 },
+    debts: [
+      debt({
+        id: "debt-a",
+        name: "Долг A",
+        balance: 21000,
+        minPayment: 5000,
+        nextPaymentDate: "2026-07-15",
+        strategy: "snowball",
+      }),
+      debt({
+        id: "debt-b",
+        name: "Долг B",
+        balance: 86000,
+        minPayment: 18000,
+        nextPaymentDate: "2026-07-15",
+        strategy: "snowball",
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+  });
+  const result = decisionCore(state);
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+
+  assert.equal(plannedFreeMoney.amount, 27000);
+  assert.equal(result.mainAction.type, "pay_overdue");
+  assert.deepEqual(result.mainAction.command, {
+    type: "confirm_payment",
+    paymentId: "debt:debt-a:2026-07-15",
+  });
+  assert.equal(result.todayPayments.length, 2);
+  assert.equal(result.todayPayments[0]?.source, "debt_payment");
+  assert.equal(result.todayPayments[0]?.amount, 5000);
+  assert.equal(result.todayPayments[1]?.amount, 18000);
+  assert.equal(
+    snapshot.forecast.events.filter((event) => event.source === "debt_payment").length,
+    2,
+  );
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) =>
+        event.source === "debt_payment" &&
+        event.date === "2026-07-16" &&
+        event.plannedDate === "2026-07-15",
+    ),
+    true,
+  );
 });
 
 test("future expected income stays in forecast before its planned date", () => {

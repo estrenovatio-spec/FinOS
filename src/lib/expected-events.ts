@@ -23,6 +23,8 @@ export type ExpectedExpenseEvent = {
   title: string;
   amount: number;
   date: string;
+  debtId?: string | null;
+  source?: "pending_transaction" | "debt_payment";
 };
 
 export type ExpectedEvent = ExpectedIncomeEvent | ExpectedExpenseEvent;
@@ -206,7 +208,9 @@ export function expectedEventDate(event: ExpectedEvent): string {
 export function expectedEventKey(event: ExpectedEvent): string {
   return event.kind === "income"
     ? `income:${event.incomeSourceId}:${event.occurrenceDate}`
-    : `expense:${event.transactionId}:${event.date}`;
+    : event.debtId
+      ? `debt:${event.debtId}:${event.date}`
+      : `expense:${event.transactionId}:${event.date}`;
 }
 
 export function setExpectedEventReminderInSetup(

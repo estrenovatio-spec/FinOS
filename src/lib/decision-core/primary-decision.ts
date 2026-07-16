@@ -94,32 +94,14 @@ export function resolvePrimaryDecision(
   input: ResolvePrimaryDecisionInput,
 ): PrimaryDecision {
   const { ctx, safeUntil, todayPayments, nextRisk } = input;
-
-  const overduePayment =
-    ctx.transactions
-      .filter(
-        (transaction) =>
-          transaction.confirmed === false &&
-          transaction.type === "expense" &&
-          transaction.date.slice(0, 10) < ctx.today &&
-          isExpectedEventVisibleToday(
-            `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
-            ctx.expectedEventReminderStates,
-            ctx.today,
-          ),
-      )
-      .sort((left, right) => {
-        if (left.date !== right.date) return left.date.localeCompare(right.date);
-        return right.amount - left.amount;
-      })[0] ?? null;
-
+  const overduePayment = todayPayments.find((payment) => payment.isOverdue);
   if (overduePayment) {
     return {
       type: "overdue_payment",
       paymentId: overduePayment.id,
       amount: overduePayment.amount,
-      dueDate: overduePayment.date.slice(0, 10),
-      title: overduePayment.note.trim() || overduePayment.categoryId,
+      dueDate: overduePayment.date,
+      title: overduePayment.title,
     };
   }
 

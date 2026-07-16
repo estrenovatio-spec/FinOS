@@ -222,6 +222,11 @@ export function TodayScreen({
         title: payment.title,
         amount: payment.amount,
         date: payment.date,
+        debtId: payment.debtId ?? null,
+        source:
+          payment.source === "debt_payment"
+            ? "debt_payment"
+            : "pending_transaction",
       };
     }
     return null;

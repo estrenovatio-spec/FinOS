@@ -425,6 +425,36 @@ test("materialized recurring does not appear in the forecast twice and debt keep
   assert.equal(debtGroup?.events[0]?.source, "debt_payment");
 });
 
+test("overdue debt payments stay in forecast as debt events on today with the original due date attached", () => {
+  const forecast = forecastFromState(
+    buildState({
+      today: "2026-07-16",
+      balances: { all: 50000, me: 50000, partner: 0 },
+      debts: [
+        debt({
+          id: "loan-overdue",
+          name: "Кредит",
+          balance: 40000,
+          minPayment: 7000,
+          nextPaymentDate: "2026-07-15",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const debtEvent = forecast.events.find((event) => event.id === "debt:loan-overdue:2026-07-15");
+
+  assert.ok(debtEvent);
+  assert.equal(debtEvent?.source, "debt_payment");
+  assert.equal(debtEvent?.date, "2026-07-16");
+  assert.equal(debtEvent?.plannedDate, "2026-07-15");
+  assert.equal(debtEvent?.isOverdue, true);
+});
+
 test("focus stays tied to date even when earlier events are inserted into the forecast", () => {
   const original = forecastFromState(
     buildState({

@@ -97,6 +97,18 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
         ctx.today,
       ),
   );
+  const hasOverdueDebtPayments = ctx.debts.some(
+    (debt) =>
+      debt.balance > 0 &&
+      debt.minPayment > 0 &&
+      debt.nextPaymentDate != null &&
+      debt.nextPaymentDate.slice(0, 10) < ctx.today &&
+      isExpectedEventVisibleToday(
+        `debt:${debt.id}:${debt.nextPaymentDate.slice(0, 10)}`,
+        ctx.expectedEventReminderStates,
+        ctx.today,
+      ),
+  );
   const status = buildStatus({
     locale: ctx.locale,
     safeUntil,
@@ -105,7 +117,7 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
     confirmedTransactionsCount: ctx.confirmedTransactions.length,
     forecast: ctx.forecast,
     requiredFloor: getRequiredFloor(ctx),
-    hasOverduePayments,
+    hasOverduePayments: hasOverduePayments || hasOverdueDebtPayments,
     hasIncomeToConfirm: ctx.resolvedIncomeSources.some(
       (source) =>
         (source.status === "due_today" || source.status === "overdue_unconfirmed") &&

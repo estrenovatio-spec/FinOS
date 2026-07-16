@@ -57,6 +57,10 @@ function addDays(iso: string, days: number): string {
   return `${y}-${mo}-${d}`;
 }
 
+function debtPaymentKey(item: DebtItem, paymentDate: string): string {
+  return `debt:${item.id}:${paymentDate}`;
+}
+
 function sortEvents(left: ForecastEvent, right: ForecastEvent) {
   if (left.date !== right.date) return left.date.localeCompare(right.date);
   if (left.amount !== right.amount) return left.amount - right.amount;
@@ -424,14 +428,16 @@ function buildFutureEssentialBudgetEvents(
 
 function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): ForecastEvent[] {
   return ctx.debts
-    .filter((item) => item.nextPaymentDate && item.minPayment > 0)
-    .filter((item) => item.nextPaymentDate!.slice(0, 10) >= ctx.today)
+    .filter((item) => item.balance > 0 && item.nextPaymentDate && item.minPayment > 0)
     .filter((item) => item.nextPaymentDate!.slice(0, 10) <= horizonEndDate)
     .map((item: DebtItem) => ({
-      id: `debt-${item.id}-${item.nextPaymentDate!.slice(0, 10)}`,
+      id: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
       title: item.name.trim(),
       amount: -item.minPayment,
-      date: item.nextPaymentDate!.slice(0, 10),
+      date:
+        item.nextPaymentDate!.slice(0, 10) < ctx.today
+          ? ctx.today
+          : item.nextPaymentDate!.slice(0, 10),
       balanceAfter: 0,
       source: "debt_payment" as const,
       recurringId: null,
@@ -439,7 +445,10 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
       incomeOccurrenceId: null,
       incomeOccurrenceDate: null,
       plannedIncomeStatus: null,
-      plannedDate: null,
+      plannedDate: item.nextPaymentDate!.slice(0, 10),
+      debtId: item.id,
+      paymentKey: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
+      isOverdue: item.nextPaymentDate!.slice(0, 10) < ctx.today,
     }));
 }
 

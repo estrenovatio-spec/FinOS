@@ -31,6 +31,7 @@ import { formatTransactionDate, getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { upsertIncomeSourceInSetup } from "@/lib/expected-events";
 import { listConfiguredIncomeSources } from "@/lib/money-setup";
+import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { useToast } from "@/components/ui/toast";
 import { useStore } from "@/store/useStore";
 import { useTransactions } from "@/store/useStore";
@@ -95,7 +96,10 @@ export function ExpectedEventActionDialog({
   const moneySetup = useStore((s) => s.moneySetup);
   const setMoneySetup = useStore((s) => s.setMoneySetup);
   const recurringTransactions = useStore((s) => s.recurringTransactions);
+  const debts = useStore((s) => s.debts);
   const updateRecurring = useStore((s) => s.updateRecurring);
+  const updateDebt = useStore((s) => s.updateDebt);
+  const payDebt = useStore((s) => s.payDebt);
   const updateTransaction = useStore((s) => s.updateTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
   const dismissPendingTransaction = useStore((s) => s.dismissPendingTransaction);
@@ -125,6 +129,10 @@ export function ExpectedEventActionDialog({
     pendingTransaction?.recurringId != null
       ? recurringTransactions.find((item) => item.id === pendingTransaction.recurringId) ?? null
       : null;
+  const debtItem =
+    event?.kind === "expense" && event.debtId
+      ? debts.find((item) => item.id === event.debtId) ?? null
+      : null;
   const incomeSource =
     event?.kind === "income"
       ? listConfiguredIncomeSources(moneySetup, locale).find(
@@ -139,6 +147,23 @@ export function ExpectedEventActionDialog({
         : null,
     [event, locale],
   );
+  const debtExpenseDraft = useMemo<TransactionDialogDraft | null>(() => {
+    if (event?.kind !== "expense" || !event.debtId) {
+      return null;
+    }
+    return {
+      amount: event.amount,
+      type: "expense",
+      categoryId: "banking",
+      currency: "RUB",
+      note: `Платёж по долгу: ${event.title}`,
+      date: event.date,
+      title: locale === "ru" ? "Внести платёж" : "Confirm debt payment",
+      subtitle: formatTransactionDate(event.date, locale),
+      submitLabel: locale === "ru" ? "Сохранить" : "Save",
+      sourceEditLabel: null,
+    };
+  }, [event, locale]);
 
   const confirmOpen = open && mode === "confirm" && event != null;
   const skipOpen = open && mode === "skip" && event != null;
@@ -208,6 +233,27 @@ export function ExpectedEventActionDialog({
 
   function handleConfirmSaved(result: TransactionDialogSaveResult) {
     if (!event) return;
+
+    if (event.kind === "expense" && event.debtId) {
+      payDebt(event.debtId, result.amount);
+      if (debtItem) {
+        const remainingBalance = Math.max(0, debtItem.balance - result.amount);
+        const paidInFullForOccurrence = result.amount >= event.amount;
+        if (remainingBalance <= 0) {
+          updateDebt(debtItem.id, { nextPaymentDate: null });
+        } else if (paidInFullForOccurrence && debtItem.nextPaymentDate) {
+          const nextDate = advanceRecurringDate(
+            debtItem.nextPaymentDate,
+            "monthly",
+            Number.parseInt(debtItem.nextPaymentDate.slice(8, 10), 10) || 1,
+            1,
+          );
+          updateDebt(debtItem.id, { nextPaymentDate: nextDate });
+        } else if (result.date !== event.date) {
+          updateDebt(debtItem.id, { nextPaymentDate: result.date });
+        }
+      }
+    }
 
     clearReminderState(event);
     appendHistory("confirmed", { amount: result.amount, resultingDate: result.date });
@@ -309,7 +355,11 @@ export function ExpectedEventActionDialog({
     }
 
     if (skipChoice === "reschedule" && rescheduleDate) {
-      updateTransaction(event.transactionId, { date: rescheduleDate, confirmed: false });
+      if (event.debtId) {
+        updateDebt(event.debtId, { nextPaymentDate: rescheduleDate });
+      } else {
+        updateTransaction(event.transactionId, { date: rescheduleDate, confirmed: false });
+      }
       if (recurringItem) {
         updateRecurring(recurringItem.id, { nextRunDate: rescheduleDate });
       }
@@ -326,7 +376,9 @@ export function ExpectedEventActionDialog({
     }
 
     if (skipChoice === "cancel") {
-      if (pendingTransaction?.recurringId) {
+      if (event.debtId) {
+        updateDebt(event.debtId, { nextPaymentDate: null });
+      } else if (pendingTransaction?.recurringId) {
         dismissPendingTransaction(event.transactionId);
       } else {
         deleteTransaction(event.transactionId);
@@ -395,6 +447,18 @@ export function ExpectedEventActionDialog({
           submitLabel={locale === "ru" ? "Сохранить" : "Save"}
           forceConfirmOnSave
           hideDelete
+          fieldMode="expected_event"
+          onDidSave={handleConfirmSaved}
+        />
+      ) : null}
+
+      {event?.kind === "expense" && event.debtId && debtExpenseDraft ? (
+        <TransactionEditDialog
+          transaction={null}
+          draft={debtExpenseDraft}
+          open={confirmOpen}
+          onOpenChange={onOpenChange}
+          onRequestSourceEdit={null}
           fieldMode="expected_event"
           onDidSave={handleConfirmSaved}
         />
