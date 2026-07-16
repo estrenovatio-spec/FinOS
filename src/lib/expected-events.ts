@@ -25,6 +25,8 @@ export type ExpectedExpenseEvent = {
   date: string;
   debtId?: string | null;
   source?: "pending_transaction" | "debt_payment";
+  paymentSource?: "debt" | "recurring" | "manual";
+  linkedEntityId?: string | null;
 };
 
 export type ExpectedEvent = ExpectedIncomeEvent | ExpectedExpenseEvent;
@@ -203,6 +205,50 @@ export function cancelIncomeOccurrenceInSetup(
 
 export function expectedEventDate(event: ExpectedEvent): string {
   return event.kind === "income" ? event.occurrenceDate : event.date;
+}
+
+export function areExpectedExpenseEventsEquivalent(
+  left: Pick<
+    ExpectedExpenseEvent,
+    "amount" | "date" | "debtId" | "paymentSource" | "linkedEntityId"
+  >,
+  right: Pick<
+    ExpectedExpenseEvent,
+    "amount" | "date" | "debtId" | "paymentSource" | "linkedEntityId"
+  >,
+): boolean {
+  if (left.amount !== right.amount || left.date !== right.date) {
+    return false;
+  }
+
+  if (
+    left.paymentSource === "debt" &&
+    right.paymentSource === "debt" &&
+    left.debtId &&
+    left.debtId === right.debtId
+  ) {
+    return true;
+  }
+
+  if (
+    left.linkedEntityId &&
+    right.linkedEntityId &&
+    left.paymentSource &&
+    right.paymentSource &&
+    left.paymentSource === right.paymentSource &&
+    left.linkedEntityId === right.linkedEntityId
+  ) {
+    return true;
+  }
+
+  const leftIsDebt = left.paymentSource === "debt";
+  const rightIsDebt = right.paymentSource === "debt";
+  if (leftIsDebt === rightIsDebt) {
+    return false;
+  }
+
+  const otherSource = leftIsDebt ? right.paymentSource : left.paymentSource;
+  return otherSource === "recurring" || otherSource === "manual";
 }
 
 export function expectedEventKey(event: ExpectedEvent): string {

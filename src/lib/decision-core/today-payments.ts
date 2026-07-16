@@ -49,6 +49,8 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
       source: "pending_transaction" as const,
       debtId: null,
       paymentKey: `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
+      paymentSource: "manual" as const,
+      linkedEntityId: transaction.id,
     }));
 
   const prioritizedDebts = sortDebtsByStrategy(
@@ -75,6 +77,8 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
       source: "debt_payment" as const,
       debtId: debt.id,
       paymentKey: debtPaymentKey(debt.id, debt.nextPaymentDate!.slice(0, 10)),
+      paymentSource: "debt" as const,
+      linkedEntityId: debt.id,
     }));
 
   return [...pendingExpensePayments, ...debtPayments].sort((left, right) => {

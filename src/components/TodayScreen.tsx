@@ -227,6 +227,8 @@ export function TodayScreen({
           payment.source === "debt_payment"
             ? "debt_payment"
             : "pending_transaction",
+        paymentSource: payment.paymentSource,
+        linkedEntityId: payment.linkedEntityId ?? null,
       };
     }
     return null;

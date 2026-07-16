@@ -106,12 +106,13 @@ test("planned free money stays identical across Today, Forecast summary and Advi
   assert.notEqual(plannedFreeMoney.amount, 0);
 });
 
-test("Forecast tab and Today presenter both rely on the shared planned-free-money presenter", () => {
+test("Today presenter keeps the shared planned-free-money presenter while Forecast uses the same forecast line", () => {
   const forecastTab = readFileSync("src/components/app/ForecastTab.tsx", "utf8");
   const todayPresenter = readFileSync("src/components/today/today-screen-presenter.ts", "utf8");
 
-  assert.match(forecastTab, /buildPlannedFreeMoneySummary/);
   assert.match(todayPresenter, /buildPlannedFreeMoneySummary/);
+  assert.match(forecastTab, /ForecastCalendarView/);
+  assert.doesNotMatch(forecastTab, /buildPlannedFreeMoneySummary/);
 });
 
 test("one scenario gives the same planned result in Today, Forecast period end, Calendar period end and Adviser", () => {

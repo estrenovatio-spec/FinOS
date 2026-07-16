@@ -10,7 +10,10 @@ import {
   getRequiredFloor,
 } from "@/lib/decision-core/constraint-point";
 import { buildEssentialBudgetReserve } from "@/lib/decision-core/essential-budget-reserve";
-import { buildForecastLine } from "@/lib/decision-core/forecast-line";
+import {
+  buildForecastLine,
+  buildGeneratedExpectedPaymentEvents,
+} from "@/lib/decision-core/forecast-line";
 import { buildMainAction } from "@/lib/decision-core/main-action";
 import { buildNextRisk } from "@/lib/decision-core/next-risk";
 import { resolvePrimaryDecision } from "@/lib/decision-core/primary-decision";
@@ -1726,6 +1729,51 @@ test("Overdue debt payments reduce free money and become the top Today action", 
     ),
     true,
   );
+});
+
+test("expected payment generation does not create a recurring duplicate when debt already covers the same due amount", () => {
+  const ctx = buildContext(
+    buildState({
+      today: "2026-07-16",
+      balances: { all: 68115, me: 68115, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "housing-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "home_housing",
+          note: "",
+          nextRunDate: "2026-07-16",
+          frequency: "monthly",
+          dayOfMonth: 16,
+        }),
+      ],
+      debts: [
+        debt({
+          id: "housing-debt",
+          name: "Ипотека",
+          balance: 95000,
+          minPayment: 19000,
+          nextPaymentDate: "2026-07-16",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const events = buildGeneratedExpectedPaymentEvents(ctx, ctx.forecast.horizonEndDate);
+  const sameDateEvents = events.filter(
+    (event) => event.date === "2026-07-16" && event.amount === -19000,
+  );
+
+  assert.equal(sameDateEvents.length, 1);
+  assert.equal(sameDateEvents[0]?.source, "debt_payment");
+  assert.equal(sameDateEvents[0]?.amount, -19000);
+  assert.equal(sameDateEvents[0]?.date, "2026-07-16");
+  assert.equal(sameDateEvents[0]?.debtId, "housing-debt");
 });
 
 test("future expected income stays in forecast before its planned date", () => {

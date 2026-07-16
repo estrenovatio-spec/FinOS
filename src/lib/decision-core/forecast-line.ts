@@ -5,6 +5,7 @@ import {
   type BudgetPeriod,
 } from "@/lib/budget-period";
 import { buildForecastDays } from "@/lib/decision-core/forecast-days";
+import { areExpectedExpenseEventsEquivalent } from "@/lib/expected-events";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
 import {
@@ -65,6 +66,31 @@ function sortEvents(left: ForecastEvent, right: ForecastEvent) {
   if (left.date !== right.date) return left.date.localeCompare(right.date);
   if (left.amount !== right.amount) return left.amount - right.amount;
   return left.id.localeCompare(right.id);
+}
+
+function debugExpectedPaymentEvent(
+  ctx: DecisionCoreContext,
+  event: ForecastEvent,
+  createdBy: "pending_transaction_generator" | "recurring_generator" | "debt_generator",
+) {
+  if (process.env.FINOS_DEBUG_EXPECTED_EVENTS !== "1") return;
+  const category =
+    event.paymentSource === "debt"
+      ? getCategoryLabel("banking", ctx.categories, ctx.locale)
+      : event.paymentSource === "manual" || event.paymentSource === "recurring"
+        ? event.title
+        : null;
+  console.info("[expected-payment-generator]", {
+    id: event.id,
+    type: event.source,
+    amount: Math.abs(event.amount),
+    date: event.date,
+    category,
+    paymentSource: event.paymentSource ?? null,
+    linkedEntityId: event.linkedEntityId ?? null,
+    debtId: event.debtId ?? null,
+    createdBy,
+  });
 }
 
 function hasMatchingActualTransaction(
@@ -139,19 +165,27 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
   return ctx.transactions
     .filter(isPendingTransaction)
     .filter((transaction) => transaction.date.slice(0, 10) >= ctx.today)
-    .map((transaction) => ({
-      id: transaction.id,
-      title: getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale),
-      amount: transaction.type === "income" ? transaction.amount : -transaction.amount,
-      date: transaction.date.slice(0, 10),
-      balanceAfter: 0,
-      source: "pending_transaction" as const,
-      incomeSourceId: null,
-      incomeOccurrenceId: null,
-      incomeOccurrenceDate: null,
-      plannedIncomeStatus: null,
-      plannedDate: null,
-    }));
+    .map((transaction) => {
+      const event = {
+        id: transaction.id,
+        title: getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale),
+        amount: transaction.type === "income" ? transaction.amount : -transaction.amount,
+        date: transaction.date.slice(0, 10),
+        balanceAfter: 0,
+        source: "pending_transaction" as const,
+        incomeSourceId: null,
+        incomeOccurrenceId: null,
+        incomeOccurrenceDate: null,
+        plannedIncomeStatus: null,
+        plannedDate: null,
+        paymentSource: transaction.type === "expense" ? ("manual" as const) : undefined,
+        linkedEntityId: transaction.type === "expense" ? transaction.id : null,
+      } satisfies ForecastEvent;
+      if (transaction.type === "expense") {
+        debugExpectedPaymentEvent(ctx, event, "pending_transaction_generator");
+      }
+      return event;
+    });
 }
 
 function recurringEventTitle(ctx: DecisionCoreContext, item: RecurringTransaction) {
@@ -162,6 +196,7 @@ function recurringEventTitle(ctx: DecisionCoreContext, item: RecurringTransactio
 function buildRecurringForecastEvents(
   ctx: DecisionCoreContext,
   horizonEndDate: string,
+  existingExpenseEvents: ForecastEvent[] = [],
 ): ForecastEvent[] {
   const events: ForecastEvent[] = [];
 
@@ -172,22 +207,49 @@ function buildRecurringForecastEvents(
     while (runDate <= horizonEndDate && isWithinRecurringEndDate(item, runDate)) {
       const skipped = (item.skippedDates ?? []).includes(runDate);
       const hasActual = hasMatchingActualTransaction(ctx.transactions, item, runDate);
+      const nextEvent = {
+        id: `recurring-${item.id}-${runDate}`,
+        title: recurringEventTitle(ctx, item),
+        amount: item.type === "income" ? item.amount : -item.amount,
+        date: runDate,
+        balanceAfter: 0,
+        source: "recurring" as const,
+        recurringId: item.id,
+        incomeSourceId: null,
+        incomeOccurrenceId: null,
+        incomeOccurrenceDate: null,
+        plannedIncomeStatus: null,
+        plannedDate: null,
+        debtId: null,
+        paymentSource: item.type === "expense" ? ("recurring" as const) : undefined,
+        linkedEntityId: item.type === "expense" ? item.id : null,
+      } satisfies ForecastEvent;
+      const duplicatesExistingExpense =
+        item.type === "expense" &&
+        existingExpenseEvents.some((existing) =>
+          areExpectedExpenseEventsEquivalent(
+            {
+              amount: Math.abs(existing.amount),
+              date: existing.date,
+              debtId: existing.debtId ?? null,
+              paymentSource: existing.paymentSource,
+              linkedEntityId: existing.linkedEntityId ?? null,
+            },
+            {
+              amount: Math.abs(nextEvent.amount),
+              date: nextEvent.date,
+              debtId: nextEvent.debtId ?? null,
+              paymentSource: nextEvent.paymentSource,
+              linkedEntityId: nextEvent.linkedEntityId ?? null,
+            },
+          ),
+        );
 
-      if (!skipped && !hasActual) {
-        events.push({
-          id: `recurring-${item.id}-${runDate}`,
-          title: recurringEventTitle(ctx, item),
-          amount: item.type === "income" ? item.amount : -item.amount,
-          date: runDate,
-          balanceAfter: 0,
-          source: "recurring",
-          recurringId: item.id,
-          incomeSourceId: null,
-          incomeOccurrenceId: null,
-          incomeOccurrenceDate: null,
-          plannedIncomeStatus: null,
-          plannedDate: null,
-        });
+      if (!skipped && !hasActual && !duplicatesExistingExpense) {
+        events.push(nextEvent);
+        if (item.type === "expense") {
+          debugExpectedPaymentEvent(ctx, nextEvent, "recurring_generator");
+        }
       }
 
       const nextRunDate = advanceRecurringDate(
@@ -430,39 +492,64 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
   return ctx.debts
     .filter((item) => item.balance > 0 && item.nextPaymentDate && item.minPayment > 0)
     .filter((item) => item.nextPaymentDate!.slice(0, 10) <= horizonEndDate)
-    .map((item: DebtItem) => ({
-      id: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
-      title: item.name.trim(),
-      amount: -item.minPayment,
-      date:
-        item.nextPaymentDate!.slice(0, 10) < ctx.today
-          ? ctx.today
-          : item.nextPaymentDate!.slice(0, 10),
-      balanceAfter: 0,
-      source: "debt_payment" as const,
-      recurringId: null,
-      incomeSourceId: null,
-      incomeOccurrenceId: null,
-      incomeOccurrenceDate: null,
-      plannedIncomeStatus: null,
-      plannedDate: item.nextPaymentDate!.slice(0, 10),
-      debtId: item.id,
-      paymentKey: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
-      isOverdue: item.nextPaymentDate!.slice(0, 10) < ctx.today,
-    }));
+    .map((item: DebtItem) => {
+      const event = {
+        id: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
+        title: item.name.trim(),
+        amount: -item.minPayment,
+        date:
+          item.nextPaymentDate!.slice(0, 10) < ctx.today
+            ? ctx.today
+            : item.nextPaymentDate!.slice(0, 10),
+        balanceAfter: 0,
+        source: "debt_payment" as const,
+        recurringId: null,
+        incomeSourceId: null,
+        incomeOccurrenceId: null,
+        incomeOccurrenceDate: null,
+        plannedIncomeStatus: null,
+        plannedDate: item.nextPaymentDate!.slice(0, 10),
+        debtId: item.id,
+        paymentKey: debtPaymentKey(item, item.nextPaymentDate!.slice(0, 10)),
+        isOverdue: item.nextPaymentDate!.slice(0, 10) < ctx.today,
+        paymentSource: "debt" as const,
+        linkedEntityId: item.id,
+      } satisfies ForecastEvent;
+      debugExpectedPaymentEvent(ctx, event, "debt_generator");
+      return event;
+    });
+}
+
+export function buildGeneratedExpectedPaymentEvents(
+  ctx: DecisionCoreContext,
+  horizonEndDate: string,
+): ForecastEvent[] {
+  const pendingEvents = buildPendingTransactionEvents(ctx).filter((event) => event.amount < 0);
+  const debtEvents = buildDebtEvents(ctx, horizonEndDate);
+  const recurringEvents = buildRecurringForecastEvents(
+    ctx,
+    horizonEndDate,
+    [...pendingEvents, ...debtEvents],
+  ).filter((event) => event.amount < 0);
+  return [...pendingEvents, ...debtEvents, ...recurringEvents].sort(sortEvents);
 }
 
 export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
   const incomeEvents = buildIncomeEvents(ctx);
   const configuredNextIncomeDate = incomeEvents[0]?.date ?? null;
   const horizonEndDate = addMonths(ctx.today, ctx.forecastHorizonMonths);
+  const expectedExpenseEvents = buildGeneratedExpectedPaymentEvents(ctx, horizonEndDate);
+  const recurringIncomeEvents = buildRecurringForecastEvents(
+    ctx,
+    horizonEndDate,
+    expectedExpenseEvents,
+  ).filter((event) => event.amount > 0);
 
   const events = [
     ...incomeEvents,
     ...buildConfirmedFutureTransactionEvents(ctx),
-    ...buildPendingTransactionEvents(ctx),
-    ...buildRecurringForecastEvents(ctx, horizonEndDate),
-    ...buildDebtEvents(ctx, horizonEndDate),
+    ...expectedExpenseEvents,
+    ...recurringIncomeEvents,
     ...buildFutureEssentialBudgetEvents(ctx, horizonEndDate),
   ]
     .filter((event) => event.date >= ctx.today && event.date <= horizonEndDate)

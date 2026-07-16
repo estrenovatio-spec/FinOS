@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   formatHumanDateLong,
   formatIsoDate,
+  formatMonthYearLong,
   formatWeekdayShort,
   getLocalTodayIsoDate,
   normalizeIsoDate,
@@ -14,12 +15,7 @@ import {
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
 import { calculateBalanceAtDate, getForecastDays } from "@/lib/decision-core/forecast-days";
-import type {
-  BalanceForecast,
-  DecisionConstraintExplanation,
-  ForecastDay,
-  ForecastEvent,
-} from "@/lib/decision-core/types";
+import type { BalanceForecast, ForecastDay, ForecastEvent } from "@/lib/decision-core/types";
 import type { Locale } from "@/types";
 import type { SavingsGoal } from "@/types/planning";
 
@@ -30,7 +26,7 @@ function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
     case "recurring":
       return locale === "ru" ? "Регулярный платёж" : "Recurring payment";
     case "debt_payment":
-      return locale === "ru" ? "Платёж по долгу" : "Debt payment";
+      return locale === "ru" ? "Ожидается" : "Expected";
     case "income_source":
       return locale === "ru" ? "Ожидается" : "Expected";
     case "confirmed_transaction":
@@ -171,12 +167,40 @@ export function resolveDisplayedEndBalance(args: {
   return args.forecastDay?.endBalance ?? calculateBalanceAtDate(args.forecast, args.date);
 }
 
+export function buildForecastMonthSummary(args: {
+  monthKey: string;
+  forecast: BalanceForecast;
+  locale: Locale;
+  currentMonthKey: string;
+}): { title: string; label: string; value: string } {
+  const year = Number(args.monthKey.slice(0, 4));
+  const month = Number(args.monthKey.slice(5, 7));
+  const lastDay = new Date(year, month, 0, 12, 0, 0, 0).getDate();
+  const monthEndDate = `${args.monthKey}-${String(lastDay).padStart(2, "0")}`;
+  const amount = Math.max(calculateBalanceAtDate(args.forecast, monthEndDate) ?? 0, 0);
+
+  return {
+    title:
+      args.locale === "ru"
+        ? `Итог ${formatMonthYearLong(`${args.monthKey}-15`, args.locale)}`
+        : `${formatMonthYearLong(`${args.monthKey}-15`, args.locale)} summary`,
+    label:
+      args.locale === "ru"
+        ? args.monthKey === args.currentMonthKey
+          ? "Свободные деньги после всех планов"
+          : "Планируется свободных денег"
+        : args.monthKey === args.currentMonthKey
+          ? "Free money after all plans"
+          : "Planned free money",
+    value: `${formatMoney(amount, args.locale)} ₽`,
+  };
+}
+
 export function ForecastCalendarView({
   locale,
   forecast,
   startDate,
   goals,
-  explanation,
   selectedDate,
   onSelectedDateChange,
   onOpenPlan,
@@ -185,7 +209,6 @@ export function ForecastCalendarView({
   forecast: BalanceForecast;
   startDate: string;
   goals: SavingsGoal[];
-  explanation?: DecisionConstraintExplanation | null;
   selectedDate: string | null;
   onSelectedDateChange: (date: string | null) => void;
   onOpenPlan?: (params: { section: "recurring" | "limits" | "debts" | "goals"; entityId?: string | null }) => void;
@@ -222,6 +245,7 @@ export function ForecastCalendarView({
   }, [goals]);
 
   const [monthIndex, setMonthIndex] = useState(0);
+  const currentMonthKey = startDate.slice(0, 7);
 
   useEffect(() => {
     setMonthIndex(0);
@@ -255,6 +279,13 @@ export function ForecastCalendarView({
       </Card>
     );
   }
+
+  const monthSummary = buildForecastMonthSummary({
+    monthKey: month.key,
+    forecast,
+    locale,
+    currentMonthKey,
+  });
 
   return (
     <Card className="border-primary/20 bg-primary/5 shadow-none">
@@ -482,17 +513,6 @@ export function ForecastCalendarView({
                               ))}
                             </div>
 
-                            {explanation?.date === day.date ? (
-                              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-                                <p className="text-sm font-semibold text-foreground">{explanation.title}</p>
-                                <p className="mt-1 text-sm text-foreground">{explanation.summary}</p>
-                                {explanation.detail ? (
-                                  <p className="mt-1 text-xs leading-snug text-muted-foreground">
-                                    {explanation.detail}
-                                  </p>
-                                ) : null}
-                              </div>
-                            ) : null}
                           </>
                         ) : (
                           <div className="rounded-xl border border-dashed border-border/70 bg-background/70 p-3 text-sm text-muted-foreground">
@@ -506,14 +526,12 @@ export function ForecastCalendarView({
                   </div>
                 );
               })}
-            {selectedDate == null ? (
-              <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-5 text-sm text-muted-foreground">
-                {locale === "ru"
-                  ? "Выберите день, чтобы увидеть доходы и расходы"
-                  : "Choose a day to see income and expenses."}
-              </div>
-            ) : null}
           </div>
+        </div>
+        <div className="rounded-2xl border border-primary/20 bg-background/90 p-4">
+          <p className="text-sm font-semibold text-foreground">{monthSummary.title}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{monthSummary.label}</p>
+          <p className="mt-2 text-2xl font-semibold text-foreground">{monthSummary.value}</p>
         </div>
       </CardContent>
     </Card>

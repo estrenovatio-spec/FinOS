@@ -2,13 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { ForecastCalendarView } from "@/components/app/ForecastCalendarView";
-import { FocusedForecastCard } from "@/components/app/FocusedForecastCard";
-import { Button } from "@/components/ui/button";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
 import type { ForecastFocus } from "@/lib/forecast-focus";
-import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
-import { buildPlannedFreeMoneySummary } from "@/lib/planned-free-money-presenter";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   useHouseholdBalances,
@@ -77,47 +73,7 @@ export function ForecastTab({
       transactions,
     ],
   );
-  const periodFreeMoney = useMemo(
-    () =>
-      calculatePlannedFreeMoneyUntilPeriodEnd(
-        {
-          locale,
-          today,
-          forecastHorizonMonths,
-          categories,
-          transactions,
-          householdFilter,
-          recurringTransactions,
-          debts,
-          moneySetup,
-          categoryBudgets,
-          budgetMonthStartDay,
-          balances,
-        },
-        snapshot,
-      ),
-    [
-      balances,
-      budgetMonthStartDay,
-      categories,
-      categoryBudgets,
-      debts,
-      forecastHorizonMonths,
-      householdFilter,
-      locale,
-      moneySetup,
-      recurringTransactions,
-      snapshot,
-      today,
-      transactions,
-    ],
-  );
   const horizonMonths = snapshot.forecast.horizonMonths ?? forecastHorizonMonths;
-  const periodFreeMoneySummary = useMemo(
-    () => buildPlannedFreeMoneySummary(locale, periodFreeMoney),
-    [locale, periodFreeMoney],
-  );
-  const [viewMode, setViewMode] = useState<"line" | "calendar">("line");
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
   const planLink = useMemo(() => {
     const focusedEvent =
@@ -163,61 +119,15 @@ export function ForecastTab({
             : `Horizon: ${formatHorizonMonths(horizonMonths, locale)} · forecast until ${snapshot.forecast.horizonEndDate}.`}
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:inline-flex sm:w-auto">
-        <Button
-          type="button"
-          variant={viewMode === "line" ? "default" : "outline"}
-          className="h-auto min-h-9 px-3 py-2 text-xs"
-          onClick={() => setViewMode("line")}
-        >
-          {locale === "ru" ? "Линия" : "Line"}
-        </Button>
-        <Button
-          type="button"
-          variant={viewMode === "calendar" ? "default" : "outline"}
-          className="h-auto min-h-9 px-3 py-2 text-xs"
-          onClick={() => setViewMode("calendar")}
-        >
-          {locale === "ru" ? "Календарь" : "Calendar"}
-        </Button>
-      </div>
-      {periodFreeMoneySummary ? (
-        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/80">
-            {periodFreeMoneySummary.label}
-          </p>
-          {periodFreeMoneySummary.subtitle ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {periodFreeMoneySummary.subtitle}
-            </p>
-          ) : null}
-          <p className="mt-2 text-2xl font-semibold text-foreground">
-            {periodFreeMoneySummary.value}
-          </p>
-          <p className="mt-1 text-xs leading-snug text-muted-foreground">
-            {periodFreeMoneySummary.caption}
-          </p>
-        </div>
-      ) : null}
-      {viewMode === "line" ? (
-        <FocusedForecastCard
-          locale={locale}
-          forecast={snapshot.forecast}
-          focus={focus}
-          explanation={snapshot.constraintExplanation}
-        />
-      ) : (
-        <ForecastCalendarView
-          locale={locale}
-          forecast={snapshot.forecast}
-          startDate={today}
-          goals={savingsGoals}
-          explanation={snapshot.constraintExplanation}
-          selectedDate={calendarSelectedDate}
-          onSelectedDateChange={setCalendarSelectedDate}
-          onOpenPlan={onOpenPlan}
-        />
-      )}
+      <ForecastCalendarView
+        locale={locale}
+        forecast={snapshot.forecast}
+        startDate={today}
+        goals={savingsGoals}
+        selectedDate={calendarSelectedDate}
+        onSelectedDateChange={setCalendarSelectedDate}
+        onOpenPlan={onOpenPlan}
+      />
       <button
         type="button"
         className="text-sm font-medium text-primary underline-offset-4 hover:underline"

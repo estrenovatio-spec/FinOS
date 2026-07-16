@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
 import {
+  buildForecastMonthSummary,
   formatMoneyEventsCountLabel,
   resolveDisplayedEndBalance,
   resolveCalendarSelectionState,
@@ -227,30 +228,34 @@ test("calendar keeps end-of-day balance continuous from the previous day", () =>
   );
 });
 
-test("forecast tab exposes a line and calendar switch without adding a new bottom tab", () => {
+test("forecast tab keeps only the calendar flow and one bottom edit action", () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), "src/components/app/ForecastTab.tsx"),
     "utf8",
   );
 
-  assert.match(source, /viewMode === "line"/);
-  assert.match(source, /viewMode === "calendar"/);
-  assert.match(source, /Линия/);
-  assert.match(source, /Календарь/);
+  assert.match(source, /ForecastCalendarView/);
   assert.match(source, /Изменить план/);
+  assert.doesNotMatch(source, /FocusedForecastCard/);
+  assert.doesNotMatch(source, /buildPlannedFreeMoneySummary/);
+  assert.doesNotMatch(source, /viewMode === "line"/);
+  assert.doesNotMatch(source, /viewMode === "calendar"/);
+  assert.doesNotMatch(source, /Линия/);
   assert.doesNotMatch(source, /id: "calendar"/);
 });
 
-test("calendar view uses inline accordion details instead of a detached details block", () => {
+test("calendar view uses inline accordion details and a monthly summary card", () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), "src/components/app/ForecastCalendarView.tsx"),
     "utf8",
   );
 
   assert.match(source, /Календарь денег/);
-  assert.match(source, /Выберите день, чтобы увидеть доходы и расходы/);
   assert.match(source, /selectedDate === day\.date/);
   assert.match(source, /onSelectedDateChange\(selectCalendarDay\(selectedDate, day\.date\)\)/);
+  assert.match(source, /buildForecastMonthSummary/);
+  assert.match(source, /Свободные деньги после всех планов/);
+  assert.match(source, /Планируется свободных денег/);
   assert.match(source, /calculateBalanceAtDate/);
   assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
@@ -259,6 +264,7 @@ test("calendar view uses inline accordion details instead of a detached details 
   assert.match(source, /В конце дня/);
   assert.match(source, /🟡/);
   assert.doesNotMatch(source, /Изменить план/);
+  assert.doesNotMatch(source, /Выберите день, чтобы увидеть доходы и расходы/);
   assert.doesNotMatch(source, /Что произойдёт с деньгами в этот день/);
   assert.doesNotMatch(source, /periodFreeMoney\.amount/);
 });
@@ -299,4 +305,77 @@ test("calendar keeps the user-selected date after data rerender", () => {
     }),
     "2026-07-16",
   );
+});
+
+test("month summary uses the same forecast line for the current month", () => {
+  const summary = buildForecastMonthSummary({
+    monthKey: "2026-07",
+    forecast: {
+      startBalance: 10000,
+      minBalance: 6939,
+      minBalanceDate: "2026-07-31",
+      firstDeficitDate: null,
+      nextIncomeDate: null,
+      horizonEndDate: "2026-07-31",
+      horizonMonths: 1,
+      events: [
+        {
+          id: "expense-1",
+          title: "План на день",
+          amount: -3061,
+          date: "2026-07-31",
+          balanceAfter: 6939,
+          source: "essential_budget",
+        },
+      ],
+    },
+    locale: "ru",
+    currentMonthKey: "2026-07",
+  });
+
+  assert.match(summary.title, /Итог/);
+  assert.equal(summary.label, "Свободные деньги после всех планов");
+  assert.equal(summary.value, "6 939 ₽");
+});
+
+test("future month summary uses planned wording", () => {
+  const summary = buildForecastMonthSummary({
+    monthKey: "2026-08",
+    forecast: {
+      startBalance: 20000,
+      minBalance: 15000,
+      minBalanceDate: "2026-08-31",
+      firstDeficitDate: null,
+      nextIncomeDate: null,
+      horizonEndDate: "2026-08-31",
+      horizonMonths: 1,
+      events: [
+        {
+          id: "expense-aug",
+          title: "Аренда",
+          amount: -5000,
+          date: "2026-08-31",
+          balanceAfter: 15000,
+          source: "recurring",
+        },
+      ],
+    },
+    locale: "ru",
+    currentMonthKey: "2026-07",
+  });
+
+  assert.equal(summary.label, "Планируется свободных денег");
+  assert.equal(summary.value, "15 000 ₽");
+});
+
+test("debt payment stays inside the selected day and the calendar no longer renders a second explanation block", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/app/ForecastCalendarView.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /source === "debt_payment"/);
+  assert.doesNotMatch(source, /shouldRenderCalendarExplanation/);
+  assert.doesNotMatch(source, /explanation\.title/);
+  assert.doesNotMatch(source, /explanation\.summary/);
 });

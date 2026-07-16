@@ -51,6 +51,8 @@ export type DecisionTodayPayment = {
   source?: "pending_transaction" | "recurring" | "debt_payment";
   debtId?: string | null;
   paymentKey?: string | null;
+  paymentSource?: "debt" | "recurring" | "manual";
+  linkedEntityId?: string | null;
 };
 
 export type DecisionNextRisk = {
@@ -302,6 +304,8 @@ export type ForecastEvent = {
   debtId?: string | null;
   paymentKey?: string | null;
   isOverdue?: boolean | null;
+  paymentSource?: "debt" | "recurring" | "manual";
+  linkedEntityId?: string | null;
   budgetPeriodFrom?: string | null;
   budgetPeriodTo?: string | null;
   budgetReserveItems?: Array<{

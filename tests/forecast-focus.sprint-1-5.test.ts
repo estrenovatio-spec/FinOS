@@ -455,6 +455,49 @@ test("overdue debt payments stay in forecast as debt events on today with the or
   assert.equal(debtEvent?.isOverdue, true);
 });
 
+test("recurring expense and debt payment with the same date and amount appear only once in forecast", () => {
+  const forecast = forecastFromState(
+    buildState({
+      today: "2026-07-16",
+      balances: { all: 68115, me: 68115, partner: 0 },
+      recurringTransactions: [
+        recurring({
+          id: "housing-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "other",
+          note: "",
+          nextRunDate: "2026-07-16",
+          frequency: "monthly",
+          dayOfMonth: 16,
+        }),
+      ],
+      debts: [
+        debt({
+          id: "housing-debt",
+          name: "Дом и ЖКХ",
+          balance: 95000,
+          minPayment: 19000,
+          nextPaymentDate: "2026-07-16",
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const sameDayPayments = forecast.events.filter(
+    (event) => event.date === "2026-07-16" && event.amount === -19000,
+  );
+
+  assert.equal(sameDayPayments.length, 1);
+  assert.equal(sameDayPayments[0]?.source, "debt_payment");
+  assert.equal(sameDayPayments[0]?.linkedEntityId, "housing-debt");
+  assert.equal(sameDayPayments[0]?.paymentSource, "debt");
+});
+
 test("focus stays tied to date even when earlier events are inserted into the forecast", () => {
   const original = forecastFromState(
     buildState({
