@@ -172,27 +172,38 @@ export function buildForecastMonthSummary(args: {
   forecast: BalanceForecast;
   locale: Locale;
   currentMonthKey: string;
-}): { title: string; label: string; value: string } {
+}): {
+  title: string;
+  monthlyLabel: string;
+  monthlyValue: string;
+  cumulativeLabel: string;
+  cumulativeValue: string;
+} {
   const year = Number(args.monthKey.slice(0, 4));
   const month = Number(args.monthKey.slice(5, 7));
+  const monthStartDate = `${args.monthKey}-01`;
   const lastDay = new Date(year, month, 0, 12, 0, 0, 0).getDate();
   const monthEndDate = `${args.monthKey}-${String(lastDay).padStart(2, "0")}`;
-  const amount = Math.max(calculateBalanceAtDate(args.forecast, monthEndDate) ?? 0, 0);
+  const monthlyFreeMoney = args.forecast.events
+    .filter((event) => event.date >= monthStartDate && event.date <= monthEndDate)
+    .reduce((sum, event) => sum + event.amount, 0);
+  const endingBalance = calculateBalanceAtDate(args.forecast, monthEndDate) ?? 0;
 
   return {
     title:
       args.locale === "ru"
         ? `Итог ${formatMonthYearLong(`${args.monthKey}-15`, args.locale)}`
         : `${formatMonthYearLong(`${args.monthKey}-15`, args.locale)} summary`,
-    label:
+    monthlyLabel:
       args.locale === "ru"
-        ? args.monthKey === args.currentMonthKey
-          ? "Свободные деньги после всех планов"
-          : "Планируется свободных денег"
-        : args.monthKey === args.currentMonthKey
-          ? "Free money after all plans"
-          : "Planned free money",
-    value: `${formatMoney(amount, args.locale)} ₽`,
+        ? "Свободно за месяц"
+        : "Free for the month",
+    monthlyValue: `${monthlyFreeMoney > 0 ? "+" : ""}${formatMoney(monthlyFreeMoney, args.locale)} ₽`,
+    cumulativeLabel:
+      args.locale === "ru"
+        ? "С учётом остатка"
+        : "Including the carry-over",
+    cumulativeValue: `${formatMoney(endingBalance, args.locale)} ₽`,
   };
 }
 
@@ -530,8 +541,16 @@ export function ForecastCalendarView({
         </div>
         <div className="rounded-2xl border border-primary/20 bg-background/90 p-4">
           <p className="text-sm font-semibold text-foreground">{monthSummary.title}</p>
-          <p className="mt-2 text-sm text-muted-foreground">{monthSummary.label}</p>
-          <p className="mt-2 text-2xl font-semibold text-foreground">{monthSummary.value}</p>
+          <div className="mt-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-muted-foreground">{monthSummary.monthlyLabel}</p>
+              <p className="text-lg font-semibold text-foreground">{monthSummary.monthlyValue}</p>
+            </div>
+            <div className="flex items-start justify-between gap-3 border-t border-border/60 pt-3">
+              <p className="text-sm text-muted-foreground">{monthSummary.cumulativeLabel}</p>
+              <p className="text-lg font-semibold text-foreground">{monthSummary.cumulativeValue}</p>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

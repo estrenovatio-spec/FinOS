@@ -254,8 +254,8 @@ test("calendar view uses inline accordion details and a monthly summary card", (
   assert.match(source, /selectedDate === day\.date/);
   assert.match(source, /onSelectedDateChange\(selectCalendarDay\(selectedDate, day\.date\)\)/);
   assert.match(source, /buildForecastMonthSummary/);
-  assert.match(source, /Свободные деньги после всех планов/);
-  assert.match(source, /Планируется свободных денег/);
+  assert.match(source, /Свободно за месяц/);
+  assert.match(source, /С учётом остатка/);
   assert.match(source, /calculateBalanceAtDate/);
   assert.match(source, /formatHumanDateLong\(day\.date, locale\)/);
   assert.match(source, /formatWeekdayShort\(day.date, locale\)/);
@@ -307,7 +307,7 @@ test("calendar keeps the user-selected date after data rerender", () => {
   );
 });
 
-test("month summary uses the same forecast line for the current month", () => {
+test("month summary separates monthly free money from cumulative balance", () => {
   const summary = buildForecastMonthSummary({
     monthKey: "2026-07",
     forecast: {
@@ -334,38 +334,155 @@ test("month summary uses the same forecast line for the current month", () => {
   });
 
   assert.match(summary.title, /Итог/);
-  assert.equal(summary.label, "Свободные деньги после всех планов");
-  assert.equal(summary.value, "6 939 ₽");
+  assert.equal(summary.monthlyLabel, "Свободно за месяц");
+  assert.equal(summary.monthlyValue, "−3 061 ₽");
+  assert.equal(summary.cumulativeLabel, "С учётом остатка");
+  assert.equal(summary.cumulativeValue, "6 939 ₽");
 });
 
-test("future month summary uses planned wording", () => {
+test("month summary keeps monthly flow and cumulative balance separate for later months", () => {
   const summary = buildForecastMonthSummary({
-    monthKey: "2026-08",
+    monthKey: "2026-02",
     forecast: {
-      startBalance: 20000,
-      minBalance: 15000,
-      minBalanceDate: "2026-08-31",
+      startBalance: 30000,
+      minBalance: 40000,
+      minBalanceDate: "2026-02-28",
       firstDeficitDate: null,
       nextIncomeDate: null,
-      horizonEndDate: "2026-08-31",
+      horizonEndDate: "2026-02-28",
       horizonMonths: 1,
       events: [
         {
-          id: "expense-aug",
-          title: "Аренда",
-          amount: -5000,
-          date: "2026-08-31",
-          balanceAfter: 15000,
-          source: "recurring",
+          id: "income-feb",
+          title: "Доход",
+          amount: 50000,
+          date: "2026-02-10",
+          balanceAfter: 80000,
+          source: "income_source",
+        },
+        {
+          id: "expense-feb",
+          title: "Расход",
+          amount: -40000,
+          date: "2026-02-28",
+          balanceAfter: 40000,
+          source: "confirmed_transaction",
         },
       ],
     },
     locale: "ru",
-    currentMonthKey: "2026-07",
+    currentMonthKey: "2026-01",
   });
 
-  assert.equal(summary.label, "Планируется свободных денег");
-  assert.equal(summary.value, "15 000 ₽");
+  assert.equal(summary.monthlyLabel, "Свободно за месяц");
+  assert.equal(summary.monthlyValue, "+10 000 ₽");
+  assert.equal(summary.cumulativeLabel, "С учётом остатка");
+  assert.equal(summary.cumulativeValue, "40 000 ₽");
+});
+
+test("month summary matches january and february carry-over example", () => {
+  const january = buildForecastMonthSummary({
+    monthKey: "2026-01",
+    forecast: {
+      startBalance: 0,
+      minBalance: 30000,
+      minBalanceDate: "2026-01-31",
+      firstDeficitDate: null,
+      nextIncomeDate: null,
+      horizonEndDate: "2026-02-28",
+      horizonMonths: 3,
+      events: [
+        {
+          id: "income-jan",
+          title: "Доход января",
+          amount: 100000,
+          date: "2026-01-10",
+          balanceAfter: 100000,
+          source: "income_source",
+        },
+        {
+          id: "expense-jan",
+          title: "Расход января",
+          amount: -70000,
+          date: "2026-01-31",
+          balanceAfter: 30000,
+          source: "confirmed_transaction",
+        },
+        {
+          id: "income-feb",
+          title: "Доход февраля",
+          amount: 50000,
+          date: "2026-02-10",
+          balanceAfter: 80000,
+          source: "income_source",
+        },
+        {
+          id: "expense-feb",
+          title: "Расход февраля",
+          amount: -40000,
+          date: "2026-02-28",
+          balanceAfter: 40000,
+          source: "confirmed_transaction",
+        },
+      ],
+    },
+    locale: "ru",
+    currentMonthKey: "2026-01",
+  });
+
+  const february = buildForecastMonthSummary({
+    monthKey: "2026-02",
+    forecast: {
+      startBalance: 0,
+      minBalance: 30000,
+      minBalanceDate: "2026-01-31",
+      firstDeficitDate: null,
+      nextIncomeDate: null,
+      horizonEndDate: "2026-02-28",
+      horizonMonths: 3,
+      events: [
+        {
+          id: "income-jan",
+          title: "Доход января",
+          amount: 100000,
+          date: "2026-01-10",
+          balanceAfter: 100000,
+          source: "income_source",
+        },
+        {
+          id: "expense-jan",
+          title: "Расход января",
+          amount: -70000,
+          date: "2026-01-31",
+          balanceAfter: 30000,
+          source: "confirmed_transaction",
+        },
+        {
+          id: "income-feb",
+          title: "Доход февраля",
+          amount: 50000,
+          date: "2026-02-10",
+          balanceAfter: 80000,
+          source: "income_source",
+        },
+        {
+          id: "expense-feb",
+          title: "Расход февраля",
+          amount: -40000,
+          date: "2026-02-28",
+          balanceAfter: 40000,
+          source: "confirmed_transaction",
+        },
+      ],
+    },
+    locale: "ru",
+    currentMonthKey: "2026-01",
+  });
+
+  assert.equal(january.monthlyValue, "+30 000 ₽");
+  assert.equal(january.cumulativeValue, "30 000 ₽");
+  assert.equal(february.monthlyValue, "+10 000 ₽");
+  assert.equal(february.cumulativeValue, "40 000 ₽");
 });
 
 test("debt payment stays inside the selected day and the calendar no longer renders a second explanation block", () => {
