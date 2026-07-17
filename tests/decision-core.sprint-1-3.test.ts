@@ -2638,7 +2638,7 @@ test("rescheduling an overdue payment removes the old overdue hero state and mov
   );
 });
 
-test("rescheduling a recurring mortgage keeps one payment on the new date without duplicating the obligation", () => {
+test("reschedule keeps recurring payment metadata on the new date without duplicating the obligation", () => {
   const scenario = evaluate(
     buildState({
       today: "2026-07-16",
@@ -2689,6 +2689,9 @@ test("rescheduling a recurring mortgage keeps one payment on the new date withou
     1,
   );
   assert.equal(mortgageEvents[0]?.source, "pending_transaction");
+  assert.equal(mortgageEvents[0]?.title, "Ипотека");
+  assert.equal(mortgageEvents[0]?.paymentSource, "recurring");
+  assert.equal(mortgageEvents[0]?.linkedEntityId, "mortgage-recurring");
 });
 
 test("rescheduled recurring mortgage appears in Today on the new due date", () => {
@@ -2731,6 +2734,8 @@ test("rescheduled recurring mortgage appears in Today on the new due date", () =
   assert.equal(scenario.result.todayPayments[0]?.title, "Ипотека");
   assert.equal(scenario.result.todayPayments[0]?.date, "2026-07-18");
   assert.equal(scenario.result.todayPayments[0]?.amount, 19000);
+  assert.equal(scenario.result.todayPayments[0]?.paymentSource, "recurring");
+  assert.equal(scenario.result.todayPayments[0]?.linkedEntityId, "mortgage-recurring");
   assert.equal(scenario.result.mainAction.type, "pay_today");
 });
 

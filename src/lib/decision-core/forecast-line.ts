@@ -171,9 +171,18 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
     .filter(isPendingTransaction)
     .filter((transaction) => transaction.date.slice(0, 10) >= ctx.today)
     .map((transaction) => {
+      const title =
+        transaction.note.trim() ||
+        getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale);
+      const paymentSource =
+        transaction.type === "expense"
+          ? transaction.recurringId
+            ? ("recurring" as const)
+            : ("manual" as const)
+          : undefined;
       const event = {
         id: transaction.id,
-        title: getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale),
+        title,
         amount: transaction.type === "income" ? transaction.amount : -transaction.amount,
         date: transaction.date.slice(0, 10),
         balanceAfter: 0,
@@ -183,8 +192,11 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
         incomeOccurrenceDate: null,
         plannedIncomeStatus: null,
         plannedDate: null,
-        paymentSource: transaction.type === "expense" ? ("manual" as const) : undefined,
-        linkedEntityId: transaction.type === "expense" ? transaction.id : null,
+        paymentSource,
+        linkedEntityId:
+          transaction.type === "expense"
+            ? transaction.recurringId ?? transaction.id
+            : null,
       } satisfies ForecastEvent;
       if (transaction.type === "expense") {
         debugExpectedPaymentEvent(ctx, event, "pending_transaction_generator");
