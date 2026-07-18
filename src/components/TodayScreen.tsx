@@ -294,11 +294,16 @@ export function TodayScreen({
     setActionBusy(false);
   }
 
-  function handleOverviewAction(actionKey: "edit_current_balance") {
+  function handleOverviewAction(actionKey: "edit_current_balance" | "add_transaction") {
     if (actionKey === "edit_current_balance") {
       setActionError(null);
       setMoneySetupSection("current_balance");
       setMoneySetupOpen(true);
+      return;
+    }
+    if (actionKey === "add_transaction") {
+      setActionError(null);
+      setQuickAddOpen(true);
     }
   }
 
@@ -385,19 +390,6 @@ export function TodayScreen({
           }
         }}
       />
-
-      <div className="sticky bottom-20 z-20 pt-2">
-        <Button
-          type="button"
-          className="h-12 w-full rounded-xl bg-primary text-base font-semibold text-primary-foreground shadow-lg hover:bg-primary/90"
-          onClick={() => {
-            setActionError(null);
-            setQuickAddOpen(true);
-          }}
-        >
-          {locale === "ru" ? "Добавить операцию" : "Add entry"}
-        </Button>
-      </div>
 
       <MoneySetupDialog
         open={moneySetupOpen}

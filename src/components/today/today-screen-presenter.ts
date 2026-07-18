@@ -32,7 +32,8 @@ export type TodayOverviewItem = {
   subtitle?: string | null;
   caption?: string | null;
   actionLabel?: string | null;
-  actionKey?: "edit_current_balance" | null;
+  actionKey?: "edit_current_balance" | "add_transaction" | null;
+  actionVariant?: "ghost" | "primary" | null;
   layout?: "default" | "wide";
   details?: Array<{
     label: string;
@@ -467,6 +468,9 @@ function buildPlannedFreeMoneyItem(
     subtitle: summary.subtitle,
     value: summary.value,
     caption: summary.caption,
+    actionLabel: locale === "ru" ? "＋ Добавить операцию" : "+ Add entry",
+    actionKey: "add_transaction",
+    actionVariant: "primary",
     layout: "wide",
     details: detailItems,
   };

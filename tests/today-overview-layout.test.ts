@@ -23,3 +23,8 @@ test("planned breakdown uses a mobile-safe two-column grid without horizontal ov
   assert.match(todayOverviewSource, /break-words text-muted-foreground/);
   assert.match(todayOverviewSource, /whitespace-nowrap text-right/);
 });
+
+test("planned free money card keeps a prominent add-operation CTA inside the card", () => {
+  assert.match(todayOverviewSource, /item\.actionVariant === "primary"/);
+  assert.match(todayOverviewSource, /w-full rounded-xl bg-primary/);
+});

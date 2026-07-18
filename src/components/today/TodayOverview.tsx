@@ -142,9 +142,13 @@ export function TodayOverview({
                 {item.actionLabel && item.actionKey ? (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto justify-start self-start px-0 py-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    variant={item.actionVariant === "primary" ? "default" : "ghost"}
+                    size={item.actionVariant === "primary" ? "default" : "sm"}
+                    className={
+                      item.actionVariant === "primary"
+                        ? "mt-1 h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+                        : "h-auto justify-start self-start px-0 py-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    }
                     aria-label={`${item.actionLabel}: ${item.label}`}
                     onClick={() => onItemAction?.(item.actionKey!)}
                   >
