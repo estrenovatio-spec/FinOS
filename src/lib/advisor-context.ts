@@ -34,6 +34,17 @@ export type AdvisorFinancialContext = {
     plannedFreeMoney: number;
     periodEndDate: string;
   };
+  financialHealth: {
+    liquidityScore: number;
+    debtLoad: number;
+    incomeStability: "low" | "medium" | "high";
+    riskLevel: "low" | "medium" | "high";
+  };
+  monthly: {
+    income: number;
+    expenses: number;
+    savingsRate: number;
+  };
   incomes: {
     currentPeriodTotal: number;
     expectedTotal: number;
@@ -332,6 +343,57 @@ export function buildAdvisorContext(args: {
       plannedFreeMoney: roundAmount(args.plannedFreeMoney?.amount),
       periodEndDate,
     },
+    financialHealth: {
+      liquidityScore: Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            args.currentBalance <= 0
+              ? 0
+              : ((args.plannedFreeMoney?.amount ?? 0) / Math.max(args.currentBalance, 1)) * 100,
+          ),
+        ),
+      ),
+      debtLoad:
+        recurringIncomes.reduce((sum, income) => sum + income.amount, 0) > 0
+          ? Math.max(
+              0,
+              Math.min(
+                100,
+                Math.round(
+                  (args.debts.reduce((sum, debt) => sum + Math.max(debt.minPayment, 0), 0)
+                    / recurringIncomes.reduce((sum, income) => sum + income.amount, 0))
+                    * 100,
+                ),
+              ),
+            )
+          : 0,
+      incomeStability:
+        [...recurringIncomes, ...oneOffIncomes].some((income) => income.status === "overdue")
+          ? "high"
+          : oneOffIncomes.length > recurringIncomes.length
+            ? "medium"
+            : "low",
+      riskLevel:
+        args.decision.forecast.firstDeficitDate || (args.plannedFreeMoney?.amount ?? 0) <= 0
+          ? "high"
+          : (args.plannedFreeMoney?.amount ?? 0) < Math.max(args.currentBalance * 0.15, 10_000)
+            ? "medium"
+            : "low",
+    },
+    monthly: {
+      income:
+        recurringIncomes.reduce((sum, income) => sum + income.amount, 0)
+        + oneOffIncomes.reduce((sum, income) => sum + income.amount, 0),
+      expenses: roundAmount(
+        (plannedBreakdown?.recurringPayments ?? 0)
+          + (plannedBreakdown?.essentialPlannedSpending ?? 0)
+          + (plannedBreakdown?.otherMandatoryPayments ?? 0)
+          + args.debts.reduce((sum, debt) => sum + Math.max(debt.minPayment, 0), 0),
+      ),
+      savingsRate: 0,
+    },
     incomes: {
       currentPeriodTotal:
         recurringIncomes.reduce((sum, income) => sum + income.amount, 0)
@@ -378,6 +440,15 @@ export function buildAdvisorContext(args: {
         ?? null,
     },
   };
+
+  financialContext.monthly.savingsRate =
+    financialContext.monthly.income > 0
+      ? Math.round(
+          ((financialContext.monthly.income - financialContext.monthly.expenses)
+            / financialContext.monthly.income)
+            * 100,
+        )
+      : 0;
 
   const cards: AdvisorContextCard[] = [
     {

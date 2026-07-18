@@ -39,12 +39,12 @@ test("advisor prompt contains the fixed behavior rules and response format", () 
     ],
   });
 
-  assert.match(prompt, /Ты — личный финансовый консультант FIN OS/);
-  assert.match(prompt, /Используй только информацию из переданного финансового контекста/);
-  assert.match(prompt, /Не придумывай данные и не пересчитывай суммы самостоятельно/);
-  assert.match(prompt, /Каждый важный вывод опирай на конкретные суммы, даты или статьи/);
-  assert.match(prompt, /назови не больше 3 факторов по убыванию влияния/);
-  assert.match(prompt, /Ответ должен быть коротким для мобильного экрана/);
+  assert.match(prompt, /Ты — профессиональный финансовый консультант FIN OS/);
+  assert.match(prompt, /LLM не считает деньги самостоятельно/);
+  assert.match(prompt, /Начинай ответ с вывода/);
+  assert.match(prompt, /причинно-следственную связь/i);
+  assert.match(prompt, /Приоритет рекомендаций всегда идёт сверху вниз/);
+  assert.match(prompt, /Ответ должен быть компактным для мобильного экрана/);
 });
 
 test("advisor prompt avoids the banned technical English words in Russian copy", () => {

@@ -12,6 +12,7 @@ import {
   normalizeAdvisorQuestionRequestBody,
 } from "@/lib/ai/advisor-contract";
 import { getAdvisorSystemPrompt } from "@/lib/ai/advisor-system-prompt";
+import type { FinancialAdviserBrief } from "@/lib/adviser/financial-analysis-engine";
 import { resolveAdvisorModel } from "@/lib/ai/model-router";
 
 export const maxDuration = 60;
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
               periodNote: context.periodNote,
               questionGuide: context.questionGuide,
               financialContext: context.financialContext,
+              financialBrief: (context.financialBrief as FinancialAdviserBrief | undefined) ?? undefined,
             }),
           },
           ...messages.map((message) => ({

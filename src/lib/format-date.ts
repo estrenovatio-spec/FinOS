@@ -188,6 +188,16 @@ export function daysInclusiveUntilDate(
   return Math.max(1, Math.ceil((targetMs - todayMs) / DAY_MS) + 1);
 }
 
+export function addDaysToIsoDate(dateStr: string, days: number): string {
+  const normalized = normalizeIsoDate(dateStr);
+  if (!normalized) return dateStr;
+  const ms = localIsoDateToMiddayMs(normalized);
+  if (ms == null) return normalized;
+  const next = new Date(ms);
+  next.setDate(next.getDate() + days);
+  return toLocalIsoDate(next);
+}
+
 export function yesterdayIsoDate(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);

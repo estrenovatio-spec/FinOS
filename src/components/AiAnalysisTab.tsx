@@ -196,6 +196,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
           periodEndDate: decision.forecast.horizonEndDate,
           questionGuide: questionBrief.promptGuide ?? undefined,
           financialContext: advisorContext.financialContext,
+          financialBrief: questionBrief.financialBrief ?? undefined,
         },
       };
 

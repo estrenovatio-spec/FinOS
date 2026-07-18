@@ -24,7 +24,12 @@ export type AdvisorEvaluationResult = {
 
 const FORBIDDEN_PHRASES = [/у вас нет доходов/i, /вам точно хватит/i, /гарантированно/i];
 
-const GENERIC_CREDIT_PHRASES = [/возьмите кредит/i, /рассмотрите ипотеку/i, /найдите дополнительный доход/i];
+const GENERIC_CREDIT_PHRASES = [
+  /возьмите кредит/i,
+  /рассмотрите ипотеку/i,
+  /одолжите/i,
+  /займ/i,
+];
 
 function normalizeText(value: string): string {
   return value.toLowerCase().replace(/ё/g, "е");
@@ -66,7 +71,7 @@ function evaluatePurchaseQuestion(input: AdvisorEvaluationInput, issues: string[
   if (includesAny(normalizedAnswer, GENERIC_CREDIT_PHRASES)) {
     issues.push("purchase_answer_uses_generic_credit_advice");
   }
-  if (!/не хватает|разрыв|свободн|платеж|цель/.test(normalizedAnswer)) {
+  if (!/не хватает|разрыв|свободн|платеж|цель|стоимост/.test(normalizedAnswer)) {
     issues.push("purchase_answer_lacks_plan_impact");
   }
 }
@@ -86,7 +91,7 @@ function evaluateCashGapQuestion(input: AdvisorEvaluationInput, issues: string[]
   ) {
     issues.push("cash_gap_answer_skips_risk_date");
   }
-  if (!/платеж|риск|прогноз|дефицит/.test(normalizedAnswer)) {
+  if (!/платеж|риск|прогноз|дефицит|задерж/.test(normalizedAnswer)) {
     issues.push("cash_gap_answer_skips_forecast_reasoning");
   }
 }
@@ -110,23 +115,28 @@ export function evaluateAdvisorAnswer(input: AdvisorEvaluationInput): AdvisorEva
   }
 
   switch (input.questionType) {
-    case "income":
-    case "expenses":
+    case "income_review":
+    case "expense_control":
       evaluateIncomeQuestion(input, issues);
       break;
-    case "purchase":
+    case "purchase_decision":
       evaluatePurchaseQuestion(input, issues);
       break;
-    case "goals":
-    case "saving":
+    case "goal_planning":
+    case "saving_plan":
       evaluateGoalQuestion(input, issues);
       break;
-    case "forecast":
-    case "scenarios":
+    case "forecast_check":
+    case "cashflow_delay":
       evaluateCashGapQuestion(input, issues);
       break;
-    case "investing":
+    case "investment":
       evaluateInvestingQuestion(input, issues);
+      break;
+    case "debt_strategy":
+      if (!/долг|платеж|приоритет|закрыва/.test(normalizedAnswer)) {
+        issues.push("debt_answer_skips_priority_logic");
+      }
       break;
     default:
       break;

@@ -89,7 +89,7 @@ test("income evaluation rejects answers that deny income when expected income ex
   const { financialContext } = makeFinancialContext();
   const result = evaluateAdvisorAnswer({
     question: "Почему у меня нет денег?",
-    questionType: "expenses",
+    questionType: "expense_control",
     answer: "У вас нет доходов, поэтому нужно просто сократить расходы.",
     financialContext,
   });
@@ -103,7 +103,7 @@ test("purchase evaluation requires factual sums and rejects generic credit advic
   const { financialContext } = makeFinancialContext();
   const result = evaluateAdvisorAnswer({
     question: "Можно ли мне купить машину за 1 500 000 ₽?",
-    questionType: "purchase",
+    questionType: "purchase_decision",
     purchaseAmountRub: 1_500_000,
     answer:
       "Стоимость машины 1 500 000 ₽. Свободных денег до конца периода 6 639 ₽, поэтому сейчас не хватает 1 493 361 ₽. Сначала лучше проверить, как покупка повлияет на регулярные платежи и цели.",
@@ -124,11 +124,11 @@ test("goal evaluation expects clarification instead of invented certainty", () =
     financialContext,
   });
 
-  assert.match(brief.promptGuide ?? "", /сначала задай 2–3 уточняющих вопроса|сначала попроси эти данные/i);
+  assert.match(brief.promptGuide ?? "", /Сначала уточни недостающие данные:/i);
 
   const result = evaluateAdvisorAnswer({
     question: "Как мне накопить на дом за 20 млн?",
-    questionType: "goals",
+    questionType: "goal_planning",
     answer:
       "Сейчас у вас 80 925 ₽ в кошельке и 15 925 ₽ можно направить по плану. Чтобы посчитать путь к 20 000 000 ₽, нужно понять срок цели и сколько уже отложено именно на дом. За какой срок хотите купить дом?",
     financialContext,
@@ -191,7 +191,7 @@ test("investing evaluation requires horizon, goal and risk questions", () => {
   const { financialContext } = makeFinancialContext();
   const result = evaluateAdvisorAnswer({
     question: "Куда вложить деньги?",
-    questionType: "investing",
+    questionType: "investment",
     answer:
       "Сначала нужно понять срок, цель и допустимый риск. Без этого нельзя выбирать инструмент даже при текущем остатке 80 925 ₽.",
     financialContext,

@@ -61,7 +61,7 @@ function makeState(overrides: Partial<DecisionCoreState> = {}): DecisionCoreStat
 test("classifier marks car purchase questions and extracts the amount", () => {
   const result = classifyAdvisorQuestion("Можно ли купить машину за 1 500 000 ₽?");
 
-  assert.equal(result.type, "purchase");
+  assert.equal(result.type, "purchase_decision");
   assert.equal(result.purchaseKind, "car");
   assert.equal(result.amountRub, 1_500_000);
   assert.equal(result.needsClarification, true);
@@ -70,7 +70,7 @@ test("classifier marks car purchase questions and extracts the amount", () => {
 test("classifier marks house purchase questions and extracts the amount", () => {
   const result = classifyAdvisorQuestion("Хочу купить дом за 26 000 000 ₽.");
 
-  assert.equal(result.type, "purchase");
+  assert.equal(result.type, "purchase_decision");
   assert.equal(result.purchaseKind, "home");
   assert.equal(result.amountRub, 26_000_000);
 });
@@ -103,14 +103,12 @@ test("purchase brief includes financial gap, avoids generic loan advice, and pro
     financialContext,
   });
 
-  assert.match(brief.promptGuide ?? "", /Стоимость цели: 1[\s\u00a0]500[\s\u00a0]000 ₽/);
-  assert.match(
-    brief.promptGuide ?? "",
-    /Сейчас можно направить без поломки плана: 6[\s\u00a0]639 ₽/,
-  );
-  assert.match(brief.promptGuide ?? "", /Финансовый разрыв: 1[\s\u00a0]493[\s\u00a0]361 ₽/);
-  assert.match(brief.promptGuide ?? "", /смоделировать.*сценарии FIN OS/i);
+  assert.match(brief.promptGuide ?? "", /Стоимость покупки: 1500000 ₽/);
+  assert.match(brief.promptGuide ?? "", /Итог анализа:/);
+  assert.match(brief.promptGuide ?? "", /Финансовый разрыв: 1402439 ₽/);
   assert.doesNotMatch(brief.promptGuide ?? "", /возьмите кредит/i);
+  assert.equal(brief.financialBrief?.questionType, "purchase_decision");
+  assert.equal(brief.financialBrief?.purchaseAnalysis?.gap, 1_402_439);
 });
 
 test("house purchase brief asks clarifying questions when the plan inputs are missing", () => {
@@ -141,10 +139,10 @@ test("house purchase brief asks clarifying questions when the plan inputs are mi
     financialContext,
   });
 
+  assert.match(brief.promptGuide ?? "", /Сначала уточни недостающие данные:/);
   assert.match(brief.promptGuide ?? "", /За сколько лет хотите купить\?/);
   assert.match(brief.promptGuide ?? "", /Будете использовать ипотеку или только свои деньги\?/);
   assert.match(brief.promptGuide ?? "", /Есть ли уже первоначальный взнос\?/);
-  assert.match(brief.promptGuide ?? "", /построить план покупки/i);
 });
 
 test("income brief keeps expected income visible and never says that income is missing", () => {
@@ -175,9 +173,8 @@ test("income brief keeps expected income visible and never says that income is m
     financialContext,
   });
 
-  assert.match(brief.promptGuide ?? "", /Ожидаемые доходы:/);
-  assert.match(brief.promptGuide ?? "", /Зарплата/);
-  assert.match(brief.promptGuide ?? "", /ожидается/);
+  assert.equal(brief.financialBrief?.questionType, "income_review");
+  assert.equal(brief.financialBrief?.expectedIncome[0]?.name, "Зарплата");
   assert.doesNotMatch(brief.promptGuide ?? "", /у вас нет доходов/i);
 });
 
@@ -209,9 +206,8 @@ test("expenses brief cites concrete pressure points instead of generic advice", 
     financialContext,
   });
 
-  assert.match(brief.promptGuide ?? "", /Регулярные платежи:/);
-  assert.match(brief.promptGuide ?? "", /Расходы по лимитам:/);
-  assert.match(brief.promptGuide ?? "", /максимум 3 самых сильных фактора/i);
+  assert.equal(brief.financialBrief?.questionType, "expense_control");
+  assert.match(brief.promptGuide ?? "", /Факты:/);
   assert.match(brief.promptGuide ?? "", /Аренда/);
   assert.doesNotMatch(brief.promptGuide ?? "", /^сократите расходы$/im);
 });
