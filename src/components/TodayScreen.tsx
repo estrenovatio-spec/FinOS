@@ -321,16 +321,11 @@ export function TodayScreen({
   }
 
   function openFinancialPlanTarget(
-    target: "balance" | "income" | "recurring" | "debts" | "limits",
+    target: "balance_and_income" | "recurring" | "debts" | "limits",
   ) {
     setFinancialPlanMenuOpen(false);
-    if (target === "balance") {
+    if (target === "balance_and_income") {
       setMoneySetupSection("current_balance");
-      setMoneySetupOpen(true);
-      return;
-    }
-    if (target === "income") {
-      setMoneySetupSection("income");
       setMoneySetupOpen(true);
       return;
     }
@@ -398,17 +393,9 @@ export function TodayScreen({
               type="button"
               variant="outline"
               className="w-full justify-start"
-              onClick={() => openFinancialPlanTarget("balance")}
+              onClick={() => openFinancialPlanTarget("balance_and_income")}
             >
-              {locale === "ru" ? "Баланс" : "Balance"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => openFinancialPlanTarget("income")}
-            >
-              {locale === "ru" ? "Доходы" : "Income"}
+              {locale === "ru" ? "Баланс и доходы" : "Balance and income"}
             </Button>
             <Button
               type="button"

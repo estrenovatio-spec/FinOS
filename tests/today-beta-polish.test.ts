@@ -683,18 +683,15 @@ test("TodayScreen exposes a financial plan menu with the correct targets", () =>
   );
 
   assert.match(source, /Настроить финансовый план/);
-  assert.match(source, /Баланс/);
-  assert.match(source, /Доходы/);
+  assert.match(source, /Баланс и доходы/);
   assert.match(source, /Регулярные платежи/);
   assert.match(source, /Долги/);
   assert.match(source, /Лимиты/);
-  assert.match(source, /openFinancialPlanTarget\("balance"\)/);
-  assert.match(source, /openFinancialPlanTarget\("income"\)/);
+  assert.match(source, /openFinancialPlanTarget\("balance_and_income"\)/);
   assert.match(source, /openFinancialPlanTarget\("recurring"\)/);
   assert.match(source, /openFinancialPlanTarget\("debts"\)/);
   assert.match(source, /openFinancialPlanTarget\("limits"\)/);
   assert.match(source, /setMoneySetupSection\("current_balance"\)/);
-  assert.match(source, /setMoneySetupSection\("income"\)/);
   assert.match(source, /onNavigateToTab\("plan", \{/);
   assert.match(source, /planSection: target/);
 });
