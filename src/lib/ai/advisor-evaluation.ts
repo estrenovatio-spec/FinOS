@@ -1,4 +1,5 @@
 import type { AdvisorFinancialContext } from "@/lib/advisor-context";
+import { scoreAdvisorQuality, type AdviserQualityScorecard } from "@/lib/adviser/adviser-quality-score";
 import type { AdvisorQuestionType } from "@/lib/ai/question-classifier";
 
 export type AdvisorEvaluationInput = {
@@ -12,6 +13,7 @@ export type AdvisorEvaluationInput = {
 export type AdvisorEvaluationResult = {
   ok: boolean;
   issues: string[];
+  score: AdviserQualityScorecard;
   usedFacts: {
     hasAnyAmount: boolean;
     mentionsIncome: boolean;
@@ -29,6 +31,16 @@ const GENERIC_CREDIT_PHRASES = [
   /рассмотрите ипотеку/i,
   /одолжите/i,
   /займ/i,
+];
+
+const INVESTMENT_RECOMMENDATION_PHRASES = [
+  /купите акции/i,
+  /купите облигац/i,
+  /индексн(ый|ого) фонд/i,
+  /etf/i,
+  /положите на вклад/i,
+  /инвестируйте/i,
+  /вложите/i,
 ];
 
 function normalizeText(value: string): string {
@@ -88,6 +100,8 @@ function evaluateCashGapQuestion(input: AdvisorEvaluationInput, issues: string[]
   if (
     input.financialContext.forecast.firstDeficitDate
     && !normalizedAnswer.includes(input.financialContext.forecast.firstDeficitDate)
+    && !/\d{4}-\d{2}-\d{2}/.test(normalizedAnswer)
+    && !/\d{1,2}\.\d{2}\.\d{4}/.test(normalizedAnswer)
   ) {
     issues.push("cash_gap_answer_skips_risk_date");
   }
@@ -103,6 +117,47 @@ function evaluateInvestingQuestion(input: AdvisorEvaluationInput, issues: string
   if (!/риск/.test(normalizedAnswer)) issues.push("investing_answer_skips_risk");
 }
 
+function evaluateGeneralFinancialAccuracy(input: AdvisorEvaluationInput, issues: string[]) {
+  const normalizedAnswer = normalizeText(input.answer);
+  if (
+    /(больше зарабатывайте|меньше тратьте|просто экономьте|ведите бюджет)/.test(normalizedAnswer) &&
+    !/потому|из-за|аренд|долг|лимит|расход|платеж|дефицит|прогноз/.test(normalizedAnswer)
+  ) {
+    issues.push("answer_uses_generic_advice_without_financial_cause");
+  }
+
+  if (
+    /(сдвиньте|перенесите|сократите|подтвердите|закройте)/.test(normalizedAnswer) &&
+    !/аренд|долг|лимит|зарплат|доход|платеж|цель|баланс|прогноз/.test(normalizedAnswer)
+  ) {
+    issues.push("answer_actions_are_not_tied_to_user_context");
+  }
+
+  if (
+    includesAny(normalizedAnswer, GENERIC_CREDIT_PHRASES) &&
+    !/разрыв|дефицит|кассов|не хватает|платеж|бюджет/.test(normalizedAnswer)
+  ) {
+    issues.push("answer_offers_unsafe_borrowing_without_budget_case");
+  }
+
+  if (
+    includesAny(normalizedAnswer, INVESTMENT_RECOMMENDATION_PHRASES) &&
+    !/срок/.test(normalizedAnswer) &&
+    !/цель/.test(normalizedAnswer) &&
+    !/риск/.test(normalizedAnswer)
+  ) {
+    issues.push("answer_gives_investment_recommendation_without_user_inputs");
+  }
+
+  if (
+    input.financialContext.incomes.expectedTotal > 0 &&
+    input.financialContext.incomes.confirmedTotal === 0 &&
+    /доход .*подтвержден|деньги уже пришли|доход уже пришел/.test(normalizedAnswer)
+  ) {
+    issues.push("answer_confuses_expected_and_confirmed_money");
+  }
+}
+
 export function evaluateAdvisorAnswer(input: AdvisorEvaluationInput): AdvisorEvaluationResult {
   const normalizedAnswer = normalizeText(input.answer);
   const issues: string[] = [];
@@ -113,6 +168,8 @@ export function evaluateAdvisorAnswer(input: AdvisorEvaluationInput): AdvisorEva
   if (!hasRubAmount(input.answer)) {
     issues.push("answer_has_no_ruble_amounts");
   }
+
+  evaluateGeneralFinancialAccuracy(input, issues);
 
   switch (input.questionType) {
     case "income_review":
@@ -142,9 +199,18 @@ export function evaluateAdvisorAnswer(input: AdvisorEvaluationInput): AdvisorEva
       break;
   }
 
-  return {
-    ok: issues.length === 0,
+  const score = scoreAdvisorQuality({
+    questionType: input.questionType,
+    answer: input.answer,
+    financialContext: input.financialContext,
+    purchaseAmountRub: input.purchaseAmountRub ?? null,
     issues,
+  });
+
+  return {
+    ok: issues.length === 0 && score.total >= 70 && score.safety >= 60 && score.accuracy >= 60,
+    issues,
+    score,
     usedFacts: {
       hasAnyAmount: hasRubAmount(input.answer),
       mentionsIncome: /доход|зарплат|поступл|пришел|получен/.test(normalizedAnswer),

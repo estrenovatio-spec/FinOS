@@ -97,6 +97,7 @@ test("income evaluation rejects answers that deny income when expected income ex
   assert.equal(result.ok, false);
   assert.ok(result.issues.includes("answer_uses_forbidden_phrase"));
   assert.ok(result.issues.includes("answer_claims_no_income_despite_expected_income"));
+  assert.ok(result.score.accuracy < 60);
 });
 
 test("purchase evaluation requires factual sums and rejects generic credit advice", () => {
@@ -112,6 +113,8 @@ test("purchase evaluation requires factual sums and rejects generic credit advic
 
   assert.equal(result.ok, true);
   assert.equal(result.usedFacts.hasAnyAmount, true);
+  assert.ok(result.score.safety >= 80);
+  assert.ok(result.score.accuracy >= 80);
 });
 
 test("goal evaluation expects clarification instead of invented certainty", () => {
@@ -135,6 +138,7 @@ test("goal evaluation expects clarification instead of invented certainty", () =
   });
 
   assert.equal(result.ok, true);
+  assert.ok(result.score.actionability >= 70);
 });
 
 test("cash-gap evaluation expects forecast date and payment reasoning", () => {
@@ -185,6 +189,7 @@ test("cash-gap evaluation expects forecast date and payment reasoning", () => {
   });
 
   assert.equal(result.ok, true);
+  assert.ok(result.score.causality >= 70);
 });
 
 test("investing evaluation requires horizon, goal and risk questions", () => {
@@ -198,4 +203,89 @@ test("investing evaluation requires horizon, goal and risk questions", () => {
   });
 
   assert.equal(result.ok, true);
+  assert.ok(result.score.safety >= 70);
+});
+
+test("generic money advice gets a low quality score", () => {
+  const { financialContext } = makeFinancialContext();
+  const result = evaluateAdvisorAnswer({
+    question: "Почему у меня нет денег?",
+    questionType: "expense_control",
+    answer: "Просто больше зарабатывайте и меньше тратьте.",
+    financialContext,
+  });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.includes("answer_has_no_ruble_amounts"));
+  assert.ok(result.issues.includes("answer_uses_generic_advice_without_financial_cause"));
+  assert.ok(result.score.total < 55);
+  assert.ok(result.score.causality < 50);
+  assert.ok(result.score.actionability < 60);
+});
+
+test("unsafe car-loan advice gets a low safety score", () => {
+  const { financialContext } = makeFinancialContext();
+  const result = evaluateAdvisorAnswer({
+    question: "Можно ли мне купить машину за 1 500 000 ₽?",
+    questionType: "purchase_decision",
+    purchaseAmountRub: 1_500_000,
+    answer: "Возьмите кредит на машину и потом постепенно рассчитаетесь.",
+    financialContext,
+  });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.includes("purchase_answer_uses_generic_credit_advice"));
+  assert.ok(result.issues.includes("answer_offers_unsafe_borrowing_without_budget_case"));
+  assert.ok(result.score.safety < 40);
+});
+
+test("answer that ignores expected 43 000 income gets a low accuracy score", () => {
+  const state = makeState({
+    moneySetup: {
+      ...emptyMoneySetup(),
+      incomeSources: [
+        {
+          id: "salary",
+          label: "Зарплата",
+          expectedDate: "2026-07-25",
+          expectedAmount: 43000,
+          kind: "salary",
+          recurrence: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 25,
+          endDate: null,
+          isPrimary: true,
+        },
+      ],
+      essentialCategoryIds: ["groceries"],
+    },
+  });
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  const adviserContext = buildAdvisorContext({
+    locale: "ru",
+    today: state.today,
+    currentBalance: state.balances.me,
+    decision: snapshot,
+    recurringTransactions: state.recurringTransactions,
+    goals: [],
+    debts: state.debts,
+    categoryBudgets: state.categoryBudgets,
+    plannedFreeMoney,
+    transactions: state.transactions,
+    categories: state.categories,
+    budgetMonthStartDay: state.budgetMonthStartDay,
+    expectedEventReminderStates: state.moneySetup.expectedEventReminderStates,
+  });
+
+  const result = evaluateAdvisorAnswer({
+    question: "Почему у меня нет денег?",
+    questionType: "expense_control",
+    answer: "У вас нет доходов, поэтому остаётся только урезать все траты.",
+    financialContext: adviserContext.financialContext,
+  });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.includes("answer_claims_no_income_despite_expected_income"));
+  assert.ok(result.score.accuracy < 50);
 });
