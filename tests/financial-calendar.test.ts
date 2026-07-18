@@ -322,6 +322,10 @@ test("calendar view uses inline accordion details and a monthly summary card", (
   assert.match(source, /pointer-events-none h-4 w-4 text-muted-foreground transition-transform/);
   assert.match(source, /В конце дня/);
   assert.match(source, /🟡/);
+  assert.match(source, /<ExpectedEventActionDialog/);
+  assert.match(source, /Оплатить/);
+  assert.match(source, /event\.source === "pending_transaction" \|\|/);
+  assert.match(source, /event\.source === "debt_payment"/);
   assert.doesNotMatch(source, /Изменить план/);
   assert.doesNotMatch(source, /Выберите день, чтобы увидеть доходы и расходы/);
   assert.doesNotMatch(source, /Что произойдёт с деньгами в этот день/);

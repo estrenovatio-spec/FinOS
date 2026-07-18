@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronLeft, ChevronRight, Goal, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ExpectedEventActionDialog } from "@/components/ExpectedEventActionDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
-import { resolveExpectedEventDisplayStatus } from "@/lib/expected-events";
+import { resolveExpectedEventDisplayStatus, type ExpectedEvent } from "@/lib/expected-events";
 import { calculateBalanceAtDate, getForecastDays } from "@/lib/decision-core/forecast-days";
 import type { BalanceForecast, ForecastDay, ForecastEvent } from "@/lib/decision-core/types";
 import { useStore } from "@/store/useStore";
@@ -232,6 +233,7 @@ export function ForecastCalendarView({
   }, [goals]);
 
   const [monthIndex, setMonthIndex] = useState(0);
+  const [expectedEvent, setExpectedEvent] = useState<ExpectedEvent | null>(null);
   const lastAppliedTargetMonthRef = useRef<string | null>(null);
   const expectedEventHistory = useStore((s) => s.expectedEventHistory);
   const currentMonthKey = startDate.slice(0, 7);
@@ -300,6 +302,7 @@ export function ForecastCalendarView({
   });
 
   return (
+    <>
     <Card className="border-primary/20 bg-primary/5 shadow-none">
       <CardContent className="space-y-4 p-4">
         <div className="flex items-center justify-between gap-3">
@@ -489,6 +492,11 @@ export function ForecastCalendarView({
                                   {section.events.map((event) => {
                                     const income = event.amount > 0;
                                     const accent = eventAccent(event, locale);
+                                    const isTodayExpectedPayment =
+                                      day.date === todayIso &&
+                                      event.amount < 0 &&
+                                      (event.source === "pending_transaction" ||
+                                        event.source === "debt_payment");
                                     return (
                                       <div key={event.id} className="rounded-lg border border-border/60 bg-background/70 p-3">
                                         <div className="flex items-start justify-between gap-3">
@@ -545,6 +553,32 @@ export function ForecastCalendarView({
                                             {formatMoney(Math.abs(event.amount), locale)} ₽
                                           </p>
                                         </div>
+                                        {isTodayExpectedPayment ? (
+                                          <div className="mt-3 flex justify-end">
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              onClick={() =>
+                                                setExpectedEvent({
+                                                  kind: "expense",
+                                                  transactionId: event.id,
+                                                  title: event.title,
+                                                  amount: Math.abs(event.amount),
+                                                  date: event.date,
+                                                  debtId: event.debtId ?? null,
+                                                  source:
+                                                    event.source === "debt_payment"
+                                                      ? "debt_payment"
+                                                      : "pending_transaction",
+                                                  paymentSource: event.paymentSource,
+                                                  linkedEntityId: event.linkedEntityId ?? null,
+                                                })
+                                              }
+                                            >
+                                              {locale === "ru" ? "Оплатить" : "Pay"}
+                                            </Button>
+                                          </div>
+                                        ) : null}
                                       </div>
                                     );
                                   })}
@@ -582,5 +616,14 @@ export function ForecastCalendarView({
         </div>
       </CardContent>
     </Card>
+      <ExpectedEventActionDialog
+        open={expectedEvent != null}
+        mode="confirm"
+        event={expectedEvent}
+        onOpenChange={(open) => {
+          if (!open) setExpectedEvent(null);
+        }}
+      />
+    </>
   );
 }
