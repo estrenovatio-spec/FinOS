@@ -182,8 +182,8 @@ export function TodayScreen({
         balances,
         freeMoney,
         plannedFreeMoney,
-      }),
-    [balances, decision, freeMoney, locale, moneySetup, plannedFreeMoney, transactions.length],
+      }, { todayIso: today }),
+    [balances, decision, freeMoney, locale, moneySetup, plannedFreeMoney, today, transactions.length],
   );
   const zeroState = isTodayZeroState({
     decision,
@@ -310,22 +310,46 @@ export function TodayScreen({
 
   return (
     <div className="space-y-3 pb-24">
-      <TodayHero
-        hero={view.hero}
-        actionBusy={actionBusy}
-        actionError={actionError}
-        onAction={handleMainAction}
-        onSecondaryAction={() => {
-          const expectedAction = resolveMainActionExpectedEvent();
-          if (expectedAction) {
-            setActionError(null);
-            openExpectedEventWorkflow(expectedAction, "skip");
-          }
-        }}
-      />
+      {view.compactAlert ? (
+        <Card className="border-amber-500/25 bg-amber-500/5 shadow-none">
+          <CardContent className="space-y-3 p-4">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">{view.compactAlert.title}</p>
+              <p className="text-sm leading-snug text-muted-foreground">{view.compactAlert.reason}</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-auto px-0 py-0 text-sm font-medium text-foreground hover:text-foreground"
+              onClick={handleMainAction}
+              disabled={actionBusy}
+            >
+              {view.compactAlert.ctaLabel}
+            </Button>
+            {actionError ? (
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-700">
+                {actionError}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : (
+        <TodayHero
+          hero={view.hero}
+          actionBusy={actionBusy}
+          actionError={actionError}
+          onAction={handleMainAction}
+          onSecondaryAction={() => {
+            const expectedAction = resolveMainActionExpectedEvent();
+            if (expectedAction) {
+              setActionError(null);
+              openExpectedEventWorkflow(expectedAction, "skip");
+            }
+          }}
+        />
+      )}
 
       <TodayOverview
-        title={view.overviewTitle}
         items={view.overviewItems}
         onItemAction={handleOverviewAction}
       />

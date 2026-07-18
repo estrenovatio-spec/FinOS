@@ -1,5 +1,5 @@
 import { getMainActionButtonLabel } from "@/components/today/main-action-resolver";
-import { formatIsoDate } from "@/lib/format-date";
+import { formatHumanDateLong, formatIsoDate, isoDateToLocalMiddayMs } from "@/lib/format-date";
 import type { MoneySetup } from "@/lib/money-setup";
 import type {
   DecisionCoreResult,
@@ -35,12 +35,21 @@ export type TodayOverviewItem = {
   actionLabel?: string | null;
   actionKey?: "edit_current_balance" | "add_transaction" | null;
   actionVariant?: "ghost" | "primary" | "highlight" | null;
+  secondaryActionLabel?: string | null;
+  secondaryActionKey?: "edit_current_balance" | "add_transaction" | null;
+  secondaryActionVariant?: "ghost" | "outline" | null;
   layout?: "default" | "wide";
   details?: Array<{
     label: string;
     value: string;
     tone?: "positive" | "negative" | "neutral" | "total";
   }> | null;
+};
+
+export type TodayCompactAlertView = {
+  title: string;
+  reason: string;
+  ctaLabel: string;
 };
 
 export type TodayPaymentsView = {
@@ -50,7 +59,8 @@ export type TodayPaymentsView = {
 
 export type TodayScreenView = {
   hero: TodayHeroView;
-  overviewTitle: string;
+  compactAlert: TodayCompactAlertView | null;
+  overviewTitle: string | null;
   overviewItems: TodayOverviewItem[];
   payments: TodayPaymentsView | null;
   hiddenPrimaryPaymentId: string | null;
@@ -83,6 +93,21 @@ function rub(amount: number | null | undefined, locale: Locale): string | null {
 function moneyValue(amount: number | null | undefined, locale: Locale): string | null {
   if (amount == null || !Number.isFinite(amount)) return null;
   return `${formatMoney(amount, locale)} ${locale === "ru" ? "₽" : "RUB"}`;
+}
+
+function differenceInCalendarDays(fromIso: string, toIso: string): number | null {
+  const fromMs = isoDateToLocalMiddayMs(fromIso);
+  const toMs = isoDateToLocalMiddayMs(toIso);
+  if (fromMs == null || toMs == null) return null;
+  return Math.round((toMs - fromMs) / (24 * 60 * 60 * 1000));
+}
+
+function formatRiskDayMonth(dateStr: string, locale: Locale): string {
+  const full = formatHumanDateLong(dateStr, locale);
+  if (locale === "ru") {
+    return full.replace(/\s+\d{4}$/, "");
+  }
+  return full.replace(/,\s*\d{4}$/, "");
 }
 
 function hasAnyMoneySetup(setup: MoneySetup): boolean {
@@ -379,6 +404,41 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
   };
 }
 
+export function shouldUseCompactRiskAlert(
+  decision: DecisionCoreResult,
+  todayIso: string,
+): boolean {
+  if (decision.mainAction.type !== "cover_deficit") return false;
+  if (decision.mainAction.command.type !== "open_forecast") return false;
+  if (decision.mainAction.command.reason === "current_deficit") return false;
+  if (!decision.mainAction.dueDate) return false;
+
+  const daysAway = differenceInCalendarDays(todayIso, decision.mainAction.dueDate);
+  return daysAway != null && daysAway > 7;
+}
+
+export function buildCompactRiskAlert(
+  decision: DecisionCoreResult,
+  locale: Locale,
+  todayIso: string,
+): TodayCompactAlertView | null {
+  if (!shouldUseCompactRiskAlert(decision, todayIso) || !decision.mainAction.dueDate) {
+    return null;
+  }
+
+  return {
+    title:
+      locale === "ru"
+        ? `Риск ${formatRiskDayMonth(decision.mainAction.dueDate, locale)}`
+        : `Risk on ${formatRiskDayMonth(decision.mainAction.dueDate, locale)}`,
+    reason:
+      locale === "ru"
+        ? "По текущему плану денег может не хватить."
+        : "Based on the current plan, money may run short.",
+    ctaLabel: locale === "ru" ? "Посмотреть прогноз →" : "View forecast →",
+  };
+}
+
 function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewItem {
   const { locale } = input;
   const currentBalance = getCurrentBalance(input);
@@ -407,6 +467,7 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
 }
 
 function buildPlannedFreeMoneyItem(
+  input: TodayPresentationInput,
   locale: Locale,
   plannedFreeMoney?: PlannedFreeMoneyView,
 ): TodayOverviewItem | null {
@@ -414,6 +475,16 @@ function buildPlannedFreeMoneyItem(
   if (!summary || !plannedFreeMoney) {
     return null;
   }
+  const currentBalance = getCurrentBalance(input);
+  const periodEnd = plannedFreeMoney.periodEndDate
+    ? formatHumanDateLong(plannedFreeMoney.periodEndDate, locale)
+    : null;
+  const caption =
+    currentBalance != null
+      ? locale === "ru"
+        ? `Сейчас у вас ${moneyValue(currentBalance, locale)}. Сумма рассчитана с учётом${plannedFreeMoney.expectedRecurringIncome > 0 || plannedFreeMoney.includesUnconfirmedIncome ? " ожидаемых доходов," : ""} платежей и лимитов${periodEnd ? ` до ${periodEnd}` : ""}.`
+        : `You currently have ${moneyValue(currentBalance, locale)}. This amount already accounts for${plannedFreeMoney.expectedRecurringIncome > 0 || plannedFreeMoney.includesUnconfirmedIncome ? " expected income," : ""} payments and spending limits${periodEnd ? ` until ${periodEnd}` : ""}.`
+      : summary.caption;
 
   const detailItems: TodayOverviewItem["details"] = plannedFreeMoney.breakdown
     ? [
@@ -470,10 +541,16 @@ function buildPlannedFreeMoneyItem(
     label: summary.label,
     subtitle: summary.subtitle,
     value: summary.value,
-    caption: summary.caption,
+    caption,
     actionLabel: locale === "ru" ? "＋ Добавить операцию" : "+ Add entry",
     actionKey: "add_transaction",
     actionVariant: "primary",
+    secondaryActionLabel:
+      locale === "ru"
+        ? "Настроить баланс, доходы и платежи"
+        : "Set up balance, income, and payments",
+    secondaryActionKey: "edit_current_balance",
+    secondaryActionVariant: "ghost",
     layout: "wide",
     details: detailItems,
   };
@@ -501,42 +578,51 @@ function buildOverview(input: TodayPresentationInput): {
     (payment) => payment.id !== hiddenPrimaryPaymentId,
   );
   const paymentsToSummarize =
-    remainingPayments.length > 0 ? remainingPayments : decision.todayPayments;
-  const items: TodayOverviewItem[] = [buildCurrentBalanceItem(input)];
+    remainingPayments.length > 0
+      ? remainingPayments
+      : hiddenPrimaryPaymentId
+        ? []
+        : decision.todayPayments;
+  const items: TodayOverviewItem[] = [];
 
-  const plannedFreeMoneyItem = buildPlannedFreeMoneyItem(locale, input.plannedFreeMoney);
+  const plannedFreeMoneyItem = buildPlannedFreeMoneyItem(input, locale, input.plannedFreeMoney);
   if (plannedFreeMoneyItem) {
     items.push(plannedFreeMoneyItem);
+  } else {
+    items.push(buildCurrentBalanceItem(input));
   }
+
+  const nearestPayment = paymentsToSummarize[0] ?? null;
 
   return {
     items,
     hiddenPrimaryPaymentId,
-    payments:
-      remainingPayments.length > 0
-        ? {
-            title: locale === "ru" ? "Остальные платежи сегодня" : "Other payments today",
-            items: remainingPayments,
-          }
-        : hiddenPrimaryPaymentId
-          ? null
-          : decision.todayPayments.length > 0
-            ? {
-                title: locale === "ru" ? "Платежи сегодня" : "Payments today",
-                items: decision.todayPayments,
-              }
-            : null,
+    payments: nearestPayment
+      ? {
+          title: locale === "ru" ? "Ближайший платёж" : "Nearest payment",
+          items: [nearestPayment],
+        }
+      : null,
   };
 }
 
-export function buildTodayScreenView(input: TodayPresentationInput): TodayScreenView {
+export function buildTodayScreenView(
+  input: TodayPresentationInput,
+  options?: { todayIso?: string },
+): TodayScreenView {
   const { locale } = input;
   const hero = buildHero(input);
   const overview = buildOverview(input);
+  const compactAlert = buildCompactRiskAlert(
+    input.decision,
+    locale,
+    options?.todayIso ?? input.decision.mainAction.dueDate ?? "1970-01-01",
+  );
 
   return {
     hero,
-    overviewTitle: locale === "ru" ? "На сегодня" : "For today",
+    compactAlert,
+    overviewTitle: null,
     overviewItems: overview.items,
     payments: overview.payments,
     hiddenPrimaryPaymentId: overview.hiddenPrimaryPaymentId,

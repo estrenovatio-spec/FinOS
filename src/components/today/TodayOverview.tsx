@@ -40,7 +40,7 @@ export function TodayOverview({
   items,
   onItemAction,
 }: {
-  title: string;
+  title?: string | null;
   items: TodayOverviewItem[];
   onItemAction?: (actionKey: NonNullable<TodayOverviewItem["actionKey"]>) => void;
 }) {
@@ -62,9 +62,11 @@ export function TodayOverview({
 
   return (
     <section className="space-y-2">
-      <div className="px-1">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-      </div>
+      {title ? (
+        <div className="px-1">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        </div>
+      ) : null}
 
       <div className="grid gap-2 md:grid-cols-3">
         {items.map((item) => {
@@ -193,22 +195,36 @@ export function TodayOverview({
                   </>
                 )}
                 {item.actionLabel && item.actionKey ? (
-                  <Button
-                    type="button"
-                    variant={item.actionVariant === "primary" || item.actionVariant === "highlight" ? "default" : "ghost"}
-                    size={item.actionVariant === "primary" || item.actionVariant === "highlight" ? "default" : "sm"}
-                    className={
-                      item.actionVariant === "primary"
-                        ? "mt-1 h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
-                        : item.actionVariant === "highlight"
-                          ? "mt-1 h-11 w-full rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100"
-                        : "h-auto justify-start self-start px-0 py-0 text-xs font-medium text-muted-foreground hover:text-foreground"
-                    }
-                    aria-label={`${item.actionLabel}: ${item.label}`}
-                    onClick={() => onItemAction?.(item.actionKey!)}
-                  >
-                    {item.actionLabel}
-                  </Button>
+                  <div className="space-y-1">
+                    <Button
+                      type="button"
+                      variant={item.actionVariant === "primary" || item.actionVariant === "highlight" ? "default" : "ghost"}
+                      size={item.actionVariant === "primary" || item.actionVariant === "highlight" ? "default" : "sm"}
+                      className={
+                        item.actionVariant === "primary"
+                          ? "mt-1 h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+                          : item.actionVariant === "highlight"
+                            ? "mt-1 h-11 w-full rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100"
+                          : "h-auto justify-start self-start px-0 py-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      }
+                      aria-label={`${item.actionLabel}: ${item.label}`}
+                      onClick={() => onItemAction?.(item.actionKey!)}
+                    >
+                      {item.actionLabel}
+                    </Button>
+                    {item.secondaryActionLabel && item.secondaryActionKey ? (
+                      <Button
+                        type="button"
+                        variant={item.secondaryActionVariant === "outline" ? "outline" : "ghost"}
+                        size="sm"
+                        className="h-auto w-full justify-start px-0 py-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+                        aria-label={`${item.secondaryActionLabel}: ${item.label}`}
+                        onClick={() => onItemAction?.(item.secondaryActionKey!)}
+                      >
+                        {item.secondaryActionLabel}
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
               </CardContent>
             </Card>

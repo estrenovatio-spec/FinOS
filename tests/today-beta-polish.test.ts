@@ -6,7 +6,12 @@ import { APP_BOTTOM_NAV_TABS } from "@/components/app/AppBottomNav";
 import { buildMoneySetupBalanceSectionView } from "@/components/MoneySetupDialog";
 import { buildFocusedForecastView } from "@/components/app/focused-forecast-presenter";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
-import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
+import {
+  buildCompactRiskAlert,
+  buildTodayScreenView,
+  isTodayZeroState,
+  shouldUseCompactRiskAlert,
+} from "@/components/today/today-screen-presenter";
 import { getDefaultCategories } from "@/lib/categories";
 import { emptyMoneySetup } from "@/lib/money-setup";
 import type { BalanceForecast, DecisionCoreResult } from "@/lib/decision-core/types";
@@ -238,6 +243,82 @@ test("hero without urgent action does not show forced CTA", () => {
   assert.equal(view.hero.amount, null);
 });
 
+test("risk through seven days stays in the full hero", () => {
+  const decision = makeDecision({
+    mainAction: {
+      type: "cover_deficit",
+      title: "25.07.2026 денег может не хватить",
+      text: "На этой дате баланс может уйти в минус.",
+      description: "Проверьте ближайшие платежи и доходы.",
+      reason: "После ближайших платежей баланс уйдёт в минус.",
+      amount: null,
+      dueDate: "2026-07-25",
+      relatedEntityId: null,
+      priority: "high",
+      command: {
+        type: "open_forecast",
+        focusDate: "2026-07-25",
+        reason: "future_deficit",
+      },
+    },
+  });
+
+  assert.equal(shouldUseCompactRiskAlert(decision, "2026-07-18"), false);
+  const view = buildTodayScreenView(
+    {
+      decision,
+      locale: "ru",
+      transactionCount: 3,
+      moneySetup: emptyMoneySetup(),
+      balances: { all: 40000, me: 40000, partner: 0 },
+    },
+    { todayIso: "2026-07-18" },
+  );
+
+  assert.equal(view.compactAlert, null);
+  assert.match(view.hero.title, /25\.07\.2026 денег может не хватить/);
+});
+
+test("risk after eight days switches to compact alert", () => {
+  const decision = makeDecision({
+    mainAction: {
+      type: "cover_deficit",
+      title: "26.07.2026 денег может не хватить",
+      text: "На этой дате баланс может уйти в минус.",
+      description: "Проверьте ближайшие платежи и доходы.",
+      reason: "После ближайших платежей баланс уйдёт в минус.",
+      amount: null,
+      dueDate: "2026-07-26",
+      relatedEntityId: null,
+      priority: "high",
+      command: {
+        type: "open_forecast",
+        focusDate: "2026-07-26",
+        reason: "future_deficit",
+      },
+    },
+  });
+
+  assert.equal(shouldUseCompactRiskAlert(decision, "2026-07-18"), true);
+  const alert = buildCompactRiskAlert(decision, "ru", "2026-07-18");
+  assert.equal(alert?.title, "Риск 26 июля");
+  assert.match(alert?.reason ?? "", /денег может не хватить/i);
+
+  const view = buildTodayScreenView(
+    {
+      decision,
+      locale: "ru",
+      transactionCount: 3,
+      moneySetup: emptyMoneySetup(),
+      balances: { all: 40000, me: 40000, partner: 0 },
+    },
+    { todayIso: "2026-07-18" },
+  );
+
+  assert.equal(view.compactAlert?.title, "Риск 26 июля");
+  assert.equal(view.compactAlert?.ctaLabel, "Посмотреть прогноз →");
+});
+
 test("hero keeps the same canonical date even without a separate safe-until card", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
@@ -343,7 +424,7 @@ test("Today overview no longer duplicates forecast horizon or next income cards"
   assert.equal(view.overviewItems.find((item) => item.id === "next-income"), undefined);
 });
 
-test("current balance is always visible when known", () => {
+test("current balance fallback stays visible when planned free money is unavailable", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),
     locale: "ru",
@@ -358,17 +439,10 @@ test("current balance is always visible when known", () => {
   const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
   assert.equal(currentBalance?.label, "Мои деньги сейчас");
   assert.match(currentBalance?.value ?? "", /40[\s\u00A0]000 ₽/);
-  assert.equal(
-    currentBalance?.caption,
-    "Это отправная точка вашего финансового плана. Здесь можно изменить баланс, доходы и обязательные платежи.",
-  );
-  assert.equal(currentBalance?.dismissibleCaption, true);
   assert.equal(currentBalance?.actionLabel, "Настроить доходы");
-  assert.equal(currentBalance?.actionKey, "edit_current_balance");
-  assert.equal(currentBalance?.actionVariant, "highlight");
 });
 
-test("financial setup card explains that the same action opens the broader plan setup flow", () => {
+test("current balance fallback still opens the shared setup flow when planned card is unavailable", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),
     locale: "ru",
@@ -381,13 +455,49 @@ test("financial setup card explains that the same action opens the broader plan 
   });
 
   const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
-  assert.equal(currentBalance?.label, "Мои деньги сейчас");
-  assert.equal(currentBalance?.actionLabel, "Настроить доходы");
+  assert.equal(currentBalance?.actionKey, "edit_current_balance");
   assert.match(currentBalance?.caption ?? "", /отправная точка вашего финансового плана/i);
-  assert.match(currentBalance?.caption ?? "", /изменить баланс, доходы и обязательные платежи/i);
 });
 
-test("Today overview shows only current balance and planned free money", () => {
+test("main spending card keeps the shared setup flow as a secondary action", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision(),
+    locale: "ru",
+    transactionCount: 2,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+    },
+    balances: { all: 97494, me: 97494, partner: 0 },
+    plannedFreeMoney: {
+      status: "available",
+      amount: 42816,
+      expectedRecurringIncome: 12000,
+      includesUnconfirmedIncome: true,
+      periodStartDate: "2026-07-13",
+      periodEndDate: "2026-07-31",
+      breakdown: {
+        currentActualBalance: 97494,
+        expectedRecurringIncome: 12000,
+        recurringPayments: 30000,
+        otherMandatoryPayments: 4000,
+        mandatoryPayments: 34000,
+        essentialPlannedSpending: 32678,
+        otherRequiredExpenses: 0,
+        plannedFreeMoney: 42816,
+        periodStartDate: "2026-07-13",
+        periodEndDate: "2026-07-31",
+      },
+      note: null,
+    },
+  });
+
+  const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
+  assert.equal(planned?.secondaryActionLabel, "Настроить баланс, доходы и платежи");
+  assert.equal(planned?.secondaryActionKey, "edit_current_balance");
+});
+
+test("Today overview shows one merged money card instead of separate balance and spending cards", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),
     locale: "ru",
@@ -436,15 +546,21 @@ test("Today overview shows only current balance and planned free money", () => {
     },
   });
 
-  assert.equal(view.overviewItems.length, 2);
+  assert.equal(view.overviewTitle, null);
+  assert.equal(view.overviewItems.length, 1);
   const allowed = view.overviewItems.find((item) => item.id === "allowed");
+  const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
   assert.equal(allowed, undefined);
+  assert.equal(currentBalance, undefined);
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
   assert.equal(planned?.label, "Можно потратить");
   assert.equal(planned?.subtitle, "до 13 августа 2026");
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.equal(planned?.layout, "wide");
+  assert.match(planned?.caption ?? "", /Сейчас у вас 40[\s\u00A0]000 ₽/);
   assert.equal(planned?.details?.at(-1)?.value, "11 592 ₽");
+  assert.equal(planned?.actionLabel, "＋ Добавить операцию");
+  assert.equal(planned?.secondaryActionLabel, "Настроить баланс, доходы и платежи");
 });
 
 test("planned free money card uses digital dates and keeps breakdown details", () => {
@@ -549,7 +665,7 @@ test("planned free money copy explains recurring-income plan without using narro
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
   assert.equal(view.overviewItems.find((item) => item.id === "allowed"), undefined);
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
-  assert.match(planned?.caption ?? "", /ожидаемые доходы придут по плану/i);
+  assert.match(planned?.caption ?? "", /Сумма рассчитана с учётом ожидаемых доходов, платежей и лимитов/i);
   assert.doesNotMatch(planned?.caption ?? "", /не подтверждено/i);
 });
 
@@ -649,9 +765,10 @@ test("main payment is not duplicated as equal secondary card", () => {
   assert.equal(view.hiddenPrimaryPaymentId, "rent");
   assert.equal(view.payments?.items.length, 1);
   assert.equal(view.payments?.items[0]?.id, "internet");
+  assert.equal(view.payments?.title, "Ближайший платёж");
 });
 
-test("other payments remain visible after primary payment is lifted to hero", () => {
+test("Today keeps only one compact nearest payment block after the hero", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       mainAction: {
@@ -681,10 +798,7 @@ test("other payments remain visible after primary payment is lifted to hero", ()
     balances: { all: 90000, me: 90000, partner: 0 },
   });
 
-  assert.deepEqual(
-    view.payments?.items.map((item) => item.id),
-    ["internet", "music"],
-  );
+  assert.deepEqual(view.payments?.items.map((item) => item.id), ["internet"]);
 });
 
 test("calm state stays non-alarming and keeps quick add available", () => {
@@ -1229,6 +1343,17 @@ test("TodayScreen no longer renders the top Today heading or secondary insight c
 
   assert.doesNotMatch(source, /<TodaySecondaryInsights/);
   assert.doesNotMatch(source, /locale === "ru" \? "Сегодня" : "Today"/);
+  assert.doesNotMatch(source, /title=\{view\.overviewTitle\}/);
+});
+
+test("TodayScreen keeps Markets rendering behind the existing toggle", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/TodayScreen.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /TodayRatesCard/);
+  assert.match(source, /liveRatesEnabled \? <TodayRatesCard locale=\{locale\} \/> : null/);
 });
 
 test("Settings tab now renders real app settings instead of services or business hubs", () => {
