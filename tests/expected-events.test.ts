@@ -268,9 +268,11 @@ test("expected event dialog uses human labels and keeps the confirmation form re
     "utf8",
   );
 
-  assert.match(todaySource, /Оплатил/);
+  assert.match(todaySource, /Оплатить/);
   assert.match(recurringSource, /Не оплатил/);
+  assert.match(recurringSource, /Оплатить/);
   assert.match(dialogSource, /Напомнить завтра/);
+  assert.match(dialogSource, /Подтвердить оплату\?/);
   assert.match(dialogSource, /Что сделать, если деньги ещё не пришли/);
   assert.match(dialogSource, /Что сделать, если платёж ещё не оплачен/);
   assert.match(dialogSource, /onClick=\{handleSnoozeUntilTomorrow\}/);

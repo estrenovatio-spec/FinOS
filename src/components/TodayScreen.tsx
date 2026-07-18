@@ -553,7 +553,7 @@ function TodayPaymentRow({
       </div>
       <div className="flex shrink-0 gap-2">
         <Button type="button" size="sm" onClick={onConfirm}>
-          {locale === "ru" ? "Оплатил" : "Paid"}
+          {locale === "ru" ? "Оплатить" : "Pay"}
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={onSkip}>
           {locale === "ru" ? "Не оплатил" : "Not paid"}

@@ -81,7 +81,7 @@ test("confirm_payment uses the existing idempotent payment confirmation flow", a
 
   const before = decisionCore(initialState);
   assert.equal(before.mainAction.command.type, "confirm_payment");
-  assert.equal(getMainActionButtonLabel(before.mainAction.command, "ru"), "Оплатил");
+  assert.equal(getMainActionButtonLabel(before.mainAction.command, "ru"), "Оплатить");
   assert.equal(before.todayPayments.length, 1);
 
   let transactions = initialState.transactions;

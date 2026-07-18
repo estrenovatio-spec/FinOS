@@ -445,7 +445,7 @@ export function ExpectedEventActionDialog({
           transaction={pendingTransaction}
           open={confirmOpen}
           onOpenChange={onOpenChange}
-          dialogTitle={locale === "ru" ? "Подтвердить оплату" : "Confirm payment"}
+          dialogTitle={locale === "ru" ? "Подтвердить оплату?" : "Confirm payment?"}
           dialogSubtitle={formatTransactionDate(pendingTransaction.date, locale)}
           submitLabel={locale === "ru" ? "Сохранить" : "Save"}
           forceConfirmOnSave

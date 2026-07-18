@@ -57,7 +57,7 @@ export function getMainActionButtonLabel(
 ): string | null {
   switch (command.type) {
     case "confirm_payment":
-      return locale === "ru" ? "Оплатил" : "Paid";
+      return locale === "ru" ? "Оплатить" : "Pay";
     case "open_money_setup":
       if (command.scope === "balance") {
         return locale === "ru" ? "Указать остаток" : "Set balance";

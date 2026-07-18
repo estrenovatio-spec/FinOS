@@ -1140,12 +1140,12 @@ export const DICT = {
     planningRecurringPaidOn: "Оплачено: {date}",
     planningRecurringSkippedInPeriod: "Не было в этом периоде: {count}",
     planningRecurringHint:
-      "Когда наступит дата, отметьте «Оплатил». Если платёж не прошёл — выберите «Не оплатил» и решите, перенести, напомнить завтра или отменить только платёж этого месяца.",
+      "Когда наступит дата, нажмите «Оплатить». Если платёж не прошёл — выберите «Не оплатил» и решите, перенести, напомнить завтра или отменить только платёж этого месяца.",
     recurringPendingTitle: "Подтвердите регулярный расход",
     recurringPendingHint:
       "С баланса спишется только после подтверждения. Если платёж ещё не прошёл, выберите «Не оплатил» и решите, что сделать с этим ожидаемым платежом.",
     recurringPendingBadge: "Ждёт подтверждения",
-    recurringPendingConfirm: "Оплатил",
+    recurringPendingConfirm: "Оплатить",
     recurringPendingSkip: "Не оплатил",
     recurringPendingDismiss: "Отменить ожидание",
     recurringPendingConfirmShort: "✓",
