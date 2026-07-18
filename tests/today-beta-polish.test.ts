@@ -145,7 +145,7 @@ test("empty user sees one primary setup action and no fake analytics", () => {
   assert.equal(view.hero.isEmptyState, true);
   assert.equal(view.hero.ctaLabel, "Указать остаток");
   assert.equal(view.overviewItems.length, 1);
-  assert.equal(view.overviewItems[0]?.label, "Сейчас в кошельке");
+  assert.equal(view.overviewItems[0]?.label, "Мои деньги сейчас");
   assert.equal(view.overviewItems[0]?.value, "Текущий остаток не указан");
 });
 
@@ -356,10 +356,33 @@ test("current balance is always visible when known", () => {
   });
 
   const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
-  assert.equal(currentBalance?.label, "Сейчас в кошельке");
+  assert.equal(currentBalance?.label, "Мои деньги сейчас");
   assert.match(currentBalance?.value ?? "", /40[\s\u00A0]000 ₽/);
-  assert.equal(currentBalance?.actionLabel, "Изменить");
+  assert.equal(
+    currentBalance?.caption,
+    "Это отправная точка вашего финансового плана. Здесь можно изменить баланс, доходы и обязательные платежи.",
+  );
+  assert.equal(currentBalance?.actionLabel, "Настроить план");
   assert.equal(currentBalance?.actionKey, "edit_current_balance");
+});
+
+test("financial setup card explains that the same action opens the broader plan setup flow", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision(),
+    locale: "ru",
+    transactionCount: 2,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-25",
+    },
+    balances: { all: 97494, me: 97494, partner: 0 },
+  });
+
+  const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
+  assert.equal(currentBalance?.label, "Мои деньги сейчас");
+  assert.equal(currentBalance?.actionLabel, "Настроить план");
+  assert.match(currentBalance?.caption ?? "", /отправная точка вашего финансового плана/i);
+  assert.match(currentBalance?.caption ?? "", /изменить баланс, доходы и обязательные платежи/i);
 });
 
 test("Today overview shows only current balance and planned free money", () => {

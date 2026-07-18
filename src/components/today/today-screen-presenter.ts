@@ -383,7 +383,7 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
   const currentBalance = getCurrentBalance(input);
   return {
     id: "current-balance",
-    label: locale === "ru" ? "Сейчас в кошельке" : "Available now",
+    label: locale === "ru" ? "Мои деньги сейчас" : "My money right now",
     value:
       currentBalance == null
         ? locale === "ru"
@@ -396,9 +396,9 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
           ? "Укажите остаток, чтобы прогноз стал честным."
           : "Add your balance so the forecast can be reliable."
         : locale === "ru"
-          ? "От этой суммы строится прогноз."
-          : "The forecast starts from this amount.",
-    actionLabel: locale === "ru" ? "Изменить" : "Edit",
+          ? "Это отправная точка вашего финансового плана. Здесь можно изменить баланс, доходы и обязательные платежи."
+          : "This is the starting point of your financial plan. Here you can update your balance, income, and required payments.",
+    actionLabel: locale === "ru" ? "Настроить план" : "Set up plan",
     actionKey: "edit_current_balance",
   };
 }
