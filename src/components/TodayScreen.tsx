@@ -21,7 +21,7 @@ import { getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatTransactionDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
-import { expectedExpenseStatusLabel, type ExpectedEvent } from "@/lib/expected-events";
+import { resolveExpectedEventDisplayStatus, type ExpectedEvent } from "@/lib/expected-events";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   calculateFreeMoneyUntilPeriodEnd,
@@ -379,17 +379,20 @@ export function TodayScreen({
                       "skip",
                     )
                   }
-                  status={expectedExpenseStatusLabel({
-                    event: {
-                      date: payment.date,
-                      debtId: payment.debtId ?? null,
-                      paymentSource: payment.paymentSource,
-                      linkedEntityId: payment.linkedEntityId ?? null,
-                    },
-                    history: expectedEventHistory,
-                    today,
-                    locale,
-                  })}
+                  status={
+                    resolveExpectedEventDisplayStatus({
+                      kind: "expense",
+                      event: {
+                        date: payment.date,
+                        debtId: payment.debtId ?? null,
+                        paymentSource: payment.paymentSource,
+                        linkedEntityId: payment.linkedEntityId ?? null,
+                      },
+                      history: expectedEventHistory,
+                      today,
+                      locale,
+                    }).label
+                  }
                 />
               ))}
             </div>

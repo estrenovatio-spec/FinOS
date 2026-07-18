@@ -8,8 +8,9 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatTransactionDate, normalizeIsoDate } from "@/lib/format-date";
+import { formatTransactionDate, getLocalTodayIsoDate, normalizeIsoDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import { resolveExpectedEventDisplayStatus } from "@/lib/expected-events";
 import { buildFocusedForecastView } from "@/components/app/focused-forecast-presenter";
 import {
   groupForecastEventsByDate,
@@ -21,36 +22,23 @@ import type {
   DecisionConstraintExplanation,
   ForecastEvent,
 } from "@/lib/decision-core/types";
+import { useStore } from "@/store/useStore";
 import type { Locale } from "@/types";
 
 function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   switch (source) {
     case "pending_transaction":
-      return locale === "ru" ? "Ожидается" : "Expected";
+      return locale === "ru" ? "Платёж" : "Payment";
     case "recurring":
       return locale === "ru" ? "Регулярный платёж" : "Recurring payment";
     case "debt_payment":
       return locale === "ru" ? "Платёж по долгу" : "Debt payment";
     case "income_source":
-      return locale === "ru" ? "Ожидается" : "Expected";
+      return locale === "ru" ? "Доход" : "Income";
     case "confirmed_transaction":
       return locale === "ru" ? "Деньги уже пришли" : "Received";
     case "essential_budget":
       return locale === "ru" ? "Плановые повседневные траты" : "Everyday spending";
-  }
-}
-
-function plannedIncomeStateLabel(event: ForecastEvent, locale: Locale): string | null {
-  if (event.source !== "income_source") return null;
-  switch (event.plannedIncomeStatus) {
-    case "scheduled":
-      return locale === "ru" ? "Ожидается" : "Expected";
-    case "due_today":
-      return locale === "ru" ? "Ожидается сегодня" : "Expected today";
-    case "overdue_unconfirmed":
-      return locale === "ru" ? "Ещё не пришло" : "Still not received";
-    default:
-      return null;
   }
 }
 
@@ -65,6 +53,8 @@ export function FocusedForecastCard({
   focus: ForecastFocus | null;
   explanation?: DecisionConstraintExplanation | null;
 }) {
+  const expectedEventHistory = useStore((s) => s.expectedEventHistory);
+  const today = getLocalTodayIsoDate();
   const groups = useMemo(() => groupForecastEventsByDate(forecast), [forecast]);
   const focusResolution = useMemo(
     () => resolveForecastFocus(forecast, focus),
@@ -274,9 +264,36 @@ export function FocusedForecastCard({
                             <p className="mt-0.5 text-xs text-muted-foreground">
                               {sourceLabel(event.source, locale)}
                             </p>
-                            {plannedIncomeStateLabel(event, locale) ? (
+                            {event.amount < 0 &&
+                            event.source !== "confirmed_transaction" &&
+                            event.source !== "essential_budget" ? (
                               <p className="mt-0.5 text-xs text-muted-foreground">
-                                {plannedIncomeStateLabel(event, locale)}
+                                {
+                                  resolveExpectedEventDisplayStatus({
+                                    kind: "expense",
+                                    event: {
+                                      date: event.date,
+                                      debtId: event.debtId ?? null,
+                                      paymentSource: event.paymentSource,
+                                      linkedEntityId: event.linkedEntityId ?? null,
+                                    },
+                                    history: expectedEventHistory,
+                                    today,
+                                    locale,
+                                  }).label
+                                }
+                              </p>
+                            ) : null}
+                            {event.source === "income_source" &&
+                            event.plannedIncomeStatus ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {
+                                  resolveExpectedEventDisplayStatus({
+                                    kind: "income",
+                                    status: event.plannedIncomeStatus,
+                                    locale,
+                                  }).label
+                                }
                               </p>
                             ) : null}
                             {isFocusedEvent ? (

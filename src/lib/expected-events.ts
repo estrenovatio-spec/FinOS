@@ -64,6 +64,35 @@ export interface ExpectedEventReminder {
   createdAt: string;
 }
 
+export type ExpectedEventDisplayStatus = {
+  key:
+    | "expected"
+    | "expected_today"
+    | "rescheduled"
+    | "overdue"
+    | "confirmed";
+  label: string;
+  tone: "neutral" | "warning" | "success";
+  priority: number;
+};
+
+type ResolveExpectedEventDisplayStatusArgs =
+  | {
+      kind: "income";
+      status: Extract<
+        MoneySetupIncomeSourceStatus,
+        "scheduled" | "due_today" | "overdue_unconfirmed"
+      >;
+      locale: Locale;
+    }
+  | {
+      kind: "expense";
+      event: Pick<ExpectedExpenseEvent, "date" | "debtId" | "paymentSource" | "linkedEntityId">;
+      history: ExpectedEventHistoryEntry[] | undefined;
+      today: string;
+      locale: Locale;
+    };
+
 function stripLegacyFlag(source: MoneySetupIncomeSource & { isLegacy?: boolean }): MoneySetupIncomeSource {
   return {
     id: source.id,
@@ -293,6 +322,45 @@ export function expectedExpenseStatusLabel(args: {
   today: string;
   locale: Locale;
 }): string {
+  return resolveExpectedEventDisplayStatus({
+    kind: "expense",
+    event: args.event,
+    history: args.history,
+    today: args.today,
+    locale: args.locale,
+  }).label;
+}
+
+export function resolveExpectedEventDisplayStatus(
+  args: ResolveExpectedEventDisplayStatusArgs,
+): ExpectedEventDisplayStatus {
+  if (args.kind === "income") {
+    switch (args.status) {
+      case "overdue_unconfirmed":
+        return {
+          key: "overdue",
+          label: args.locale === "ru" ? "Ещё не пришло" : "Still not received",
+          tone: "warning",
+          priority: 3,
+        };
+      case "due_today":
+        return {
+          key: "expected_today",
+          label: args.locale === "ru" ? "Ожидается сегодня" : "Expected today",
+          tone: "warning",
+          priority: 2,
+        };
+      case "scheduled":
+      default:
+        return {
+          key: "expected",
+          label: args.locale === "ru" ? "Ожидается" : "Expected",
+          tone: "neutral",
+          priority: 1,
+        };
+    }
+  }
+
   const { event, history, today, locale } = args;
   const entries = history ?? [];
 
@@ -303,22 +371,44 @@ export function expectedExpenseStatusLabel(args: {
       matchesExpenseHistoryEntry(entry, event),
   );
   if (rescheduledEntry && rescheduledEntry.originalDate !== event.date) {
-    return locale === "ru"
-      ? `Перенесено с ${formatTransactionDate(rescheduledEntry.originalDate, locale)} на ${formatTransactionDate(event.date, locale)}`
-      : `Rescheduled from ${formatTransactionDate(rescheduledEntry.originalDate, locale)} to ${formatTransactionDate(event.date, locale)}`;
+    return {
+      key: "rescheduled",
+      label:
+        locale === "ru"
+          ? `Перенесено с ${formatTransactionDate(rescheduledEntry.originalDate, locale)} на ${formatTransactionDate(event.date, locale)}`
+          : `Rescheduled from ${formatTransactionDate(rescheduledEntry.originalDate, locale)} to ${formatTransactionDate(event.date, locale)}`,
+      tone: "warning",
+      priority: 4,
+    };
   }
 
   if (event.date < today) {
-    return locale === "ru"
-      ? `Просрочено с ${formatTransactionDate(event.date, locale)}`
-      : `Overdue since ${formatTransactionDate(event.date, locale)}`;
+    return {
+      key: "overdue",
+      label:
+        locale === "ru"
+          ? `Просрочено с ${formatTransactionDate(event.date, locale)}`
+          : `Overdue since ${formatTransactionDate(event.date, locale)}`,
+      tone: "warning",
+      priority: 3,
+    };
   }
 
   if (event.date === today) {
-    return locale === "ru" ? "Ожидается сегодня" : "Expected today";
+    return {
+      key: "expected_today",
+      label: locale === "ru" ? "Ожидается сегодня" : "Expected today",
+      tone: "warning",
+      priority: 2,
+    };
   }
 
-  return locale === "ru" ? "Ожидается" : "Expected";
+  return {
+    key: "expected",
+    label: locale === "ru" ? "Ожидается" : "Expected",
+    tone: "neutral",
+    priority: 1,
+  };
 }
 
 export function setExpectedEventReminderInSetup(

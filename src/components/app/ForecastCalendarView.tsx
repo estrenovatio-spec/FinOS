@@ -14,7 +14,7 @@ import {
 } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
-import { expectedExpenseStatusLabel } from "@/lib/expected-events";
+import { resolveExpectedEventDisplayStatus } from "@/lib/expected-events";
 import { calculateBalanceAtDate, getForecastDays } from "@/lib/decision-core/forecast-days";
 import type { BalanceForecast, ForecastDay, ForecastEvent } from "@/lib/decision-core/types";
 import { useStore } from "@/store/useStore";
@@ -24,13 +24,13 @@ import type { SavingsGoal } from "@/types/planning";
 function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   switch (source) {
     case "pending_transaction":
-      return locale === "ru" ? "Ожидается" : "Expected";
+      return locale === "ru" ? "Платёж" : "Payment";
     case "recurring":
       return locale === "ru" ? "Регулярный платёж" : "Recurring payment";
     case "debt_payment":
       return locale === "ru" ? "Платёж по долгу" : "Debt payment";
     case "income_source":
-      return locale === "ru" ? "Ожидается" : "Expected";
+      return locale === "ru" ? "Доход" : "Income";
     case "confirmed_transaction":
       return locale === "ru" ? "Деньги уже пришли" : "Already received";
     case "essential_budget":
@@ -38,39 +38,11 @@ function sourceLabel(source: ForecastEvent["source"], locale: Locale): string {
   }
 }
 
-function plannedIncomeStateLabel(event: ForecastEvent, locale: Locale): string | null {
-  if (event.source !== "income_source") return null;
-  switch (event.plannedIncomeStatus) {
-    case "scheduled":
-      return locale === "ru" ? "Ожидается" : "Expected";
-    case "due_today":
-      return locale === "ru" ? "Ожидается сегодня" : "Expected today";
-    case "overdue_unconfirmed":
-      return locale === "ru" ? "Ещё не пришло" : "Still not received";
-    default:
-      return null;
-  }
-}
-
 function eventAccent(event: ForecastEvent, locale: Locale): { badge: string; label: string; tone: string } {
   if (event.source === "income_source") {
-    if (event.plannedIncomeStatus === "overdue_unconfirmed") {
-      return {
-        badge: "🟠",
-        label: locale === "ru" ? "Ещё не пришло" : "Still not received",
-        tone: "text-amber-700",
-      };
-    }
     return {
-      badge: "🟡",
-      label:
-        event.plannedIncomeStatus === "due_today"
-          ? locale === "ru"
-            ? "Ожидается сегодня"
-            : "Expected today"
-          : locale === "ru"
-            ? "Ожидается"
-            : "Expected",
+      badge: event.plannedIncomeStatus === "overdue_unconfirmed" ? "🟠" : "🟡",
+      label: locale === "ru" ? "Доход" : "Income",
       tone: "text-amber-700",
     };
   }
@@ -508,22 +480,32 @@ export function ForecastCalendarView({
                                             event.source !== "confirmed_transaction" &&
                                             event.source !== "essential_budget" ? (
                                               <p className="mt-0.5 text-xs text-muted-foreground">
-                                                {expectedExpenseStatusLabel({
-                                                  event: {
-                                                    date: event.date,
-                                                    debtId: event.debtId ?? null,
-                                                    paymentSource: event.paymentSource,
-                                                    linkedEntityId: event.linkedEntityId ?? null,
-                                                  },
-                                                  history: expectedEventHistory,
-                                                  today: todayIso,
-                                                  locale,
-                                                })}
+                                                {
+                                                  resolveExpectedEventDisplayStatus({
+                                                    kind: "expense",
+                                                    event: {
+                                                      date: event.date,
+                                                      debtId: event.debtId ?? null,
+                                                      paymentSource: event.paymentSource,
+                                                      linkedEntityId: event.linkedEntityId ?? null,
+                                                    },
+                                                    history: expectedEventHistory,
+                                                    today: todayIso,
+                                                    locale,
+                                                  }).label
+                                                }
                                               </p>
                                             ) : null}
-                                            {plannedIncomeStateLabel(event, locale) ? (
+                                            {event.source === "income_source" &&
+                                            event.plannedIncomeStatus ? (
                                               <p className="mt-0.5 text-xs text-muted-foreground">
-                                                {plannedIncomeStateLabel(event, locale)}
+                                                {
+                                                  resolveExpectedEventDisplayStatus({
+                                                    kind: "income",
+                                                    status: event.plannedIncomeStatus,
+                                                    locale,
+                                                  }).label
+                                                }
                                               </p>
                                             ) : null}
                                           </div>

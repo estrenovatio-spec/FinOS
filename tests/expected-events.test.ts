@@ -7,6 +7,7 @@ import {
   clearExpectedEventReminderInSetup,
   expectedExpenseStatusLabel,
   isExpectedEventVisibleToday,
+  resolveExpectedEventDisplayStatus,
   rescheduleIncomeSourceInSetup,
   setExpectedEventReminderInSetup,
   shouldSuggestRecurringAmountUpdate,
@@ -199,6 +200,54 @@ test("expected expense status explains when a payment was moved to a new date", 
   });
 
   assert.equal(label, "Перенесено с 17.07.2026 на 18.07.2026");
+});
+
+test("Today, Forecast Calendar, and Focused Forecast Card use the same expected-event status helper", () => {
+  const status = resolveExpectedEventDisplayStatus({
+    kind: "expense",
+    event: {
+      date: "2026-07-18",
+      debtId: null,
+      paymentSource: "recurring",
+      linkedEntityId: "mortgage-recurring",
+    },
+    history: [
+      {
+        id: "history-1",
+        eventKey: "expense:mortgage-july:2026-07-17",
+        kind: "expense",
+        title: "Ипотека",
+        originalDate: "2026-07-17",
+        action: "rescheduled",
+        resultingDate: "2026-07-18",
+        paymentSource: "recurring",
+        linkedEntityId: "mortgage-recurring",
+        debtId: null,
+        createdAt: "2026-07-17T09:00:00.000Z",
+      },
+    ],
+    today: "2026-07-18",
+    locale: "ru",
+  });
+
+  assert.equal(status.label, "Перенесено с 17.07.2026 на 18.07.2026");
+
+  const todaySource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/TodayScreen.tsx"),
+    "utf8",
+  );
+  const calendarSource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/app/ForecastCalendarView.tsx"),
+    "utf8",
+  );
+  const focusedSource = fs.readFileSync(
+    path.join(process.cwd(), "src/components/app/FocusedForecastCard.tsx"),
+    "utf8",
+  );
+
+  assert.match(todaySource, /resolveExpectedEventDisplayStatus\(/);
+  assert.match(calendarSource, /resolveExpectedEventDisplayStatus\(/);
+  assert.match(focusedSource, /resolveExpectedEventDisplayStatus\(/);
 });
 
 test("expected event dialog uses human labels and keeps the confirmation form restricted", () => {
