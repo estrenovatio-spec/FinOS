@@ -16,7 +16,7 @@
     "test:beta-polish": "node --import tsx --test tests/today-beta-polish.test.ts tests/income-hotfix.test.ts tests/daily-safe-spending.test.ts tests/recurring-mobile-layout.test.ts tests/today-overview-layout.test.ts tests/plan-navigation.test.ts",
     "test:cloud-auth": "node --import tsx --test tests/email-otp.test.ts tests/email-sender.test.ts tests/email-otp-service.test.ts",
     "test:currency": "node --import tsx --test tests/currency-widget.test.ts",
-    "test:adviser": "node --import tsx --test tests/adviser-tab.test.ts tests/advisor-evaluation.test.ts tests/adviser-financial-engine.test.ts tests/adviser-recommendations.test.ts tests/advisor-question-classifier.test.ts tests/advisor-system-prompt.test.ts tests/advisor-route-contract.test.ts",
+    "test:adviser": "node --import tsx --test tests/adviser-tab.test.ts tests/advisor-evaluation.test.ts tests/adviser-financial-engine.test.ts tests/adviser-recommendations.test.ts tests/adviser-real-world-benchmark.test.ts tests/advisor-question-classifier.test.ts tests/advisor-system-prompt.test.ts tests/advisor-route-contract.test.ts",
     "test:financial-calendar": "node --import tsx --test tests/financial-calendar.test.ts",
     "test:financial-scenarios": "node --import tsx --test tests/financial-scenarios.test.ts tests/adviser-scenarios.test.ts",
     "test:expected-events": "node --import tsx --test tests/expected-events.test.ts",

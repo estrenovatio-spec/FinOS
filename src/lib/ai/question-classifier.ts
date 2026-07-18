@@ -142,8 +142,24 @@ export function classifyAdvisorQuestion(
   const amountRub = extractQuestionAmountRub(question);
   const delayDays = extractDelayDays(question);
   const emotionalTone = detectEmotionalTone(question);
+  const hasIncomeDelayMeaning =
+    /(зарплат|доход|поступлен|поступит|приход)/i.test(lower) &&
+    /(задерж|позже|сдвинут|запазд|запозда|не придет|не придет вовремя|не придет в срок|не придет)/i.test(lower);
+  const hasExpensePressureMeaning =
+    /(куда .*утека|почему денег опять нет|опять нет денег|почему .*не остаетс|почему .*не остаётся|к концу месяца .*пусто|почему .*пусто)/i.test(
+      lower,
+    );
+  const hasLongTermHomeGoalMeaning =
+    (purchaseKind === "home" || purchaseKind === "apartment") &&
+    /(через\s+\d+\s*(лет|года|год)|за\s+\d+\s*(лет|года|год)|реально|достижим|какой нужен темп|смогу ли)/i.test(
+      lower,
+    );
 
-  if (/(если|что будет если|задерж|не придет|не придёт|потеряю работу)/i.test(lower) && delayDays != null) {
+  if (
+    ((/(если|что будет если|задерж|не придет|не придёт|потеряю работу)/i.test(lower) &&
+      delayDays != null) ||
+      hasIncomeDelayMeaning)
+  ) {
     return {
       type: "cashflow_delay",
       purchaseKind: null,
@@ -155,7 +171,7 @@ export function classifyAdvisorQuestion(
     };
   }
 
-  if (purchaseKind != null && /(можно|потяну|купить|покупк|взять)/i.test(lower)) {
+  if (purchaseKind != null && /(можно|потяну|купить|покупк|взять|брат|рано|созрел|поздно)/i.test(lower)) {
     return {
       type: "purchase_decision",
       purchaseKind,
@@ -203,7 +219,7 @@ export function classifyAdvisorQuestion(
     };
   }
 
-  if (/(трат|расход|дорог|эконом|ужат|нет денег|не хватает денег|почему денег не хватает)/i.test(lower)) {
+  if (/(трат|расход|дорог|эконом|ужат|нет денег|не хватает денег|почему денег не хватает)/i.test(lower) || hasExpensePressureMeaning) {
     return {
       type: "expense_control",
       purchaseKind: null,
@@ -227,7 +243,7 @@ export function classifyAdvisorQuestion(
     };
   }
 
-  if (/(цел|мечт|когда куплю|когда смогу купить)/i.test(lower)) {
+  if (/(цел|мечт|когда куплю|когда смогу купить)/i.test(lower) || hasLongTermHomeGoalMeaning) {
     return {
       type: "goal_planning",
       purchaseKind,
