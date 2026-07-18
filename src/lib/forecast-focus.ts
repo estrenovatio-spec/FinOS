@@ -27,6 +27,11 @@ export type ForecastFocusResolution = {
   outOfHorizon: boolean;
 };
 
+export type ForecastCalendarNavigationTarget = {
+  targetMonthKey: string | null;
+  selectedDate: string | null;
+};
+
 function sortGroups(left: ForecastDateGroup, right: ForecastDateGroup) {
   return left.date.localeCompare(right.date);
 }
@@ -124,5 +129,44 @@ export function resolveForecastFocus(
     selectedEventId: null,
     exactMatch: false,
     outOfHorizon: false,
+  };
+}
+
+export function resolveForecastCalendarNavigationTarget(args: {
+  forecast: BalanceForecast;
+  focus: ForecastFocus | null;
+  todayIso: string;
+}): ForecastCalendarNavigationTarget {
+  const todayIso = normalizeIsoDate(args.todayIso);
+  const currentMonthKey = todayIso?.slice(0, 7) ?? null;
+  const focusDate = normalizeIsoDate(args.focus?.date);
+
+  if (!focusDate) {
+    return {
+      targetMonthKey: currentMonthKey,
+      selectedDate: null,
+    };
+  }
+
+  if (todayIso && focusDate < todayIso) {
+    const nearestRiskDate = normalizeIsoDate(args.forecast.firstDeficitDate);
+    return {
+      targetMonthKey: currentMonthKey,
+      selectedDate:
+        nearestRiskDate &&
+        nearestRiskDate >= todayIso &&
+        nearestRiskDate.slice(0, 7) === currentMonthKey
+          ? nearestRiskDate
+          : null,
+    };
+  }
+
+  const resolution = resolveForecastFocus(args.forecast, args.focus);
+  return {
+    targetMonthKey:
+      resolution.selectedDate?.slice(0, 7) ??
+      focusDate.slice(0, 7) ??
+      currentMonthKey,
+    selectedDate: resolution.selectedDate,
   };
 }

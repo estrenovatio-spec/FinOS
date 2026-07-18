@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronLeft, ChevronRight, Goal, TriangleAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -187,6 +187,7 @@ export function ForecastCalendarView({
   startDate,
   goals,
   selectedDate,
+  targetMonthKey,
   onSelectedDateChange,
   onOpenPlan,
 }: {
@@ -195,6 +196,7 @@ export function ForecastCalendarView({
   startDate: string;
   goals: SavingsGoal[];
   selectedDate: string | null;
+  targetMonthKey?: string | null;
   onSelectedDateChange: (date: string | null) => void;
   onOpenPlan?: (params: { section: "recurring" | "limits" | "debts" | "goals"; entityId?: string | null }) => void;
 }) {
@@ -230,12 +232,29 @@ export function ForecastCalendarView({
   }, [goals]);
 
   const [monthIndex, setMonthIndex] = useState(0);
+  const lastAppliedTargetMonthRef = useRef<string | null>(null);
   const expectedEventHistory = useStore((s) => s.expectedEventHistory);
   const currentMonthKey = startDate.slice(0, 7);
 
   useEffect(() => {
     setMonthIndex(0);
   }, [months.length]);
+
+  useEffect(() => {
+    if (!targetMonthKey) {
+      lastAppliedTargetMonthRef.current = null;
+      return;
+    }
+    if (lastAppliedTargetMonthRef.current === targetMonthKey) {
+      return;
+    }
+    const nextIndex = months.findIndex((item) => item.key === targetMonthKey);
+    if (nextIndex < 0) {
+      return;
+    }
+    lastAppliedTargetMonthRef.current = targetMonthKey;
+    setMonthIndex(nextIndex);
+  }, [months, targetMonthKey]);
 
   const month = months[monthIndex] ?? null;
   const todayIso = getLocalTodayIsoDate();
@@ -245,6 +264,13 @@ export function ForecastCalendarView({
       onSelectedDateChange(null);
       return;
     }
+    const waitingForTargetMonth =
+      Boolean(targetMonthKey) &&
+      month.key !== targetMonthKey &&
+      selectedDate?.slice(0, 7) === targetMonthKey;
+    if (waitingForTargetMonth) {
+      return;
+    }
     const resolvedDate = resolveCalendarSelectionState({
       currentSelectedDate: selectedDate,
       monthDays: month.days,
@@ -252,7 +278,7 @@ export function ForecastCalendarView({
     if (resolvedDate !== selectedDate) {
       onSelectedDateChange(resolvedDate);
     }
-  }, [month, onSelectedDateChange, selectedDate]);
+  }, [month, onSelectedDateChange, selectedDate, targetMonthKey]);
 
   if (!month) {
     return (

@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ForecastCalendarView } from "@/components/app/ForecastCalendarView";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getLocalTodayIsoDate } from "@/lib/format-date";
-import type { ForecastFocus } from "@/lib/forecast-focus";
+import {
+  resolveForecastCalendarNavigationTarget,
+  type ForecastFocus,
+} from "@/lib/forecast-focus";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   useHouseholdBalances,
@@ -75,6 +78,30 @@ export function ForecastTab({
   );
   const horizonMonths = snapshot.forecast.horizonMonths ?? forecastHorizonMonths;
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
+  const [calendarTargetMonthKey, setCalendarTargetMonthKey] = useState<string | null>(null);
+  const lastAppliedFocusKeyRef = useRef<string | null>(null);
+  const focusKey = focus
+    ? `${focus.reason}:${focus.date}:${focus.eventId ?? "none"}`
+    : null;
+  const calendarTarget = useMemo(
+    () =>
+      resolveForecastCalendarNavigationTarget({
+        forecast: snapshot.forecast,
+        focus,
+        todayIso: today,
+      }),
+    [focus, snapshot.forecast, today],
+  );
+
+  useEffect(() => {
+    if (focusKey === lastAppliedFocusKeyRef.current) {
+      return;
+    }
+    lastAppliedFocusKeyRef.current = focusKey;
+    setCalendarSelectedDate(calendarTarget.selectedDate);
+    setCalendarTargetMonthKey(calendarTarget.targetMonthKey);
+  }, [calendarTarget.selectedDate, calendarTarget.targetMonthKey, focusKey]);
+
   const planLink = useMemo(() => {
     const focusedEvent =
       focus?.eventId != null
@@ -125,6 +152,7 @@ export function ForecastTab({
         startDate={today}
         goals={savingsGoals}
         selectedDate={calendarSelectedDate}
+        targetMonthKey={calendarTargetMonthKey}
         onSelectedDateChange={setCalendarSelectedDate}
         onOpenPlan={onOpenPlan}
       />

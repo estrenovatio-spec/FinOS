@@ -11,6 +11,7 @@ import {
   selectCalendarDay,
 } from "@/components/app/ForecastCalendarView";
 import { calculateBalanceAtDate } from "@/lib/decision-core/forecast-days";
+import { resolveForecastCalendarNavigationTarget } from "@/lib/forecast-focus";
 import type { BalanceForecast } from "@/lib/decision-core/types";
 
 function makeForecast(partial?: Partial<BalanceForecast>): BalanceForecast {
@@ -365,6 +366,102 @@ test("calendar keeps the user-selected date after data rerender", () => {
   );
 });
 
+test("risk alert deep link opens forecast on the risk month and day", () => {
+  const target = resolveForecastCalendarNavigationTarget({
+    forecast: makeForecast({
+      events: [
+        {
+          id: "rent-sep",
+          title: "Аренда",
+          amount: -30000,
+          date: "2026-09-29",
+          balanceAfter: -1200,
+          source: "recurring",
+        },
+      ],
+      days: [
+        {
+          date: "2026-09-29",
+          events: [
+            {
+              id: "rent-sep",
+              title: "Аренда",
+              amount: -30000,
+              date: "2026-09-29",
+              balanceAfter: -1200,
+              source: "recurring",
+            },
+          ],
+          incomeTotal: 0,
+          expenseTotal: 30000,
+          netChange: -30000,
+          startBalance: 28800,
+          endBalance: -1200,
+        },
+      ],
+      firstDeficitDate: "2026-09-29",
+    }),
+    focus: {
+      date: "2026-09-29",
+      source: "today_main_action",
+      reason: "future_deficit",
+      eventId: "rent-sep",
+    },
+    todayIso: "2026-07-18",
+  });
+
+  assert.equal(target.targetMonthKey, "2026-09");
+  assert.equal(target.selectedDate, "2026-09-29");
+});
+
+test("stale risk date falls back to the current month", () => {
+  const target = resolveForecastCalendarNavigationTarget({
+    forecast: makeForecast({
+      firstDeficitDate: "2026-08-04",
+      events: [
+        {
+          id: "rent-aug",
+          title: "Аренда",
+          amount: -10000,
+          date: "2026-08-04",
+          balanceAfter: -2500,
+          source: "recurring",
+        },
+      ],
+      days: [
+        {
+          date: "2026-08-04",
+          events: [
+            {
+              id: "rent-aug",
+              title: "Аренда",
+              amount: -10000,
+              date: "2026-08-04",
+              balanceAfter: -2500,
+              source: "recurring",
+            },
+          ],
+          incomeTotal: 0,
+          expenseTotal: 10000,
+          netChange: -10000,
+          startBalance: 7500,
+          endBalance: -2500,
+        },
+      ],
+    }),
+    focus: {
+      date: "2026-07-10",
+      source: "today_main_action",
+      reason: "future_deficit",
+      eventId: "old-risk",
+    },
+    todayIso: "2026-07-18",
+  });
+
+  assert.equal(target.targetMonthKey, "2026-07");
+  assert.equal(target.selectedDate, null);
+});
+
 test("month summary separates monthly free money from cumulative balance", () => {
   const summary = buildForecastMonthSummary({
     monthKey: "2026-07",
@@ -553,4 +650,15 @@ test("debt payment stays inside the selected day and the calendar no longer rend
   assert.doesNotMatch(source, /shouldRenderCalendarExplanation/);
   assert.doesNotMatch(source, /explanation\.title/);
   assert.doesNotMatch(source, /explanation\.summary/);
+});
+
+test("forecast tab passes the resolved target month into the calendar", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/app/ForecastTab.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /resolveForecastCalendarNavigationTarget/);
+  assert.match(source, /targetMonthKey=\{calendarTargetMonthKey\}/);
+  assert.match(source, /selectedDate=\{calendarSelectedDate\}/);
 });
