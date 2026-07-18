@@ -164,6 +164,7 @@ function mergePlanningByKey<T extends { updatedAt?: string }>(
   getKey: (item: T) => string,
   lastSyncedAt?: string | null,
   pendingIds?: ReadonlySet<string>,
+  previouslySyncedRemoteIds?: ReadonlySet<string>,
 ): T[] {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   const map = new Map<string, T>();
@@ -177,6 +178,10 @@ function mergePlanningByKey<T extends { updatedAt?: string }>(
     const existing = map.get(key);
     if (!existing) {
       if (pendingIds?.has(key)) {
+        map.set(key, item);
+        continue;
+      }
+      if (previouslySyncedRemoteIds && !previouslySyncedRemoteIds.has(key)) {
         map.set(key, item);
         continue;
       }
@@ -231,8 +236,16 @@ export function mergeSavingsGoals(
   remote: SavingsGoal[],
   lastSyncedAt?: string | null,
   pendingIds?: ReadonlySet<string>,
+  previouslySyncedRemoteIds?: ReadonlySet<string>,
 ): SavingsGoal[] {
-  return mergePlanningByKey(local, remote, (g) => g.id, lastSyncedAt, pendingIds);
+  return mergePlanningByKey(
+    local,
+    remote,
+    (g) => g.id,
+    lastSyncedAt,
+    pendingIds,
+    previouslySyncedRemoteIds,
+  );
 }
 
 export function mergeCategoryBudgets(
@@ -318,6 +331,7 @@ export function mergeSyncPayload(
   deletedTransactionIds?: ReadonlySet<string>,
   deletedDebtIds?: ReadonlySet<string>,
   pendingTransactionUpdateIds?: ReadonlySet<string>,
+  previouslySyncedRemoteGoalIds?: ReadonlySet<string>,
   pendingGoalIds?: ReadonlySet<string>,
 ): MergedSyncResult {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
@@ -350,6 +364,7 @@ export function mergeSyncPayload(
     remote.savingsGoals ?? [],
     lastSyncedAt,
     pendingGoalIds,
+    previouslySyncedRemoteGoalIds,
   );
   const categoryBudgets = mergeCategoryBudgets(
     localPlanning.categoryBudgets,

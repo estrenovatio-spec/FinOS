@@ -137,6 +137,7 @@ export function applyHouseholdSync(
     deletedTransactions,
     deletedDebts,
     pendingTransactionUpdates,
+    new Set(cloud.lastSyncedRemoteGoalIds),
     pendingGoalIds,
   );
 

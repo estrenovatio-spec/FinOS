@@ -315,6 +315,62 @@ test("applyHouseholdSync keeps a pending local goal when remote sync is still be
   useCloudStore.setState(previousCloud);
 });
 
+test("applyHouseholdSync keeps a local unsynced goal even when last sync is newer than the goal timestamp", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    transactions: [],
+    categories: getDefaultCategories(),
+    savingsGoals: [
+      {
+        id: "goal-local-only",
+        name: "Подушка на машину",
+        targetAmount: 250000,
+        savedAmount: 15000,
+        deadline: "2026-10-01",
+        monthlyContribution: null,
+        kind: "custom",
+        emergencyMonths: null,
+        updatedAt: "2026-07-18T09:00:00.000Z",
+      },
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-18T09:05:00.000Z",
+    pendingGoalIds: [],
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      savingsGoals: [],
+    }),
+    "token-1",
+  );
+
+  assert.equal(useStore.getState().savingsGoals.length, 1);
+  assert.equal(useStore.getState().savingsGoals[0]?.id, "goal-local-only");
+  assert.equal(useStore.getState().savingsGoals[0]?.name, "Подушка на машину");
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
 test("default local state with only system categories is meaningfully empty", () => {
   assert.equal(
     isMeaningfullyEmptyLocalState({
