@@ -188,6 +188,9 @@ export function ExpectedEventActionDialog({
       action,
       resultingDate: options?.resultingDate ?? null,
       amount: options?.amount ?? null,
+      paymentSource: event.kind === "expense" ? event.paymentSource : undefined,
+      linkedEntityId: event.kind === "expense" ? event.linkedEntityId ?? null : undefined,
+      debtId: event.kind === "expense" ? event.debtId ?? null : undefined,
       createdAt: new Date().toISOString(),
     });
   }

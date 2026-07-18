@@ -2739,6 +2739,52 @@ test("rescheduled recurring mortgage appears in Today on the new due date", () =
   assert.equal(scenario.result.mainAction.type, "pay_today");
 });
 
+test("pending recurring mortgage keeps its recurring title even when the old pending transaction note is empty", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-18",
+      balances: { all: 68115, me: 68115, partner: 0 },
+      transactions: [
+        tx({
+          id: "mortgage-july",
+          amount: 19000,
+          type: "expense",
+          categoryId: "other",
+          date: "2026-07-18",
+          note: "",
+          confirmed: false,
+          recurringId: "mortgage-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          nextRunDate: "2026-07-18",
+          frequency: "monthly",
+          dayOfMonth: 16,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const pendingForecastPayment = scenario.ctx.forecast.events.find(
+    (event) => event.source === "pending_transaction" && event.date === "2026-07-18",
+  );
+
+  assert.equal(pendingForecastPayment?.title, "Ипотека");
+  assert.equal(scenario.result.todayPayments[0]?.title, "Ипотека");
+  assert.equal(scenario.result.todayPayments[0]?.paymentSource, "recurring");
+  assert.equal(scenario.result.todayPayments[0]?.linkedEntityId, "mortgage-recurring");
+});
+
 test("snoozed overdue income is hidden today without changing the forecast date, and returns tomorrow", () => {
   const baseMoneySetup = {
     ...emptyMoneySetup(),

@@ -1,4 +1,5 @@
 import { advanceRecurringDate } from "@/lib/planning/analytics";
+import { formatTransactionDate } from "@/lib/format-date";
 import {
   listConfiguredIncomeSources,
   type MoneySetup,
@@ -46,6 +47,9 @@ export interface ExpectedEventHistoryEntry {
   action: ExpectedEventHistoryAction;
   resultingDate?: string | null;
   amount?: number | null;
+  paymentSource?: "debt" | "recurring" | "manual";
+  linkedEntityId?: string | null;
+  debtId?: string | null;
   createdAt: string;
 }
 
@@ -257,6 +261,64 @@ export function expectedEventKey(event: ExpectedEvent): string {
     : event.debtId
       ? `debt:${event.debtId}:${event.date}`
       : `expense:${event.transactionId}:${event.date}`;
+}
+
+function matchesExpenseHistoryEntry(
+  entry: ExpectedEventHistoryEntry,
+  event: Pick<ExpectedExpenseEvent, "date" | "debtId" | "paymentSource" | "linkedEntityId">,
+): boolean {
+  if (entry.kind !== "expense") return false;
+
+  if (event.debtId && entry.debtId && event.debtId === entry.debtId) {
+    return true;
+  }
+
+  if (
+    event.paymentSource &&
+    entry.paymentSource &&
+    event.linkedEntityId &&
+    entry.linkedEntityId &&
+    event.paymentSource === entry.paymentSource &&
+    event.linkedEntityId === entry.linkedEntityId
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function expectedExpenseStatusLabel(args: {
+  event: Pick<ExpectedExpenseEvent, "date" | "debtId" | "paymentSource" | "linkedEntityId">;
+  history: ExpectedEventHistoryEntry[] | undefined;
+  today: string;
+  locale: Locale;
+}): string {
+  const { event, history, today, locale } = args;
+  const entries = history ?? [];
+
+  const rescheduledEntry = entries.find(
+    (entry) =>
+      entry.action === "rescheduled" &&
+      entry.resultingDate === event.date &&
+      matchesExpenseHistoryEntry(entry, event),
+  );
+  if (rescheduledEntry && rescheduledEntry.originalDate !== event.date) {
+    return locale === "ru"
+      ? `Перенесено с ${formatTransactionDate(rescheduledEntry.originalDate, locale)} на ${formatTransactionDate(event.date, locale)}`
+      : `Rescheduled from ${formatTransactionDate(rescheduledEntry.originalDate, locale)} to ${formatTransactionDate(event.date, locale)}`;
+  }
+
+  if (event.date < today) {
+    return locale === "ru"
+      ? `Просрочено с ${formatTransactionDate(event.date, locale)}`
+      : `Overdue since ${formatTransactionDate(event.date, locale)}`;
+  }
+
+  if (event.date === today) {
+    return locale === "ru" ? "Ожидается сегодня" : "Expected today";
+  }
+
+  return locale === "ru" ? "Ожидается" : "Expected";
 }
 
 export function setExpectedEventReminderInSetup(

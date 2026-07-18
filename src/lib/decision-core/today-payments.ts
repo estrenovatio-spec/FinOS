@@ -1,5 +1,6 @@
 import { getCategoryLabel } from "@/lib/categories";
 import { isExpectedEventVisibleToday } from "@/lib/expected-events";
+import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
 import { isPendingTransaction } from "@/lib/transaction-confirmed";
 import type { DecisionCoreContext, DecisionTodayPayment } from "@/lib/decision-core/types";
 import type { DebtItem } from "@/types/planning";
@@ -26,7 +27,7 @@ function sortDebtsByStrategy(debts: DebtItem[]): DebtItem[] {
 }
 
 export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayment[] {
-  const { locale, today, categories, transactions, debts } = ctx;
+  const { locale, today, categories, transactions, debts, recurringTransactions } = ctx;
 
   const pendingExpensePayments: DecisionTodayPayment[] = transactions
     .filter(isPendingTransaction)
@@ -39,19 +40,30 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
         today,
       ),
     )
-    .map((transaction) => ({
-      id: transaction.id,
-      title:
-        transaction.note.trim() || getCategoryLabel(transaction.categoryId, categories, locale),
-      amount: transaction.amount,
-      date: transaction.date.slice(0, 10),
-      isOverdue: transaction.date.slice(0, 10) < today,
-      source: "pending_transaction" as const,
-      debtId: null,
-      paymentKey: `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
-      paymentSource: transaction.recurringId ? ("recurring" as const) : ("manual" as const),
-      linkedEntityId: transaction.recurringId ?? transaction.id,
-    }));
+    .map((transaction) => {
+      const recurringItem =
+        transaction.recurringId != null
+          ? recurringTransactions.find((item) => item.id === transaction.recurringId) ?? null
+          : null;
+      const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
+      const title =
+        (recurringItem ? recurringDisplayName(recurringItem, categoryLabel) : null) ||
+        transaction.note.trim() ||
+        categoryLabel;
+
+      return {
+        id: transaction.id,
+        title,
+        amount: transaction.amount,
+        date: transaction.date.slice(0, 10),
+        isOverdue: transaction.date.slice(0, 10) < today,
+        source: "pending_transaction" as const,
+        debtId: null,
+        paymentKey: `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
+        paymentSource: transaction.recurringId ? ("recurring" as const) : ("manual" as const),
+        linkedEntityId: transaction.recurringId ?? transaction.id,
+      };
+    });
 
   const prioritizedDebts = sortDebtsByStrategy(
     debts

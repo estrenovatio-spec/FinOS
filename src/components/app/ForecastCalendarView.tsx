@@ -14,8 +14,10 @@ import {
 } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { buildForecastCalendarMonths } from "@/lib/forecast-calendar";
+import { expectedExpenseStatusLabel } from "@/lib/expected-events";
 import { calculateBalanceAtDate, getForecastDays } from "@/lib/decision-core/forecast-days";
 import type { BalanceForecast, ForecastDay, ForecastEvent } from "@/lib/decision-core/types";
+import { useStore } from "@/store/useStore";
 import type { Locale } from "@/types";
 import type { SavingsGoal } from "@/types/planning";
 
@@ -256,6 +258,7 @@ export function ForecastCalendarView({
   }, [goals]);
 
   const [monthIndex, setMonthIndex] = useState(0);
+  const expectedEventHistory = useStore((s) => s.expectedEventHistory);
   const currentMonthKey = startDate.slice(0, 7);
 
   useEffect(() => {
@@ -501,6 +504,23 @@ export function ForecastCalendarView({
                                             <p className="mt-0.5 text-xs text-muted-foreground">
                                               {sourceLabel(event.source, locale)}
                                             </p>
+                                            {event.amount < 0 &&
+                                            event.source !== "confirmed_transaction" &&
+                                            event.source !== "essential_budget" ? (
+                                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                                {expectedExpenseStatusLabel({
+                                                  event: {
+                                                    date: event.date,
+                                                    debtId: event.debtId ?? null,
+                                                    paymentSource: event.paymentSource,
+                                                    linkedEntityId: event.linkedEntityId ?? null,
+                                                  },
+                                                  history: expectedEventHistory,
+                                                  today: todayIso,
+                                                  locale,
+                                                })}
+                                              </p>
+                                            ) : null}
                                             {plannedIncomeStateLabel(event, locale) ? (
                                               <p className="mt-0.5 text-xs text-muted-foreground">
                                                 {plannedIncomeStateLabel(event, locale)}

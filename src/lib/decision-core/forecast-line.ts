@@ -171,7 +171,12 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
     .filter(isPendingTransaction)
     .filter((transaction) => transaction.date.slice(0, 10) >= ctx.today)
     .map((transaction) => {
+      const recurringItem =
+        transaction.recurringId != null
+          ? ctx.recurringTransactions.find((item) => item.id === transaction.recurringId) ?? null
+          : null;
       const title =
+        (recurringItem ? recurringEventTitle(ctx, recurringItem) : null) ||
         transaction.note.trim() ||
         getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale);
       const paymentSource =

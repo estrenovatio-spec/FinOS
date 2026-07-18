@@ -21,7 +21,7 @@ import { getLocalTodayIsoDate } from "@/lib/format-date";
 import { formatTransactionDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { ForecastFocus } from "@/lib/forecast-focus";
-import type { ExpectedEvent } from "@/lib/expected-events";
+import { expectedExpenseStatusLabel, type ExpectedEvent } from "@/lib/expected-events";
 import type { PlanSection } from "@/lib/plan-navigation";
 import {
   calculateFreeMoneyUntilPeriodEnd,
@@ -51,6 +51,7 @@ export function TodayScreen({
   const debts = useStore((s) => s.debts);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
   const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
+  const expectedEventHistory = useStore((s) => s.expectedEventHistory);
   const householdFilter = useStore((s) => s.householdFilter);
   const partnerName = useStore((s) => s.partnerName);
   const partnerKeywords = useStore((s) => s.partnerKeywords);
@@ -348,6 +349,13 @@ export function TodayScreen({
                         title: payment.title,
                         amount: payment.amount,
                         date: payment.date,
+                        debtId: payment.debtId ?? null,
+                        source:
+                          payment.source === "debt_payment"
+                            ? "debt_payment"
+                            : "pending_transaction",
+                        paymentSource: payment.paymentSource,
+                        linkedEntityId: payment.linkedEntityId ?? null,
                       },
                       "confirm",
                     )
@@ -360,10 +368,28 @@ export function TodayScreen({
                         title: payment.title,
                         amount: payment.amount,
                         date: payment.date,
+                        debtId: payment.debtId ?? null,
+                        source:
+                          payment.source === "debt_payment"
+                            ? "debt_payment"
+                            : "pending_transaction",
+                        paymentSource: payment.paymentSource,
+                        linkedEntityId: payment.linkedEntityId ?? null,
                       },
                       "skip",
                     )
                   }
+                  status={expectedExpenseStatusLabel({
+                    event: {
+                      date: payment.date,
+                      debtId: payment.debtId ?? null,
+                      paymentSource: payment.paymentSource,
+                      linkedEntityId: payment.linkedEntityId ?? null,
+                    },
+                    history: expectedEventHistory,
+                    today,
+                    locale,
+                  })}
                 />
               ))}
             </div>
@@ -405,12 +431,14 @@ function TodayPaymentRow({
   title,
   amount,
   date,
+  status,
   onConfirm,
   onSkip,
 }: {
   title: string;
   amount: number;
   date: string;
+  status: string;
   onConfirm: () => void;
   onSkip: () => void;
 }) {
@@ -423,6 +451,7 @@ function TodayPaymentRow({
         <p className="text-xs text-muted-foreground">
           {formatMoney(amount, locale)} {locale === "ru" ? "₽" : "RUB"} · {formatTransactionDate(date, locale)}
         </p>
+        <p className="mt-1 text-xs text-muted-foreground">{status}</p>
       </div>
       <div className="flex shrink-0 gap-2">
         <Button type="button" size="sm" onClick={onConfirm}>

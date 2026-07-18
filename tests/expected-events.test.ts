@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   cancelIncomeOccurrenceInSetup,
   clearExpectedEventReminderInSetup,
+  expectedExpenseStatusLabel,
   isExpectedEventVisibleToday,
   rescheduleIncomeSourceInSetup,
   setExpectedEventReminderInSetup,
@@ -168,6 +169,36 @@ test("snoozing an expected event stores one stable reminder entry and hides it o
     ).expectedEventReminderStates,
     [],
   );
+});
+
+test("expected expense status explains when a payment was moved to a new date", () => {
+  const label = expectedExpenseStatusLabel({
+    event: {
+      date: "2026-07-18",
+      debtId: null,
+      paymentSource: "recurring",
+      linkedEntityId: "mortgage-recurring",
+    },
+    history: [
+      {
+        id: "history-1",
+        eventKey: "expense:mortgage-july:2026-07-17",
+        kind: "expense",
+        title: "Ипотека",
+        originalDate: "2026-07-17",
+        action: "rescheduled",
+        resultingDate: "2026-07-18",
+        paymentSource: "recurring",
+        linkedEntityId: "mortgage-recurring",
+        debtId: null,
+        createdAt: "2026-07-17T09:00:00.000Z",
+      },
+    ],
+    today: "2026-07-18",
+    locale: "ru",
+  });
+
+  assert.equal(label, "Перенесено с 17.07.2026 на 18.07.2026");
 });
 
 test("expected event dialog uses human labels and keeps the confirmation form restricted", () => {
