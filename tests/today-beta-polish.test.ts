@@ -493,8 +493,8 @@ test("main spending card keeps the shared setup flow as a secondary action", () 
   });
 
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.equal(planned?.secondaryActionLabel, "Настроить баланс, доходы и платежи");
-  assert.equal(planned?.secondaryActionKey, "edit_current_balance");
+  assert.equal(planned?.secondaryActionLabel, "Настроить финансовый план");
+  assert.equal(planned?.secondaryActionKey, "open_financial_plan_menu");
 });
 
 test("Today overview shows one merged money card instead of separate balance and spending cards", () => {
@@ -554,13 +554,17 @@ test("Today overview shows one merged money card instead of separate balance and
   assert.equal(currentBalance, undefined);
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
   assert.equal(planned?.label, "Можно потратить");
-  assert.equal(planned?.subtitle, "до 13 августа 2026");
+  assert.equal(planned?.subtitle, null);
+  assert.equal(planned?.valueNote, "До 13 августа 2026");
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
   assert.equal(planned?.layout, "wide");
-  assert.match(planned?.caption ?? "", /Сейчас у вас 40[\s\u00A0]000 ₽/);
+  assert.match(planned?.caption ?? "", /Баланс сейчас: 40[\s\u00A0]000 ₽/);
+  assert.match(planned?.caption ?? "", /Учтены ожидаемые доходы, платежи и лимиты/i);
+  assert.doesNotMatch(planned?.caption ?? "", /13 августа 2026/);
   assert.equal(planned?.details?.at(-1)?.value, "11 592 ₽");
   assert.equal(planned?.actionLabel, "＋ Добавить операцию");
-  assert.equal(planned?.secondaryActionLabel, "Настроить баланс, доходы и платежи");
+  assert.equal(planned?.secondaryActionLabel, "Настроить финансовый план");
+  assert.equal(planned?.secondaryActionKey, "open_financial_plan_menu");
 });
 
 test("planned free money card uses digital dates and keeps breakdown details", () => {
@@ -607,7 +611,8 @@ test("planned free money card uses digital dates and keeps breakdown details", (
   });
 
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
-  assert.equal(planned?.subtitle, "до 13 августа 2026");
+  assert.equal(planned?.subtitle, null);
+  assert.equal(planned?.valueNote, "До 13 августа 2026");
   assert.equal(planned?.details?.[0]?.label, "Сейчас в кошельке");
   assert.equal(planned?.details?.[1]?.value, "+5 000 ₽");
   assert.equal(planned?.details?.[2]?.label, "Регулярные платежи");
@@ -665,8 +670,33 @@ test("planned free money copy explains recurring-income plan without using narro
   const planned = view.overviewItems.find((item) => item.id === "planned-free-money");
   assert.equal(view.overviewItems.find((item) => item.id === "allowed"), undefined);
   assert.match(planned?.value ?? "", /11[\s\u00A0]592 ₽/);
-  assert.match(planned?.caption ?? "", /Сумма рассчитана с учётом ожидаемых доходов, платежей и лимитов/i);
+  assert.match(planned?.caption ?? "", /Учтены ожидаемые доходы, платежи и лимиты/i);
+  assert.match(planned?.caption ?? "", /Баланс сейчас: 69[\s\u00A0]071 ₽/);
   assert.doesNotMatch(planned?.caption ?? "", /не подтверждено/i);
+  assert.equal((planned?.valueNote?.match(/31 июля 2026/g) ?? []).length, 1);
+});
+
+test("TodayScreen exposes a financial plan menu with the correct targets", () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), "src/components/TodayScreen.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /Настроить финансовый план/);
+  assert.match(source, /Баланс/);
+  assert.match(source, /Доходы/);
+  assert.match(source, /Регулярные платежи/);
+  assert.match(source, /Долги/);
+  assert.match(source, /Лимиты/);
+  assert.match(source, /openFinancialPlanTarget\("balance"\)/);
+  assert.match(source, /openFinancialPlanTarget\("income"\)/);
+  assert.match(source, /openFinancialPlanTarget\("recurring"\)/);
+  assert.match(source, /openFinancialPlanTarget\("debts"\)/);
+  assert.match(source, /openFinancialPlanTarget\("limits"\)/);
+  assert.match(source, /setMoneySetupSection\("current_balance"\)/);
+  assert.match(source, /setMoneySetupSection\("income"\)/);
+  assert.match(source, /onNavigateToTab\("plan", \{/);
+  assert.match(source, /planSection: target/);
 });
 
 test("planned free money breakdown arithmetic stays explicit", () => {

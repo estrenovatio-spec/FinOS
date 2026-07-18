@@ -30,13 +30,22 @@ export type TodayOverviewItem = {
   label: string;
   value: string;
   subtitle?: string | null;
+  valueNote?: string | null;
   caption?: string | null;
   dismissibleCaption?: boolean;
   actionLabel?: string | null;
-  actionKey?: "edit_current_balance" | "add_transaction" | null;
+  actionKey?:
+    | "edit_current_balance"
+    | "add_transaction"
+    | "open_financial_plan_menu"
+    | null;
   actionVariant?: "ghost" | "primary" | "highlight" | null;
   secondaryActionLabel?: string | null;
-  secondaryActionKey?: "edit_current_balance" | "add_transaction" | null;
+  secondaryActionKey?:
+    | "edit_current_balance"
+    | "add_transaction"
+    | "open_financial_plan_menu"
+    | null;
   secondaryActionVariant?: "ghost" | "outline" | null;
   layout?: "default" | "wide";
   details?: Array<{
@@ -482,8 +491,8 @@ function buildPlannedFreeMoneyItem(
   const caption =
     currentBalance != null
       ? locale === "ru"
-        ? `Сейчас у вас ${moneyValue(currentBalance, locale)}. Сумма рассчитана с учётом${plannedFreeMoney.expectedRecurringIncome > 0 || plannedFreeMoney.includesUnconfirmedIncome ? " ожидаемых доходов," : ""} платежей и лимитов${periodEnd ? ` до ${periodEnd}` : ""}.`
-        : `You currently have ${moneyValue(currentBalance, locale)}. This amount already accounts for${plannedFreeMoney.expectedRecurringIncome > 0 || plannedFreeMoney.includesUnconfirmedIncome ? " expected income," : ""} payments and spending limits${periodEnd ? ` until ${periodEnd}` : ""}.`
+        ? `Баланс сейчас: ${moneyValue(currentBalance, locale)}. Учтены${plannedFreeMoney.expectedRecurringIncome > 0 || plannedFreeMoney.includesUnconfirmedIncome ? " ожидаемые доходы," : ""} платежи и лимиты.`
+        : `Balance now: ${moneyValue(currentBalance, locale)}. Expected income, payments, and spending limits are included.`
       : summary.caption;
 
   const detailItems: TodayOverviewItem["details"] = plannedFreeMoney.breakdown
@@ -539,17 +548,23 @@ function buildPlannedFreeMoneyItem(
   return {
     id: "planned-free-money",
     label: summary.label,
-    subtitle: summary.subtitle,
+    subtitle: null,
     value: summary.value,
+    valueNote:
+      periodEnd
+        ? locale === "ru"
+          ? `До ${periodEnd}`
+          : `Until ${periodEnd}`
+        : summary.subtitle,
     caption,
     actionLabel: locale === "ru" ? "＋ Добавить операцию" : "+ Add entry",
     actionKey: "add_transaction",
     actionVariant: "primary",
     secondaryActionLabel:
       locale === "ru"
-        ? "Настроить баланс, доходы и платежи"
-        : "Set up balance, income, and payments",
-    secondaryActionKey: "edit_current_balance",
+        ? "Настроить финансовый план"
+        : "Set up financial plan",
+    secondaryActionKey: "open_financial_plan_menu",
     secondaryActionVariant: "ghost",
     layout: "wide",
     details: detailItems,

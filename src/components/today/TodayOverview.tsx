@@ -42,7 +42,11 @@ export function TodayOverview({
 }: {
   title?: string | null;
   items: TodayOverviewItem[];
-  onItemAction?: (actionKey: NonNullable<TodayOverviewItem["actionKey"]>) => void;
+  onItemAction?: (
+    actionKey: NonNullable<
+      TodayOverviewItem["actionKey"] | TodayOverviewItem["secondaryActionKey"]
+    >,
+  ) => void;
 }) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [currentBalanceHintDismissed, setCurrentBalanceHintDismissed] = useState(() => {
@@ -108,6 +112,9 @@ export function TodayOverview({
                         <p className="text-lg font-semibold leading-tight text-foreground">
                           {item.value}
                         </p>
+                        {item.valueNote ? (
+                          <p className="text-xs font-medium text-muted-foreground">{item.valueNote}</p>
+                        ) : null}
                       </div>
                       <Chevron className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     </div>
@@ -174,6 +181,9 @@ export function TodayOverview({
                           {item.value}
                         </p>
                       </div>
+                      {item.valueNote ? (
+                        <p className="text-xs font-medium text-muted-foreground">{item.valueNote}</p>
+                      ) : null}
                     </div>
                     {showCaption ? (
                       <div className="flex items-start justify-between gap-2">

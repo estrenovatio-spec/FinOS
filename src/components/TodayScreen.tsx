@@ -12,6 +12,7 @@ import {
 import { buildTodayScreenView, isTodayZeroState } from "@/components/today/today-screen-presenter";
 import { MoneySetupDialog } from "@/components/MoneySetupDialog";
 import type { MoneySetupInitialSection } from "@/components/MoneySetupDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -69,6 +70,7 @@ export function TodayScreen({
   const [expectedEventOpen, setExpectedEventOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [financialPlanMenuOpen, setFinancialPlanMenuOpen] = useState(false);
 
   const showHouseholdToggle = hasPartnerBudget(partnerName, partnerKeywords);
   const today = getLocalTodayIsoDate();
@@ -295,17 +297,47 @@ export function TodayScreen({
     setActionBusy(false);
   }
 
-  function handleOverviewAction(actionKey: "edit_current_balance" | "add_transaction") {
+  function handleOverviewAction(
+    actionKey:
+      | "edit_current_balance"
+      | "add_transaction"
+      | "open_financial_plan_menu",
+  ) {
     if (actionKey === "edit_current_balance") {
       setActionError(null);
       setMoneySetupSection("current_balance");
       setMoneySetupOpen(true);
       return;
     }
+    if (actionKey === "open_financial_plan_menu") {
+      setActionError(null);
+      setFinancialPlanMenuOpen(true);
+      return;
+    }
     if (actionKey === "add_transaction") {
       setActionError(null);
       setQuickAddOpen(true);
     }
+  }
+
+  function openFinancialPlanTarget(
+    target: "balance" | "income" | "recurring" | "debts" | "limits",
+  ) {
+    setFinancialPlanMenuOpen(false);
+    if (target === "balance") {
+      setMoneySetupSection("current_balance");
+      setMoneySetupOpen(true);
+      return;
+    }
+    if (target === "income") {
+      setMoneySetupSection("income");
+      setMoneySetupOpen(true);
+      return;
+    }
+    onNavigateToTab("plan", {
+      planSection: target,
+      entityId: null,
+    });
   }
 
   return (
@@ -353,6 +385,58 @@ export function TodayScreen({
         items={view.overviewItems}
         onItemAction={handleOverviewAction}
       />
+
+      <Dialog open={financialPlanMenuOpen} onOpenChange={setFinancialPlanMenuOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {locale === "ru" ? "Настроить финансовый план" : "Set up financial plan"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("balance")}
+            >
+              {locale === "ru" ? "Баланс" : "Balance"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("income")}
+            >
+              {locale === "ru" ? "Доходы" : "Income"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("recurring")}
+            >
+              {locale === "ru" ? "Регулярные платежи" : "Recurring payments"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("debts")}
+            >
+              {locale === "ru" ? "Долги" : "Debts"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("limits")}
+            >
+              {locale === "ru" ? "Лимиты" : "Limits"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {view.payments ? (
         <Card className="border-border/25 bg-card/95 shadow-none">
