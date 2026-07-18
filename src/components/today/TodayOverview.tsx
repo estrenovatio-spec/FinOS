@@ -1,10 +1,20 @@
 "use client";
 
-import { ChevronDown, ChevronUp, CalendarClock, CircleDollarSign, PiggyBank, Wallet } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  CalendarClock,
+  CircleDollarSign,
+  PiggyBank,
+  Wallet,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { TodayOverviewItem } from "@/components/today/today-screen-presenter";
+
+const CURRENT_BALANCE_HINT_DISMISSED_KEY = "finos-current-balance-hint-dismissed-v1";
 
 function iconForItem(id: TodayOverviewItem["id"]) {
   switch (id) {
@@ -35,7 +45,20 @@ export function TodayOverview({
   onItemAction?: (actionKey: NonNullable<TodayOverviewItem["actionKey"]>) => void;
 }) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [currentBalanceHintDismissed, setCurrentBalanceHintDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(CURRENT_BALANCE_HINT_DISMISSED_KEY) === "1";
+  });
   if (items.length === 0) return null;
+
+  function dismissCurrentBalanceHint() {
+    setCurrentBalanceHintDismissed(true);
+    try {
+      window.localStorage.setItem(CURRENT_BALANCE_HINT_DISMISSED_KEY, "1");
+    } catch {
+      // localStorage can be unavailable in embedded/private contexts.
+    }
+  }
 
   return (
     <section className="space-y-2">
@@ -47,6 +70,9 @@ export function TodayOverview({
         {items.map((item) => {
           const Icon = iconForItem(item.id);
           if (!Icon) return null;
+          const showCaption =
+            Boolean(item.caption) &&
+            !(item.id === "current-balance" && item.dismissibleCaption && currentBalanceHintDismissed);
           const expandable = Boolean(item.details && item.details.length > 0);
           const expanded = expandedItemId === item.id;
           const Chevron = expanded ? ChevronUp : ChevronDown;
@@ -83,8 +109,23 @@ export function TodayOverview({
                       </div>
                       <Chevron className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     </div>
-                    {item.caption ? (
-                      <p className="text-xs leading-snug text-muted-foreground">{item.caption}</p>
+                    {showCaption ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs leading-snug text-muted-foreground">{item.caption}</p>
+                        {item.id === "current-balance" && item.dismissibleCaption ? (
+                          <button
+                            type="button"
+                            aria-label="Скрыть пояснение"
+                            className="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              dismissCurrentBalanceHint();
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                     {expanded && item.details ? (
                       <div className="space-y-2 rounded-md border border-border/60 bg-muted/30 p-3">
@@ -132,21 +173,35 @@ export function TodayOverview({
                         </p>
                       </div>
                     </div>
-                    {item.caption ? (
-                      <p className="text-xs leading-snug text-muted-foreground">
-                        {item.caption}
-                      </p>
+                    {showCaption ? (
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs leading-snug text-muted-foreground">
+                          {item.caption}
+                        </p>
+                        {item.id === "current-balance" && item.dismissibleCaption ? (
+                          <button
+                            type="button"
+                            aria-label="Скрыть пояснение"
+                            className="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            onClick={dismissCurrentBalanceHint}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </>
                 )}
                 {item.actionLabel && item.actionKey ? (
                   <Button
                     type="button"
-                    variant={item.actionVariant === "primary" ? "default" : "ghost"}
-                    size={item.actionVariant === "primary" ? "default" : "sm"}
+                    variant={item.actionVariant === "primary" || item.actionVariant === "highlight" ? "default" : "ghost"}
+                    size={item.actionVariant === "primary" || item.actionVariant === "highlight" ? "default" : "sm"}
                     className={
                       item.actionVariant === "primary"
                         ? "mt-1 h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+                        : item.actionVariant === "highlight"
+                          ? "mt-1 h-11 w-full rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100"
                         : "h-auto justify-start self-start px-0 py-0 text-xs font-medium text-muted-foreground hover:text-foreground"
                     }
                     aria-label={`${item.actionLabel}: ${item.label}`}

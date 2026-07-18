@@ -362,8 +362,10 @@ test("current balance is always visible when known", () => {
     currentBalance?.caption,
     "Это отправная точка вашего финансового плана. Здесь можно изменить баланс, доходы и обязательные платежи.",
   );
-  assert.equal(currentBalance?.actionLabel, "Настроить план");
+  assert.equal(currentBalance?.dismissibleCaption, true);
+  assert.equal(currentBalance?.actionLabel, "Настроить доходы");
   assert.equal(currentBalance?.actionKey, "edit_current_balance");
+  assert.equal(currentBalance?.actionVariant, "highlight");
 });
 
 test("financial setup card explains that the same action opens the broader plan setup flow", () => {
@@ -380,7 +382,7 @@ test("financial setup card explains that the same action opens the broader plan 
 
   const currentBalance = view.overviewItems.find((item) => item.id === "current-balance");
   assert.equal(currentBalance?.label, "Мои деньги сейчас");
-  assert.equal(currentBalance?.actionLabel, "Настроить план");
+  assert.equal(currentBalance?.actionLabel, "Настроить доходы");
   assert.match(currentBalance?.caption ?? "", /отправная точка вашего финансового плана/i);
   assert.match(currentBalance?.caption ?? "", /изменить баланс, доходы и обязательные платежи/i);
 });

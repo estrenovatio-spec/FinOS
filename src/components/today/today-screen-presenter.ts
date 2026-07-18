@@ -31,9 +31,10 @@ export type TodayOverviewItem = {
   value: string;
   subtitle?: string | null;
   caption?: string | null;
+  dismissibleCaption?: boolean;
   actionLabel?: string | null;
   actionKey?: "edit_current_balance" | "add_transaction" | null;
-  actionVariant?: "ghost" | "primary" | null;
+  actionVariant?: "ghost" | "primary" | "highlight" | null;
   layout?: "default" | "wide";
   details?: Array<{
     label: string;
@@ -398,8 +399,10 @@ function buildCurrentBalanceItem(input: TodayPresentationInput): TodayOverviewIt
         : locale === "ru"
           ? "Это отправная точка вашего финансового плана. Здесь можно изменить баланс, доходы и обязательные платежи."
           : "This is the starting point of your financial plan. Here you can update your balance, income, and required payments.",
-    actionLabel: locale === "ru" ? "Настроить план" : "Set up plan",
+    dismissibleCaption: currentBalance != null,
+    actionLabel: locale === "ru" ? "Настроить доходы" : "Set up income",
     actionKey: "edit_current_balance",
+    actionVariant: "highlight",
   };
 }
 
