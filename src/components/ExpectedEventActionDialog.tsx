@@ -238,7 +238,10 @@ export function ExpectedEventActionDialog({
     if (!event) return;
 
     if (event.kind === "expense" && event.debtId) {
-      payDebt(event.debtId, result.amount);
+      payDebt(event.debtId, result.amount, {
+        paymentDate: result.date,
+        updateSchedule: false,
+      });
       if (debtItem) {
         const remainingBalance = Math.max(0, debtItem.balance - result.amount);
         const paidInFullForOccurrence = result.amount >= event.amount;

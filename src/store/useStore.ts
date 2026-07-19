@@ -348,7 +348,11 @@ interface StoreState {
   removeRecurring: (id: string) => void;
   addDebt: (data: Omit<DebtItem, "id" | "updatedAt">) => string;
   updateDebt: (id: string, patch: Partial<Omit<DebtItem, "id">>) => void;
-  payDebt: (id: string, amount: number) => boolean;
+  payDebt: (
+    id: string,
+    amount: number,
+    opts?: { paymentDate?: string; updateSchedule?: boolean },
+  ) => boolean;
   removeDebt: (id: string) => void;
   processRecurringDue: () => void;
   applyPlanningInput: (
@@ -1679,25 +1683,58 @@ export const useStore = create<StoreState>()(
         }));
         if (updated) void cloudPushDebt(updated);
       },
-      payDebt: (id, amount) => {
+      payDebt: (id, amount, opts) => {
         const amt = roundMoneyUp(amount);
         if (amt <= 0) return false;
-        let changed = false;
+        const debt = get().debts.find((item) => item.id === id) ?? null;
+        if (!debt || debt.balance <= 0) return false;
+        const actualAmount = Math.min(amt, debt.balance);
+        const paymentDate = normalizeIsoDate(opts?.paymentDate) ?? todayIso();
+        const now = new Date().toISOString();
+        const owner =
+          debt.owner === "all"
+            ? get().entryOwner
+            : debt.owner;
+        const shouldUpdateSchedule = opts?.updateSchedule !== false;
+        const remainingBalance = Math.max(0, debt.balance - actualAmount);
+        const scheduledAmount = Math.min(debt.minPayment, debt.balance);
         let updated: DebtItem | null = null;
         set((state) => ({
-          debts: state.debts.map((debt) => {
-            if (debt.id !== id) return debt;
-            changed = true;
+          debts: state.debts.map((item) => {
+            if (item.id !== id) return item;
+            let nextPaymentDate = item.nextPaymentDate;
+            if (shouldUpdateSchedule) {
+              if (remainingBalance <= 0) {
+                nextPaymentDate = null;
+              } else if (item.nextPaymentDate && actualAmount >= scheduledAmount) {
+                nextPaymentDate = advanceRecurringDate(
+                  item.nextPaymentDate,
+                  "monthly",
+                  Number.parseInt(item.nextPaymentDate.slice(8, 10), 10) || 1,
+                  1,
+                );
+              }
+            }
             updated = {
-              ...debt,
-              balance: Math.max(0, roundMoneyUp(debt.balance - amt)),
-              updatedAt: new Date().toISOString(),
+              ...item,
+              balance: Math.max(0, roundMoneyUp(item.balance - actualAmount)),
+              nextPaymentDate,
+              updatedAt: now,
             };
             return updated;
           }),
         }));
+        get().addTransaction({
+          amount: actualAmount,
+          type: "expense",
+          categoryId: getFallbackCategoryId("expense"),
+          currency: normalizeAppCurrency(),
+          note: `Платёж по долгу — ${debt.name}`,
+          date: paymentDate,
+          owner,
+        });
         if (updated) void cloudPushDebt(updated);
-        return changed;
+        return true;
       },
       removeDebt: (id) => {
         set((state) => ({ debts: state.debts.filter((d) => d.id !== id) }));

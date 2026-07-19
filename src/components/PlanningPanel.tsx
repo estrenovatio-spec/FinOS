@@ -641,7 +641,8 @@ export function PlanningPanel({
   const handleDebtPayment = (id: string) => {
     const amount = numInput(debtPayAmount);
     if (amount <= 0) return;
-    payDebt(id, amount);
+    const paid = payDebt(id, amount);
+    if (!paid) return;
     setDebtPayId(null);
     setDebtPayAmount("");
   };

@@ -172,6 +172,146 @@ test("goal survives cloud hydrate when local browser goal is still unsynced", ()
   useCloudStore.setState(previousCloud);
 });
 
+test("debt payment creates an expense transaction, reduces balance, and does not repeat after sync", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: [],
+    savingsGoals: [],
+    categoryBudgets: [],
+    recurringTransactions: [],
+    debts: [
+      {
+        id: "water-debt",
+        name: "ЖКХ вода трудовая",
+        owner: "all",
+        balance: 21000,
+        minPayment: 5000,
+        ratePct: null,
+        nextPaymentDate: "2026-07-20",
+        strategy: "avalanche",
+        priority: "normal",
+        updatedAt: "2026-07-19T09:00:00.000Z",
+      },
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    budgetMonthStartDay: 1,
+    cashOffsetMe: 97494,
+    cashOffsetPartner: 0,
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    cloudUserId: "user-1",
+    householdMemberUserIds: ["user-1"],
+    lastSyncedAt: "2026-07-19T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  const paid = useStore.getState().payDebt("water-debt", 5000, {
+    paymentDate: "2026-07-19",
+  });
+  assert.equal(paid, true);
+
+  const localState = useStore.getState();
+  assert.equal(localState.debts[0]?.balance, 16000);
+  assert.equal(localState.debts[0]?.nextPaymentDate, "2026-08-20");
+  assert.equal(localState.transactions.length, 1);
+  assert.equal(localState.transactions[0]?.type, "expense");
+  assert.equal(localState.transactions[0]?.amount, 5000);
+  assert.equal(localState.transactions[0]?.date, "2026-07-19");
+  assert.equal(localState.transactions[0]?.note, "Платёж по долгу — ЖКХ вода трудовая");
+
+  const currentBalance =
+    localState.cashOffsetMe +
+    localState.transactions.reduce(
+      (sum, tx) => sum + (tx.type === "income" ? tx.amount : -tx.amount),
+      0,
+    );
+  assert.equal(currentBalance, 92494);
+
+  const localDecision = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-19",
+    forecastHorizonMonths: 3,
+    categories: localState.categories,
+    transactions: localState.transactions,
+    householdFilter: "me",
+    recurringTransactions: localState.recurringTransactions,
+    debts: localState.debts,
+    moneySetup: localState.moneySetup,
+    categoryBudgets: localState.categoryBudgets,
+    budgetMonthStartDay: localState.budgetMonthStartDay,
+    balances: { all: currentBalance, me: currentBalance, partner: 0 },
+  });
+
+  assert.equal(
+    localDecision.forecast.events.some(
+      (event) => event.source === "debt_payment" && event.date === "2026-07-20",
+    ),
+    false,
+  );
+  assert.equal(
+    localDecision.forecast.events.some(
+      (event) =>
+        event.source === "debt_payment" &&
+        event.date === "2026-08-20" &&
+        event.amount === -5000,
+    ),
+    true,
+  );
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: localState.transactions,
+      debts: localState.debts,
+      moneySetup: localState.moneySetup,
+      balanceOffsets: { "user-1": 97494 },
+    }),
+    "token-1",
+    { replace: true },
+  );
+
+  const syncedState = useStore.getState();
+  assert.equal(syncedState.transactions.length, 1);
+  assert.equal(syncedState.transactions[0]?.note, "Платёж по долгу — ЖКХ вода трудовая");
+  assert.equal(syncedState.debts[0]?.balance, 16000);
+  assert.equal(syncedState.debts[0]?.nextPaymentDate, "2026-08-20");
+
+  const syncedBalance =
+    syncedState.cashOffsetMe +
+    syncedState.transactions.reduce(
+      (sum, tx) => sum + (tx.type === "income" ? tx.amount : -tx.amount),
+      0,
+    );
+  assert.equal(syncedBalance, 92494);
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
 test("Today planned free money card keeps the add-operation CTA wired as the primary action", () => {
   const state = makeState({
     balances: { all: 0, me: 0, partner: 0 },
