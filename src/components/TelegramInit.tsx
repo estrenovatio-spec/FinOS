@@ -40,6 +40,7 @@ export function TelegramInit() {
     const height = tg.viewportStableHeight || tg.viewportHeight;
     if (height) {
       document.documentElement.style.setProperty("--tg-viewport-height", `${height}px`);
+      document.documentElement.style.setProperty("--app-viewport-height", `${height}px`);
     }
 
     return () => {

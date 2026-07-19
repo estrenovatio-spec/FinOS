@@ -40,11 +40,14 @@ export function AppBottomNav({
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background supports-[backdrop-filter]:bg-background/95"
+      style={{
+        minHeight: "calc(var(--app-bottom-nav-height) + max(env(safe-area-inset-bottom), 0px))",
+        paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
+      }}
       aria-label={t(locale, "appBottomNavAria")}
     >
-      <div className="mx-auto grid max-w-lg grid-cols-5">
+      <div className="mx-auto grid min-h-[var(--app-bottom-nav-height)] max-w-lg grid-cols-5">
         {APP_BOTTOM_NAV_TABS.map(({ id, icon: Icon, labelKey }) => {
           const selected = active === id;
           return (
@@ -53,7 +56,7 @@ export function AppBottomNav({
               type="button"
               onClick={() => onChange(id)}
               className={[
-                "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[9px] font-medium leading-tight transition-colors sm:px-1 sm:text-[10px]",
+                "flex min-h-[var(--app-bottom-nav-height)] flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[9px] font-medium leading-tight transition-colors sm:px-1 sm:text-[10px]",
                 selected
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",

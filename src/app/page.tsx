@@ -163,8 +163,10 @@ export default function HomePage() {
   return (
     <main
       className={[
-        "mx-auto flex min-h-[var(--tg-viewport-height,100vh)] max-w-lg flex-col gap-2 px-4",
-        previewMode ? "pb-[calc(6rem+env(safe-area-inset-bottom))]" : "pb-24",
+        "mx-auto flex min-h-[var(--app-viewport-height,100dvh)] max-w-lg flex-col gap-2 px-4",
+        previewMode
+          ? "pb-[calc(var(--app-bottom-nav-height)+1rem+env(safe-area-inset-bottom))]"
+          : "pb-[calc(var(--app-bottom-nav-height)+1rem+env(safe-area-inset-bottom))]",
       ].join(" ")}
       lang={locale}
     >

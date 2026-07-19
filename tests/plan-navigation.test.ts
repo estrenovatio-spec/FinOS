@@ -36,6 +36,9 @@ test("bottom nav contains Plan and no longer uses recurring as the fourth app ta
   assert.match(appBottomNavSource, /id: "plan"/);
   assert.doesNotMatch(appBottomNavSource, /id: "recurring"/);
   assert.match(appBottomNavSource, /text-center whitespace-normal/);
+  assert.match(appBottomNavSource, /fixed inset-x-0 bottom-0 z-40/);
+  assert.match(appBottomNavSource, /--app-bottom-nav-height/);
+  assert.match(appBottomNavSource, /paddingBottom: "max\(env\(safe-area-inset-bottom\), 0px\)"/);
 });
 
 test("forecast tab is read-only and links into plan instead of rendering planning forms inline", () => {
@@ -65,6 +68,8 @@ test("page wires Plan tab state separately from Forecast focus", () => {
   assert.match(pageSource, /readStoredPlanSection/);
   assert.match(pageSource, /writeStoredPlanSection/);
   assert.match(pageSource, /onAppViewChange\("plan"/);
+  assert.match(pageSource, /min-h-\[var\(--app-viewport-height,100dvh\)\]/);
+  assert.match(pageSource, /pb-\[calc\(var\(--app-bottom-nav-height\)\+1rem\+env\(safe-area-inset-bottom\)\)\]/);
 });
 
 test("legacy tab state migrates recurring and regulars into plan recurring", () => {
