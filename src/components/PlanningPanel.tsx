@@ -44,8 +44,8 @@ import {
 } from "@/lib/planning/analytics";
 import type { GoalMonthlyPlans } from "@/lib/planning/analytics";
 import {
+  effectiveSkippedDates,
   recurringDisplayName,
-  skippedPaymentTotal,
 } from "@/lib/planning/recurring-skipped";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -1757,8 +1757,8 @@ export function PlanningPanel({
                 recurringCards.map(({ item, status, lastPaidDate, skippedInPeriod }) => {
                   const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
                   const title = recurringDisplayName(item, categoryLabel);
-                  const skipped = item.skippedDates ?? [];
-                  const skipTotal = skippedPaymentTotal(item);
+                  const skipped = effectiveSkippedDates(item, transactions);
+                  const skipTotal = skipped.length * item.amount;
                   return (
                     <div
                       key={item.id}

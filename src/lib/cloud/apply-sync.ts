@@ -1,5 +1,6 @@
 import { defaultVehicleGaragePrefs, resolveRemoteGarage } from "@/lib/vehicle";
 import { applyGoalMonthlyToGoal } from "@/lib/planning/analytics";
+import { sanitizeRecurringTransactionsSkippedDates } from "@/lib/planning/recurring-skipped";
 import { mergeSyncPayload } from "@/lib/cloud/merge-sync";
 import { emptyMoneySetup, normalizeMoneySetup, pruneMoneySetupIds } from "@/lib/money-setup";
 import { cashOffsetsForViewer } from "@/lib/balance-offsets";
@@ -105,7 +106,10 @@ export function applyHouseholdSync(
       categories: remote.categories,
       savingsGoals,
       categoryBudgets: remote.categoryBudgets ?? [],
-      recurringTransactions: remote.recurringTransactions ?? [],
+      recurringTransactions: sanitizeRecurringTransactionsSkippedDates(
+        remote.recurringTransactions ?? [],
+        remote.transactions,
+      ),
       debts: remote.debts ?? [],
       moneySetup: prunedMoneySetup,
       cashOffsetMe: syncedOffsets.cashOffsetMe,

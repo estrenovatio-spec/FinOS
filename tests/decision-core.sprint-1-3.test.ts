@@ -23,6 +23,10 @@ import type { DecisionCoreContext, DecisionCoreState } from "@/lib/decision-core
 import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 import { rescheduleIncomeSourceInSetup } from "@/lib/expected-events";
 import { confirmPendingPaymentById } from "@/lib/pending-payment";
+import {
+  effectiveSkippedDates,
+  hasConfirmedRecurringOccurrenceInBucket,
+} from "@/lib/planning/recurring-skipped";
 import { buildStoredTransactionNote } from "@/lib/transaction-note";
 import { countsInBalance } from "@/lib/transaction-confirmed";
 import { getDefaultCategories } from "@/lib/categories";
@@ -2783,6 +2787,87 @@ test("pending recurring mortgage keeps its recurring title even when the old pen
   assert.equal(scenario.result.todayPayments[0]?.title, "Ипотека");
   assert.equal(scenario.result.todayPayments[0]?.paymentSource, "recurring");
   assert.equal(scenario.result.todayPayments[0]?.linkedEntityId, "mortgage-recurring");
+});
+
+test("paid recurring occurrence suppresses stale skipped dates from the same monthly occurrence", () => {
+  const item = recurring({
+    id: "mortgage-recurring",
+    amount: 19000,
+    type: "expense",
+    categoryId: "housing",
+    note: "Ипотека",
+    nextRunDate: "2026-08-16",
+    frequency: "monthly",
+    dayOfMonth: 16,
+    skippedDates: ["2026-07-17"],
+  });
+
+  const transactions = [
+    tx({
+      id: "mortgage-paid",
+      amount: 19000,
+      type: "expense",
+      categoryId: "housing",
+      date: "2026-07-16",
+      note: "Ипотека",
+      confirmed: true,
+      recurringId: "mortgage-recurring",
+    }),
+  ];
+
+  assert.equal(
+    hasConfirmedRecurringOccurrenceInBucket(item, "2026-07-17", transactions),
+    true,
+  );
+  assert.deepEqual(effectiveSkippedDates(item, transactions), []);
+});
+
+test("legacy paid plus skipped recurring conflict resolves to paid in forecast and today", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-19",
+      balances: { all: 90000, me: 90000, partner: 0 },
+      transactions: [
+        tx({
+          id: "mortgage-paid",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-16",
+          note: "Ипотека",
+          confirmed: true,
+          recurringId: "mortgage-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          nextRunDate: "2026-08-16",
+          frequency: "monthly",
+          dayOfMonth: 16,
+          skippedDates: ["2026-07-17"],
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const julyMortgageEvents = scenario.ctx.forecast.events.filter(
+    (event) =>
+      (event.source === "pending_transaction" || event.source === "recurring") &&
+      event.linkedEntityId === "mortgage-recurring" &&
+      event.date.startsWith("2026-07"),
+  );
+
+  assert.deepEqual(julyMortgageEvents, []);
+  assert.equal(scenario.result.todayPayments.length, 0);
 });
 
 test("snoozed overdue income is hidden today without changing the forecast date, and returns tomorrow", () => {

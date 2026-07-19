@@ -1,6 +1,7 @@
 import { migrateCategoryId, sanitizeCategories } from "@/lib/categories";
 import type { SyncPayload } from "@/lib/household/types";
 import { emptyMoneySetup, normalizeMoneySetup, type MoneySetup } from "@/lib/money-setup";
+import { sanitizeRecurringTransactionsSkippedDates } from "@/lib/planning/recurring-skipped";
 import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
 
@@ -266,6 +267,7 @@ export function mergeRecurringTransactions(
   remote: RecurringTransaction[],
   lastSyncedAt?: string | null,
   deletedIds?: ReadonlySet<string>,
+  transactions: Transaction[] = [],
 ): RecurringTransaction[] {
   const merged = mergeByKey(
     local.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) })),
@@ -273,8 +275,10 @@ export function mergeRecurringTransactions(
     (r) => r.id,
     lastSyncedAt,
   );
-  if (!deletedIds?.size) return merged;
-  return merged.filter((r) => !deletedIds.has(r.id));
+  const withoutDeleted = deletedIds?.size
+    ? merged.filter((r) => !deletedIds.has(r.id))
+    : merged;
+  return sanitizeRecurringTransactionsSkippedDates(withoutDeleted, transactions);
 }
 
 export function mergeDebts(
@@ -376,6 +380,7 @@ export function mergeSyncPayload(
     remote.recurringTransactions ?? [],
     lastSyncedAt,
     deletedRecurringIds,
+    transactions,
   );
   const debts = mergeDebts(localPlanning.debts, remote.debts ?? [], lastSyncedAt, deletedDebtIds);
   const moneySetup = mergeMoneySetup(localPlanning.moneySetup, remote.moneySetup);

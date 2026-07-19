@@ -527,3 +527,77 @@ test("applyHouseholdSync updates goal deadline from newer remote goal", () => {
   useStore.setState(previousStore);
   useCloudStore.setState(previousCloud);
 });
+
+test("applyHouseholdSync resolves legacy paid plus skipped recurring conflict in favor of paid", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    transactions: [],
+    categories: getDefaultCategories(),
+    recurringTransactions: [],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-19T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [
+        {
+          id: "mortgage-paid",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          currency: "RUB",
+          note: "Ипотека",
+          date: "2026-07-16",
+          owner: "me",
+          confirmed: true,
+          recurringId: "mortgage-recurring",
+        },
+      ],
+      recurringTransactions: [
+        {
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          skippedDates: ["2026-07-17"],
+          owner: "me",
+          frequency: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 16,
+          nextRunDate: "2026-08-16",
+          enabled: true,
+        },
+      ],
+    }),
+    "token-1",
+  );
+
+  assert.deepEqual(
+    useStore.getState().recurringTransactions[0]?.skippedDates ?? [],
+    [],
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});

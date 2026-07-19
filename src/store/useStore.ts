@@ -98,7 +98,12 @@ import {
   todayIso,
   advanceRecurringDate,
 } from "@/lib/planning/analytics";
-import { appendSkippedDate } from "@/lib/planning/recurring-skipped";
+import {
+  appendSkippedDate,
+  hasConfirmedRecurringOccurrenceInBucket,
+  sanitizeRecurringSkippedDates,
+  sanitizeRecurringTransactionsSkippedDates,
+} from "@/lib/planning/recurring-skipped";
 import { recurringToParsedTransaction } from "@/lib/planning/recurring-run";
 import { useCloudStore } from "@/store/useCloudStore";
 import { resolveTransactionAmount } from "@/lib/parse-amount";
@@ -1582,13 +1587,14 @@ export const useStore = create<StoreState>()(
       },
       addRecurring: (data) => {
         const id = makeId();
-        const item: RecurringTransaction = {
+        const rawItem: RecurringTransaction = {
           ...data,
           id,
           enabled: true,
           skippedDates: data.skippedDates ?? [],
           updatedAt: new Date().toISOString(),
         };
+        const item = sanitizeRecurringSkippedDates(rawItem, get().transactions);
         set((state) => ({
           recurringTransactions: [...state.recurringTransactions, item],
         }));
@@ -1600,7 +1606,10 @@ export const useStore = create<StoreState>()(
         set((state) => ({
           recurringTransactions: state.recurringTransactions.map((r) => {
             if (r.id !== id) return r;
-            updated = { ...r, ...patch, updatedAt: new Date().toISOString() };
+            updated = sanitizeRecurringSkippedDates(
+              { ...r, ...patch, updatedAt: new Date().toISOString() },
+              state.transactions,
+            );
             return updated;
           }),
         }));
@@ -1738,6 +1747,17 @@ export const useStore = create<StoreState>()(
           return false;
         }
         set({ transactions: result.transactions });
+        if (result.updatedTransaction.recurringId) {
+          const recurringItem = get().recurringTransactions.find(
+            (item) => item.id === result.updatedTransaction?.recurringId,
+          );
+          if (recurringItem) {
+            get().updateRecurring(
+              recurringItem.id,
+              sanitizeRecurringSkippedDates(recurringItem, result.transactions),
+            );
+          }
+        }
         void cloudPushTransaction(result.updatedTransaction);
         return true;
       },
@@ -1749,9 +1769,16 @@ export const useStore = create<StoreState>()(
             (r) => r.id === tx.recurringId,
           );
           if (item) {
-            get().updateRecurring(item.id, {
-              skippedDates: appendSkippedDate(item.skippedDates, tx.date),
-            });
+            const isTechnicalDuplicate = hasConfirmedRecurringOccurrenceInBucket(
+              item,
+              tx.date,
+              get().transactions,
+            );
+            if (!isTechnicalDuplicate) {
+              get().updateRecurring(item.id, {
+                skippedDates: appendSkippedDate(item.skippedDates, tx.date),
+              });
+            }
           }
         }
         get().deleteTransaction(id);
@@ -1936,30 +1963,33 @@ export const useStore = create<StoreState>()(
           categoryBudgets: Array.isArray(raw.categoryBudgets)
             ? (raw.categoryBudgets as CategoryBudget[])
             : [],
-          recurringTransactions: Array.isArray(raw.recurringTransactions)
-            ? (raw.recurringTransactions as RecurringTransaction[]).map(
-                (r) => ({
-                  ...r,
-                  skippedDates: Array.isArray(r.skippedDates)
-                    ? r.skippedDates
-                    : [],
-	                  intervalMonths:
-	                    r.frequency === "monthly"
-	                      ? Math.max(
-                          1,
-                          Math.min(
-                            60,
-	                            Math.round(Number(r.intervalMonths) || 1),
-	                          ),
-	                        )
-	                      : null,
-	                  endDate:
-	                    typeof r.endDate === "string" && r.endDate.trim()
-	                      ? r.endDate
-	                      : null,
-	                }),
-              )
-            : [],
+          recurringTransactions: sanitizeRecurringTransactionsSkippedDates(
+            Array.isArray(raw.recurringTransactions)
+              ? (raw.recurringTransactions as RecurringTransaction[]).map(
+                  (r) => ({
+                    ...r,
+                    skippedDates: Array.isArray(r.skippedDates)
+                      ? r.skippedDates
+                      : [],
+	                    intervalMonths:
+	                      r.frequency === "monthly"
+	                        ? Math.max(
+                            1,
+                            Math.min(
+                              60,
+	                              Math.round(Number(r.intervalMonths) || 1),
+	                            ),
+	                          )
+	                        : null,
+	                    endDate:
+	                      typeof r.endDate === "string" && r.endDate.trim()
+	                        ? r.endDate
+	                        : null,
+	                  }),
+                )
+              : [],
+            transactions,
+          ),
           debts: Array.isArray(raw.debts)
             ? (raw.debts as DebtItem[])
                 .filter(
