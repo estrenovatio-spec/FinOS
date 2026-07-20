@@ -32,6 +32,11 @@ export interface MoneySetupIncomeSource {
   isPrimary?: boolean;
 }
 
+export interface MoneySetupValidationIssue {
+  path: string;
+  code: "end_date_before_expected_date";
+}
+
 export type MoneySetupIncomeSourceStatus =
   | "scheduled"
   | "due_today"
@@ -109,32 +114,37 @@ function normalizeMoneySetupIncomeSource(
   )
     ? (source.kind as MoneySetupIncomeSourceKind)
     : "other";
+  const recurrence =
+    source.recurrence === "once" || source.recurrence === "monthly"
+      ? source.recurrence
+      : "monthly";
+  const expectedDate =
+    typeof source.expectedDate === "string" && source.expectedDate.trim()
+      ? source.expectedDate
+      : null;
+  const normalizedIntervalMonths =
+    source.intervalMonths == null || Number.isNaN(Number(source.intervalMonths))
+      ? 1
+      : Math.max(1, Math.min(60, Math.round(Number(source.intervalMonths))));
+  const normalizedDayOfMonth =
+    source.dayOfMonth == null || Number.isNaN(Number(source.dayOfMonth))
+      ? null
+      : Math.max(1, Math.min(31, Math.round(Number(source.dayOfMonth))));
+  const endDate =
+    typeof source.endDate === "string" && source.endDate.trim()
+      ? source.endDate
+      : null;
 
   return {
     id,
     label,
-    expectedDate:
-      typeof source.expectedDate === "string" && source.expectedDate.trim()
-        ? source.expectedDate
-        : null,
+    expectedDate,
     expectedAmount,
     kind,
-    recurrence:
-      source.recurrence === "once" || source.recurrence === "monthly"
-        ? source.recurrence
-        : "monthly",
-    intervalMonths:
-      source.intervalMonths == null || Number.isNaN(Number(source.intervalMonths))
-        ? 1
-        : Math.max(1, Math.min(60, Math.round(Number(source.intervalMonths)))),
-    dayOfMonth:
-      source.dayOfMonth == null || Number.isNaN(Number(source.dayOfMonth))
-        ? null
-        : Math.max(1, Math.min(31, Math.round(Number(source.dayOfMonth)))),
-    endDate:
-      typeof source.endDate === "string" && source.endDate.trim()
-        ? source.endDate
-        : null,
+    recurrence,
+    intervalMonths: recurrence === "monthly" ? normalizedIntervalMonths : null,
+    dayOfMonth: recurrence === "monthly" ? normalizedDayOfMonth : null,
+    endDate: recurrence === "monthly" ? endDate : null,
     ...(typeof source.isPrimary === "boolean" ? { isPrimary: source.isPrimary } : {}),
   };
 }
@@ -199,6 +209,22 @@ export function normalizeMoneySetup(raw: unknown): MoneySetup {
         ? setup.updatedAt
         : null,
   };
+}
+
+export function validateMoneySetup(setup: MoneySetup): MoneySetupValidationIssue[] {
+  return setup.incomeSources.flatMap((source, index) => {
+    const expectedDate = isoDay(source.expectedDate);
+    const endDate = isoDay(source.endDate);
+    if (expectedDate && endDate && endDate < expectedDate) {
+      return [
+        {
+          path: `incomeSources.${index}.endDate`,
+          code: "end_date_before_expected_date" as const,
+        },
+      ];
+    }
+    return [];
+  });
 }
 
 export function pruneMoneySetupIds(

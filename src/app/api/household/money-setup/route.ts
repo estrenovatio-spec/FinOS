@@ -4,7 +4,7 @@ import { dbUnavailable, forbidden, mapCloudGuardError, unauthorized } from "@/li
 import { requireSession } from "@/lib/api/household-auth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { buildSyncPayload, patchHouseholdMoneySetup } from "@/lib/household/service";
-import { MONEY_SETUP_INCOME_SOURCE_KINDS } from "@/lib/money-setup";
+import { MONEY_SETUP_INCOME_SOURCE_KINDS, normalizeMoneySetup, validateMoneySetup } from "@/lib/money-setup";
 
 const incomeSourceSchema = z.object({
   id: z.string(),
@@ -12,6 +12,10 @@ const incomeSourceSchema = z.object({
   expectedDate: z.string().nullable(),
   expectedAmount: z.number().finite().nullable(),
   kind: z.enum(MONEY_SETUP_INCOME_SOURCE_KINDS),
+  recurrence: z.enum(["once", "monthly"]).optional(),
+  intervalMonths: z.number().int().min(1).max(60).nullable().optional(),
+  dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+  endDate: z.string().nullable().optional(),
   isPrimary: z.boolean().optional(),
 });
 
@@ -52,8 +56,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
 
+  const normalizedSetup = normalizeMoneySetup(body.moneySetup);
+  const validationIssues = validateMoneySetup(normalizedSetup);
+  if (validationIssues.length > 0) {
+    return NextResponse.json(
+      { error: "validation_error", issues: validationIssues },
+      { status: 400 },
+    );
+  }
+
   try {
-    await patchHouseholdMoneySetup(session.userId, session.householdId, body.moneySetup);
+    await patchHouseholdMoneySetup(session.userId, session.householdId, normalizedSetup);
     const sync = await buildSyncPayload(session.householdId, session.userId);
     return NextResponse.json({ ok: true, sync });
   } catch (e) {
