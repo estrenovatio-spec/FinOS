@@ -12,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { buildMoneySetupProgress } from "@/components/today/money-setup-progress";
 import {
   MONEY_SETUP_INCOME_SOURCE_KINDS,
+  normalizeMoneySetup,
   type MoneySetupIncomeRecurrence,
   type MoneySetupIncomeSource,
   type MoneySetupIncomeSourceKind,
+  validateMoneySetup,
 } from "@/lib/money-setup";
 import {
   buildIncomeSetupSavePayload,
@@ -223,6 +225,9 @@ export function MoneySetupDialog({
           source.expectedAmount != null ? String(source.expectedAmount) : "",
         kind: source.kind,
         recurrence: source.recurrence ?? "monthly",
+        intervalMonths: source.intervalMonths ?? 1,
+        dayOfMonth: source.dayOfMonth ?? null,
+        endDate: source.endDate ?? "",
         isPrimary: Boolean(source.isPrimary),
       }));
     }
@@ -238,6 +243,9 @@ export function MoneySetupDialog({
               : "",
           kind: "salary" as MoneySetupIncomeSourceKind,
           recurrence: "monthly" as MoneySetupIncomeRecurrence,
+          intervalMonths: 1,
+          dayOfMonth: null,
+          endDate: "",
           isPrimary: true,
         },
       ];
@@ -335,13 +343,26 @@ export function MoneySetupDialog({
       expectedIncomeAmount,
     });
 
-    updateMoneySetup({
+    const nextMoneySetup = normalizeMoneySetup({
+      ...moneySetup,
       ...incomePayload,
       requiredRecurringIds: moneySetup.requiredRecurringIds,
       hasNoRequiredFixedExpenses: moneySetup.hasNoRequiredFixedExpenses,
       essentialCategoryIds: moneySetup.essentialCategoryIds,
       useHouseholdBalance: showHouseholdToggle ? useHouseholdBalance : false,
     });
+    const validationIssue = validateMoneySetup(nextMoneySetup)[0];
+    if (validationIssue?.code === "end_date_before_expected_date") {
+      toast(
+        locale === "ru"
+          ? "Дата окончания дохода не может быть раньше первой даты поступления"
+          : "Income end date cannot be earlier than the first payout date",
+        "error",
+      );
+      return;
+    }
+
+    updateMoneySetup(nextMoneySetup);
     toast(
       locale === "ru" ? "Финансовая база сохранена" : "Financial base saved",
       "success",

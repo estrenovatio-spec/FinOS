@@ -71,6 +71,9 @@ test("existing sources stay in place when a new one is added", () => {
       expectedAmount: "120000",
       kind: "salary",
       recurrence: "once",
+      intervalMonths: null,
+      dayOfMonth: null,
+      endDate: "",
       isPrimary: true,
     },
   ];
@@ -101,6 +104,9 @@ test("saving multiple income sources does not overwrite the first one", () => {
         expectedAmount: "120000",
         kind: "salary",
         recurrence: "once",
+        intervalMonths: null,
+        dayOfMonth: null,
+        endDate: "",
         isPrimary: true,
       },
       {
@@ -110,6 +116,9 @@ test("saving multiple income sources does not overwrite the first one", () => {
         expectedAmount: "40000",
         kind: "passive",
         recurrence: "once",
+        intervalMonths: null,
+        dayOfMonth: null,
+        endDate: "",
         isPrimary: false,
       },
     ],
@@ -120,6 +129,59 @@ test("saving multiple income sources does not overwrite the first one", () => {
   assert.equal(payload.incomeSources[1]?.id, "passive-1");
   assert.equal(payload.nextIncomeDate, "2026-07-25");
   assert.equal(payload.expectedIncomeAmount, 120000);
+});
+
+test("saving income sources preserves hidden recurrence fields for cloud persistence", () => {
+  const payload = buildIncomeSetupSavePayload({
+    showIncomeSources: true,
+    nextIncomeDate: "2026-07-25",
+    expectedIncomeAmount: "120000",
+    incomeSources: [
+      {
+        id: "salary-1",
+        label: "Зарплата",
+        expectedDate: "2026-07-25",
+        expectedAmount: "120000",
+        kind: "salary",
+        recurrence: "monthly",
+        intervalMonths: 2,
+        dayOfMonth: 25,
+        endDate: "2026-11-25",
+        isPrimary: true,
+      },
+    ],
+  });
+
+  assert.equal(payload.incomeSources[0]?.intervalMonths, 2);
+  assert.equal(payload.incomeSources[0]?.dayOfMonth, 25);
+  assert.equal(payload.incomeSources[0]?.endDate, "2026-11-25");
+});
+
+test("switching an income source to one-time clears monthly-only schedule fields", () => {
+  const payload = buildIncomeSetupSavePayload({
+    showIncomeSources: true,
+    nextIncomeDate: "2026-07-25",
+    expectedIncomeAmount: "120000",
+    incomeSources: [
+      {
+        id: "salary-1",
+        label: "Зарплата",
+        expectedDate: "2026-07-25",
+        expectedAmount: "120000",
+        kind: "salary",
+        recurrence: "once",
+        intervalMonths: 3,
+        dayOfMonth: 25,
+        endDate: "2026-11-25",
+        isPrimary: true,
+      },
+    ],
+  });
+
+  assert.equal(payload.incomeSources[0]?.recurrence, "once");
+  assert.equal(payload.incomeSources[0]?.intervalMonths, null);
+  assert.equal(payload.incomeSources[0]?.dayOfMonth, null);
+  assert.equal(payload.incomeSources[0]?.endDate, null);
 });
 
 test("cancel-like empty draft is not persisted as a regular income source", () => {
@@ -135,6 +197,9 @@ test("cancel-like empty draft is not persisted as a regular income source", () =
         expectedAmount: "",
         kind: "salary",
         recurrence: "once",
+        intervalMonths: null,
+        dayOfMonth: null,
+        endDate: "",
         isPrimary: true,
       },
     ],

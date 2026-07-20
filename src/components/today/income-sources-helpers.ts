@@ -13,6 +13,9 @@ export type IncomeSourceDraft = {
   expectedAmount: string;
   kind: MoneySetupIncomeSourceKind;
   recurrence: MoneySetupIncomeRecurrence;
+  intervalMonths: number | null;
+  dayOfMonth: number | null;
+  endDate: string;
   isPrimary: boolean;
 };
 
@@ -37,6 +40,9 @@ export function toIncomeSourceDraft(
       source.expectedAmount != null ? String(source.expectedAmount) : "",
     kind: source.kind,
     recurrence: source.recurrence ?? "monthly",
+    intervalMonths: source.intervalMonths ?? 1,
+    dayOfMonth: source.dayOfMonth ?? null,
+    endDate: source.endDate ?? "",
     isPrimary: Boolean(source.isPrimary),
   };
 }
@@ -49,6 +55,9 @@ export function emptyIncomeSourceDraft(isPrimary: boolean): IncomeSourceDraft {
     expectedAmount: "",
     kind: "salary",
     recurrence: "monthly",
+    intervalMonths: 1,
+    dayOfMonth: null,
+    endDate: "",
     isPrimary,
   };
 }
@@ -71,6 +80,9 @@ export function buildLegacyIncomeSourceDraft(
         setup.expectedIncomeAmount != null ? String(setup.expectedIncomeAmount) : "",
       kind: "salary",
       recurrence: "monthly",
+      intervalMonths: 1,
+      dayOfMonth: null,
+      endDate: "",
       isPrimary: true,
   };
 }
@@ -136,12 +148,23 @@ export function buildIncomeSetupSavePayload(args: {
       expectedAmount: parseAmount(item.expectedAmount),
       kind: item.kind,
       recurrence: item.recurrence,
-      intervalMonths: item.recurrence === "monthly" ? 1 : null,
-      dayOfMonth:
-        item.recurrence === "monthly" && item.expectedDate
-          ? Number.parseInt(item.expectedDate.slice(8, 10), 10) || null
+      intervalMonths:
+        item.recurrence === "monthly"
+          ? item.intervalMonths == null
+            ? 1
+            : Math.max(1, Math.min(60, Math.round(Number(item.intervalMonths) || 1)))
           : null,
-      endDate: null,
+      dayOfMonth:
+        item.recurrence === "monthly"
+          ? item.dayOfMonth ??
+            (item.expectedDate
+              ? Number.parseInt(item.expectedDate.slice(8, 10), 10) || null
+              : null)
+          : null,
+      endDate:
+        item.recurrence === "monthly"
+          ? item.endDate || null
+          : null,
       ...(item.isPrimary ? { isPrimary: true } : {}),
     }),
   );
