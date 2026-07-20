@@ -1896,6 +1896,82 @@ test("legacy pending debt payment without debtId is merged with the real debt ev
   assert.equal(plannedFreeMoney.amount, 32150);
 });
 
+test("the same debt keeps separate occurrences when the dates differ", () => {
+  const state = buildState({
+    today: "2026-07-20",
+    forecastHorizonMonths: 3,
+    balances: { all: 50000, me: 50000, partner: 0 },
+    debts: [
+      debt({
+        id: "water-debt",
+        name: "ЖКХ вода",
+        balance: 10000,
+        minPayment: 5000,
+        nextPaymentDate: "2026-07-20",
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+  });
+
+  const snapshot = decisionCoreSnapshot(state);
+  const debtEvents = snapshot.forecast.events.filter(
+    (event) => event.source === "debt_payment" && event.debtId === "water-debt",
+  );
+
+  assert.deepEqual(
+    debtEvents.map((event) => event.plannedDate),
+    ["2026-07-20", "2026-08-20"],
+  );
+});
+
+test("different debts with the same title amount and date are kept as separate payments", () => {
+  const state = buildState({
+    today: "2026-07-20",
+    balances: { all: 50000, me: 50000, partner: 0 },
+    debts: [
+      debt({
+        id: "debt-a",
+        name: "Банкрот Ксю",
+        balance: 17850,
+        minPayment: 17850,
+        nextPaymentDate: "2026-07-20",
+      }),
+      debt({
+        id: "debt-b",
+        name: "Банкрот Ксю",
+        balance: 17850,
+        minPayment: 17850,
+        nextPaymentDate: "2026-07-20",
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+  });
+
+  const result = decisionCore(state);
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  const debtEvents = snapshot.forecast.events.filter(
+    (event) =>
+      event.source === "debt_payment" &&
+      event.plannedDate === "2026-07-20" &&
+      (event.debtId === "debt-a" || event.debtId === "debt-b"),
+  );
+
+  assert.equal(result.todayPayments.length, 2);
+  assert.deepEqual(
+    result.todayPayments.map((payment) => payment.debtId),
+    ["debt-a", "debt-b"],
+  );
+  assert.equal(debtEvents.length, 2);
+  assert.equal(plannedFreeMoney.amount, 14300);
+});
+
 test("debt forecast schedule repeats monthly until the balance is fully covered", () => {
   const ctx = buildContext(
     buildState({
