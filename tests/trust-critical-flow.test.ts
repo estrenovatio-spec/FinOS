@@ -8,6 +8,12 @@ import { buildAdvisorContext } from "@/lib/advisor-context";
 import { getDefaultCategories } from "@/lib/categories";
 import { applyHouseholdSync } from "@/lib/cloud/apply-sync";
 import { decisionCoreSnapshot, type DecisionCoreState } from "@/lib/decision-core";
+import { confirmExpectedPaymentFromInput } from "@/lib/expected-payment-actions";
+import {
+  buildMatcherState,
+  buildSyntheticPaymentTransaction,
+  matchInputToExpectedPayments,
+} from "@/lib/expected-payment-matcher";
 import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import type { HouseholdPublic, SyncPayload } from "@/lib/household/types";
 import { emptyMoneySetup } from "@/lib/money-setup";
@@ -537,4 +543,277 @@ test("advisor context keeps expected income visible instead of collapsing it int
   assert.equal(advisorContext.financialContext.incomes.recurring[0]?.title, "Зарплата");
   assert.ok(advisorContext.debugSummary.expectedIncomeTotal > 0);
   assert.equal(advisorContext.cards.some((card) => card.id === "free_money"), true);
+});
+
+test("matched debt payment from quick input reduces balance and does not repeat in forecast", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: [],
+    savingsGoals: [],
+    categoryBudgets: [],
+    recurringTransactions: [],
+    debts: [
+      {
+        id: "bankrot-ksyu",
+        name: "банкрот ксю",
+        owner: "all",
+        balance: 17850,
+        minPayment: 17850,
+        ratePct: null,
+        nextPaymentDate: "2026-07-20",
+        strategy: "avalanche",
+        priority: "normal",
+        updatedAt: "2026-07-20T09:00:00.000Z",
+      },
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    budgetMonthStartDay: 1,
+    cashOffsetMe: 97494,
+    cashOffsetPartner: 0,
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    cloudUserId: "user-1",
+    householdMemberUserIds: ["user-1"],
+    lastSyncedAt: "2026-07-20T09:00:00.000Z",
+  });
+
+  const match = matchInputToExpectedPayments({
+    state: buildMatcherState({
+      locale: "ru",
+      today: "2026-07-20",
+      forecastHorizonMonths: 3,
+      categories: getDefaultCategories(),
+      transactions: useStore.getState().transactions,
+      householdFilter: "me",
+      recurringTransactions: useStore.getState().recurringTransactions,
+      debts: useStore.getState().debts,
+      moneySetup: useStore.getState().moneySetup,
+      categoryBudgets: useStore.getState().categoryBudgets,
+      budgetMonthStartDay: 1,
+      balances: { all: 97494, me: 97494, partner: 0 },
+    }),
+    input: "17850 банкрот ксю",
+    parsed: {
+      amount: 17850,
+      type: "expense",
+      categoryId: "banking",
+      currency: "RUB",
+      note: "банкрот ксю",
+      date: "2026-07-20",
+      owner: "me",
+    },
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "single");
+  if (match.kind !== "single") return;
+
+  const confirmed = confirmExpectedPaymentFromInput({
+    candidate: match.candidate,
+    actual: buildSyntheticPaymentTransaction(match.candidate, "17850 банкрот ксю", 17850),
+    transcript: "17850 банкрот ксю",
+    actions: {
+      addTransaction: useStore.getState().addTransaction,
+      updateTransaction: useStore.getState().updateTransaction,
+      deleteTransaction: useStore.getState().deleteTransaction,
+      payDebt: useStore.getState().payDebt,
+      updateDebt: useStore.getState().updateDebt,
+      updateRecurring: useStore.getState().updateRecurring,
+    },
+    lookups: {
+      recurringTransactions: useStore.getState().recurringTransactions,
+      debts: useStore.getState().debts,
+    },
+  });
+
+  assert.equal(confirmed, true);
+  assert.equal(useStore.getState().transactions.length, 1);
+  assert.equal(useStore.getState().transactions[0]?.amount, 17850);
+  assert.equal(useStore.getState().debts[0]?.balance, 0);
+
+  const currentBalance =
+    useStore.getState().cashOffsetMe +
+    useStore.getState().transactions.reduce(
+      (sum, tx) => sum + (tx.type === "income" ? tx.amount : -tx.amount),
+      0,
+    );
+  assert.equal(currentBalance, 79644);
+
+  const snapshot = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-20",
+    forecastHorizonMonths: 3,
+    categories: useStore.getState().categories,
+    transactions: useStore.getState().transactions,
+    householdFilter: "me",
+    recurringTransactions: useStore.getState().recurringTransactions,
+    debts: useStore.getState().debts,
+    moneySetup: useStore.getState().moneySetup,
+    categoryBudgets: useStore.getState().categoryBudgets,
+    budgetMonthStartDay: 1,
+    balances: { all: currentBalance, me: currentBalance, partner: 0 },
+  });
+
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) => event.debtId === "bankrot-ksyu" && event.date === "2026-07-20",
+    ),
+    false,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("partial matched payment keeps only the remaining pending amount in forecast", () => {
+  const previousStore = useStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: [
+      tx({
+        id: "mortgage-pending",
+        amount: 18000,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-20",
+        note: "Ипотека",
+        confirmed: false,
+        recurringId: "mortgage-recurring",
+      }),
+    ],
+    recurringTransactions: [
+      recurring({
+        id: "mortgage-recurring",
+        amount: 18000,
+        type: "expense",
+        categoryId: "housing",
+        note: "Ипотека",
+        nextRunDate: "2026-07-20",
+        frequency: "monthly",
+        dayOfMonth: 20,
+      }),
+    ],
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    cashOffsetMe: 50000,
+    cashOffsetPartner: 0,
+  });
+
+  const match = matchInputToExpectedPayments({
+    state: buildMatcherState({
+      locale: "ru",
+      today: "2026-07-20",
+      forecastHorizonMonths: 3,
+      categories: getDefaultCategories(),
+      transactions: useStore.getState().transactions,
+      householdFilter: "me",
+      recurringTransactions: useStore.getState().recurringTransactions,
+      debts: [],
+      moneySetup: useStore.getState().moneySetup,
+      categoryBudgets: [],
+      budgetMonthStartDay: 1,
+      balances: { all: 50000, me: 50000, partner: 0 },
+    }),
+    input: "5000 ипотека",
+    parsed: {
+      amount: 5000,
+      type: "expense",
+      categoryId: "housing",
+      currency: "RUB",
+      note: "ипотека",
+      date: "2026-07-20",
+      owner: "me",
+    },
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "single");
+  if (match.kind !== "single") return;
+
+  const confirmed = confirmExpectedPaymentFromInput({
+    candidate: match.candidate,
+    actual: {
+      amount: 5000,
+      type: "expense",
+      categoryId: "housing",
+      currency: "RUB",
+      note: "ипотека",
+      date: "2026-07-20",
+      owner: "me",
+      confirmed: true,
+      recurringId: "mortgage-recurring",
+    },
+    transcript: "5000 ипотека",
+    actions: {
+      addTransaction: useStore.getState().addTransaction,
+      updateTransaction: useStore.getState().updateTransaction,
+      deleteTransaction: useStore.getState().deleteTransaction,
+      payDebt: useStore.getState().payDebt,
+      updateDebt: useStore.getState().updateDebt,
+      updateRecurring: useStore.getState().updateRecurring,
+    },
+    lookups: {
+      recurringTransactions: useStore.getState().recurringTransactions,
+      debts: [],
+    },
+  });
+
+  assert.equal(confirmed, true);
+  assert.equal(
+    useStore.getState().transactions.filter((tx) => tx.confirmed === false)[0]?.amount,
+    13000,
+  );
+
+  const snapshot = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-20",
+    forecastHorizonMonths: 3,
+    categories: useStore.getState().categories,
+    transactions: useStore.getState().transactions,
+    householdFilter: "me",
+    recurringTransactions: useStore.getState().recurringTransactions,
+    debts: [],
+    moneySetup: useStore.getState().moneySetup,
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    balances: { all: 45000, me: 45000, partner: 0 },
+  });
+
+  assert.equal(
+    snapshot.forecast.events.filter(
+      (event) =>
+        event.date === "2026-07-20" &&
+        event.amount === -13000 &&
+        (event.source === "pending_transaction" || event.source === "recurring"),
+    ).length,
+    1,
+  );
+
+  useStore.setState(previousStore);
 });

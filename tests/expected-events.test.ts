@@ -12,7 +12,107 @@ import {
   setExpectedEventReminderInSetup,
   shouldSuggestRecurringAmountUpdate,
 } from "@/lib/expected-events";
+import {
+  buildMatcherState,
+  matchInputToExpectedPayments,
+} from "@/lib/expected-payment-matcher";
 import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
+import { getDefaultCategories } from "@/lib/categories";
+import type { Transaction } from "@/types";
+import type { DebtItem, RecurringTransaction } from "@/types/planning";
+
+function tx(
+  partial: Partial<Transaction> &
+    Pick<Transaction, "id" | "amount" | "type" | "categoryId" | "date">,
+): Transaction {
+  return {
+    id: partial.id,
+    amount: partial.amount,
+    type: partial.type,
+    categoryId: partial.categoryId,
+    currency: "RUB",
+    note: partial.note ?? "",
+    date: partial.date,
+    owner: partial.owner ?? "me",
+    confirmed: partial.confirmed,
+    goalId: null,
+    goalAmount: null,
+    recurringId: partial.recurringId ?? null,
+    odometerKm: null,
+    fuelLiters: null,
+    vehicleId: null,
+    transferPairId: null,
+    businessTxId: null,
+  };
+}
+
+function recurring(
+  partial: Partial<RecurringTransaction> &
+    Pick<
+      RecurringTransaction,
+      "id" | "amount" | "type" | "categoryId" | "nextRunDate" | "frequency"
+    >,
+): RecurringTransaction {
+  return {
+    id: partial.id,
+    amount: partial.amount,
+    type: partial.type,
+    categoryId: partial.categoryId,
+    note: partial.note ?? "",
+    skippedDates: partial.skippedDates ?? [],
+    owner: partial.owner ?? "me",
+    frequency: partial.frequency,
+    intervalMonths: partial.intervalMonths ?? 1,
+    dayOfMonth: partial.dayOfMonth ?? 20,
+    nextRunDate: partial.nextRunDate,
+    endDate: partial.endDate ?? null,
+    enabled: partial.enabled ?? true,
+    updatedAt: partial.updatedAt,
+  };
+}
+
+function debt(
+  partial: Partial<DebtItem> &
+    Pick<DebtItem, "id" | "name" | "balance" | "minPayment">,
+): DebtItem {
+  return {
+    id: partial.id,
+    name: partial.name,
+    owner: partial.owner ?? "me",
+    balance: partial.balance,
+    minPayment: partial.minPayment,
+    ratePct: partial.ratePct ?? null,
+    nextPaymentDate: partial.nextPaymentDate ?? null,
+    strategy: partial.strategy ?? "avalanche",
+    priority: partial.priority ?? "normal",
+    updatedAt: partial.updatedAt,
+  };
+}
+
+function matcherState(args?: {
+  today?: string;
+  transactions?: Transaction[];
+  recurringTransactions?: RecurringTransaction[];
+  debts?: DebtItem[];
+}) {
+  return buildMatcherState({
+    locale: "ru",
+    today: args?.today ?? "2026-07-20",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: args?.transactions ?? [],
+    householdFilter: "me",
+    recurringTransactions: args?.recurringTransactions ?? [],
+    debts: args?.debts ?? [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    balances: { all: 50000, me: 50000, partner: 0 },
+  });
+}
 
 test("rescheduling legacy income source materializes it into incomeSources and updates primary date", () => {
   const setup = {
@@ -286,4 +386,138 @@ test("expected event dialog uses human labels and keeps the confirmation form re
   assert.doesNotMatch(dialogSource, /Готово/);
   assert.match(txDialogSource, /fieldMode\?: "full" \| "expected_event"/);
   assert.match(txDialogSource, /!expectedEventMode \? \(/);
+});
+
+test("matcher finds a debt payment by amount and normalized title", () => {
+  const match = matchInputToExpectedPayments({
+    state: matcherState({
+      debts: [
+        debt({
+          id: "bankrot-ksyu",
+          name: "банкрот ксю",
+          balance: 17850,
+          minPayment: 17850,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+    }),
+    input: "17850 банкрот ксю",
+    parsed: {
+      amount: 17850,
+      type: "expense",
+      categoryId: "banking",
+      currency: "RUB",
+      note: "банкрот ксю",
+      date: "2026-07-20",
+    },
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "single");
+  if (match.kind !== "single") return;
+  assert.equal(match.candidate.debtId, "bankrot-ksyu");
+});
+
+test("matcher resolves partial title overlap for ЖКХ water payment", () => {
+  const match = matchInputToExpectedPayments({
+    state: matcherState({
+      debts: [
+        debt({
+          id: "water-debt",
+          name: "ЖКХ вода трудовая",
+          balance: 5000,
+          minPayment: 5000,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+    }),
+    input: "5000 жкх вода",
+    parsed: {
+      amount: 5000,
+      type: "expense",
+      categoryId: "banking",
+      currency: "RUB",
+      note: "жкх вода",
+      date: "2026-07-20",
+    },
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "single");
+  if (match.kind !== "single") return;
+  assert.equal(match.candidate.debtId, "water-debt");
+});
+
+test("matcher can find a single expected payment even when the user entered no amount", () => {
+  const match = matchInputToExpectedPayments({
+    state: matcherState({
+      transactions: [
+        tx({
+          id: "mortgage-pending",
+          amount: 5000,
+          type: "expense",
+          categoryId: "home_housing",
+          date: "2026-07-20",
+          note: "Ипотека",
+          confirmed: false,
+          recurringId: "mortgage-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "mortgage-recurring",
+          amount: 5000,
+          type: "expense",
+          categoryId: "home_housing",
+          nextRunDate: "2026-07-20",
+          frequency: "monthly",
+          note: "Ипотека",
+        }),
+      ],
+    }),
+    input: "оплатил ипотеку",
+    parsed: null,
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "single");
+  if (match.kind !== "single") return;
+  assert.equal(match.candidate.transactionId, "mortgage-pending");
+});
+
+test("matcher offers multiple candidates when the phrase is ambiguous", () => {
+  const match = matchInputToExpectedPayments({
+    state: matcherState({
+      debts: [
+        debt({
+          id: "water-a",
+          name: "ЖКХ вода трудовая",
+          balance: 5000,
+          minPayment: 5000,
+          nextPaymentDate: "2026-07-20",
+        }),
+        debt({
+          id: "water-b",
+          name: "ЖКХ вода дмитров",
+          balance: 5000,
+          minPayment: 5000,
+          nextPaymentDate: "2026-07-20",
+        }),
+      ],
+    }),
+    input: "5000 жкх вода",
+    parsed: {
+      amount: 5000,
+      type: "expense",
+      categoryId: "banking",
+      currency: "RUB",
+      note: "жкх вода",
+      date: "2026-07-20",
+    },
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "multiple");
+  if (match.kind !== "multiple") return;
+  assert.equal(match.candidates.length, 2);
 });
