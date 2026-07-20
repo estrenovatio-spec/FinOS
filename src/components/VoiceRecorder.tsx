@@ -686,11 +686,11 @@ export function VoiceRecorder({
   }, [locale, processValue, submitBusy, toast, voiceProcessing, voiceState]);
 
   const voiceButtonIcon = voiceProcessing ? (
-    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+    <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
   ) : recording ? (
-    <Square className="h-4 w-4" aria-hidden />
+    <Square className="h-5 w-5 fill-current" aria-hidden />
   ) : (
-    <Mic className="h-4 w-4" aria-hidden />
+    <Mic className="h-5 w-5" aria-hidden />
   );
 
   const voiceButtonLabel = recording ? t(locale, "voiceStopAria") : t(locale, "voiceMicLive");
@@ -729,7 +729,7 @@ export function VoiceRecorder({
               <Button
                 type="button"
                 variant={recording ? "destructive" : "outline"}
-                className="h-[44px] w-9 shrink-0 border-primary/20 bg-primary/5 px-0"
+                className="h-11 w-11 shrink-0 border-primary/20 bg-primary/5 p-0"
                 disabled={micDisabled}
                 onClick={() => void onVoiceClick()}
                 aria-label={voiceButtonLabel}
@@ -742,13 +742,13 @@ export function VoiceRecorder({
         ) : (
           <div className="flex items-stretch gap-2">
             <textarea
-                name="quick-entry"
-                value={text}
-                onChange={handleTextChange}
-                onInput={handleTextInput}
-                placeholder={t(locale, "fallbackPlaceholder")}
-                rows={2}
-                disabled={submitBusy || voiceProcessing}
+              name="quick-entry"
+              value={text}
+              onChange={handleTextChange}
+              onInput={handleTextInput}
+              placeholder={t(locale, "fallbackPlaceholder")}
+              rows={2}
+              disabled={submitBusy || voiceProcessing}
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
@@ -757,14 +757,14 @@ export function VoiceRecorder({
             <Button
               type="button"
               variant={recording ? "destructive" : "outline"}
-                className="min-h-[64px] w-10 shrink-0 px-0"
-                disabled={micDisabled}
-                onClick={() => void onVoiceClick()}
-                aria-label={voiceButtonLabel}
-                title={voiceAvailable ? undefined : voiceUnavailableTitle}
-              >
-                {voiceButtonIcon}
-              </Button>
+              className="h-11 w-11 shrink-0 p-0"
+              disabled={micDisabled}
+              onClick={() => void onVoiceClick()}
+              aria-label={voiceButtonLabel}
+              title={voiceAvailable ? undefined : voiceUnavailableTitle}
+            >
+              {voiceButtonIcon}
+            </Button>
           </div>
         )}
 

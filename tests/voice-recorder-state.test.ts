@@ -16,3 +16,10 @@ test("voice recorder keeps one visible control and cleans up recording on unmoun
   assert.match(source, /void cancelVoiceRecording\(\)/);
   assert.doesNotMatch(source, /busy && !recording \?/);
 });
+
+test("voice recorder keeps the same fixed button size in every state", () => {
+  assert.match(source, /className="h-11 w-11 shrink-0 border-primary\/20 bg-primary\/5 p-0"/);
+  assert.match(source, /className="h-11 w-11 shrink-0 p-0"/);
+  assert.match(source, /<Square className="h-5 w-5 fill-current" aria-hidden \/>/);
+  assert.doesNotMatch(source, /width:auto|width:fit-content|display:none|visibility:hidden/);
+});
