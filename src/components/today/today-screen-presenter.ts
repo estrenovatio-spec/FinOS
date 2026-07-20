@@ -588,16 +588,6 @@ function buildOverview(input: TodayPresentationInput): {
     decision.mainAction.command.type === "confirm_payment"
       ? decision.mainAction.command.paymentId
       : null;
-
-  const remainingPayments = decision.todayPayments.filter(
-    (payment) => payment.id !== hiddenPrimaryPaymentId,
-  );
-  const paymentsToSummarize =
-    remainingPayments.length > 0
-      ? remainingPayments
-      : hiddenPrimaryPaymentId
-        ? []
-        : decision.todayPayments;
   const items: TodayOverviewItem[] = [];
 
   const plannedFreeMoneyItem = buildPlannedFreeMoneyItem(input, locale, input.plannedFreeMoney);
@@ -607,15 +597,13 @@ function buildOverview(input: TodayPresentationInput): {
     items.push(buildCurrentBalanceItem(input));
   }
 
-  const nearestPayment = paymentsToSummarize[0] ?? null;
-
   return {
     items,
     hiddenPrimaryPaymentId,
-    payments: nearestPayment
+    payments: decision.todayPayments.length > 0
       ? {
-          title: locale === "ru" ? "Ближайший платёж" : "Nearest payment",
-          items: [nearestPayment],
+          title: locale === "ru" ? "Платежи на сегодня" : "Payments due today",
+          items: decision.todayPayments,
         }
       : null,
   };

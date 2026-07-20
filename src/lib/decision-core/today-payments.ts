@@ -65,6 +65,7 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
       };
     });
 
+  const seenDebtOccurrences = new Set<string>();
   const prioritizedDebts = sortDebtsByStrategy(
     debts
       .filter((debt) => debt.balance > 0 && debt.minPayment > 0 && debt.nextPaymentDate)
@@ -75,7 +76,15 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
           ctx.expectedEventReminderStates,
           today,
         ),
-      ),
+      )
+      .filter((debt) => {
+        const occurrenceKey = debtPaymentKey(debt.id, debt.nextPaymentDate!.slice(0, 10));
+        if (seenDebtOccurrences.has(occurrenceKey)) {
+          return false;
+        }
+        seenDebtOccurrences.add(occurrenceKey);
+        return true;
+      }),
   );
   const debtRank = new Map(prioritizedDebts.map((debt, index) => [debt.id, index]));
 

@@ -1780,6 +1780,60 @@ test("expected payment generation does not create a recurring duplicate when deb
   assert.equal(sameDateEvents[0]?.debtId, "housing-debt");
 });
 
+test("duplicate debt records with the same debtId and occurrence date generate only one expected payment", () => {
+  const state = buildState({
+    today: "2026-07-20",
+    balances: { all: 50000, me: 50000, partner: 0 },
+    debts: [
+      debt({
+        id: "bankrot-ksyu",
+        name: "Банкрот Ксю",
+        balance: 17850,
+        minPayment: 17850,
+        nextPaymentDate: "2026-07-20",
+      }),
+      debt({
+        id: "bankrot-ksyu",
+        name: "Банкрот Ксю",
+        balance: 17850,
+        minPayment: 17850,
+        nextPaymentDate: "2026-07-20",
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+  });
+  const ctx = buildContext(state);
+  const result = decisionCore(state);
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  const expectedPayments = buildGeneratedExpectedPaymentEvents(
+    ctx,
+    ctx.forecast.horizonEndDate,
+  ).filter(
+    (event) =>
+      event.source === "debt_payment" &&
+      event.debtId === "bankrot-ksyu" &&
+      event.plannedDate === "2026-07-20",
+  );
+
+  assert.equal(result.todayPayments.length, 1);
+  assert.equal(result.todayPayments[0]?.debtId, "bankrot-ksyu");
+  assert.equal(expectedPayments.length, 1);
+  assert.equal(
+    snapshot.forecast.events.filter(
+      (event) =>
+        event.source === "debt_payment" &&
+        event.debtId === "bankrot-ksyu" &&
+        event.plannedDate === "2026-07-20",
+    ).length,
+    1,
+  );
+  assert.equal(plannedFreeMoney.amount, 32150);
+});
+
 test("debt forecast schedule repeats monthly until the balance is fully covered", () => {
   const ctx = buildContext(
     buildState({

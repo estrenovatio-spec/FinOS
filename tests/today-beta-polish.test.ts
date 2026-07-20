@@ -750,7 +750,7 @@ test("planned free money breakdown arithmetic stays explicit", () => {
   assert.equal(planned?.details?.at(-1)?.value, "2 500 ₽");
 });
 
-test("main payment is not duplicated as equal secondary card", () => {
+test("today keeps the nearest payment in hero but still shows all payments due today in the list", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       mainAction: {
@@ -790,12 +790,12 @@ test("main payment is not duplicated as equal secondary card", () => {
   });
 
   assert.equal(view.hiddenPrimaryPaymentId, "rent");
-  assert.equal(view.payments?.items.length, 1);
-  assert.equal(view.payments?.items[0]?.id, "internet");
-  assert.equal(view.payments?.title, "Ближайший платёж");
+  assert.equal(view.payments?.items.length, 2);
+  assert.deepEqual(view.payments?.items.map((item) => item.id), ["rent", "internet"]);
+  assert.equal(view.payments?.title, "Платежи на сегодня");
 });
 
-test("Today keeps only one compact nearest payment block after the hero", () => {
+test("today shows every payment due today even when hero highlights the nearest one", () => {
   const view = buildTodayScreenView({
     decision: makeDecision({
       mainAction: {
@@ -825,7 +825,7 @@ test("Today keeps only one compact nearest payment block after the hero", () => 
     balances: { all: 90000, me: 90000, partner: 0 },
   });
 
-  assert.deepEqual(view.payments?.items.map((item) => item.id), ["internet"]);
+  assert.deepEqual(view.payments?.items.map((item) => item.id), ["rent", "internet", "music"]);
 });
 
 test("calm state stays non-alarming and keeps quick add available", () => {
@@ -874,7 +874,7 @@ test("reserve required keeps the reserve guidance in hero without duplicating a 
         kind: "payment",
         title: "ЖКХ",
         amount: 18000,
-        date: "2026-07-20",
+        date: "2026-07-21",
         daysAway: 8,
         label: "через 8 дней",
       },
@@ -1516,7 +1516,7 @@ test("setActualCash ignores confirmed income that is dated in the future", () =>
         categoryId: "salary",
         currency: "RUB",
         note: "Зарплата",
-        date: "2026-07-20",
+        date: "2026-07-21",
         owner: "me",
         goalId: null,
         goalAmount: null,

@@ -512,6 +512,7 @@ function buildFutureEssentialBudgetEvents(
 
 function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): ForecastEvent[] {
   const events: ForecastEvent[] = [];
+  const seenDebtOccurrences = new Set<string>();
 
   for (const item of ctx.debts) {
     if (!(item.balance > 0 && item.nextPaymentDate && item.minPayment > 0)) {
@@ -522,9 +523,18 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
     let scheduledDate = item.nextPaymentDate.slice(0, 10);
 
     while (remainingBalance > 0 && scheduledDate <= horizonEndDate) {
+      const occurrenceKey = debtPaymentKey(item, scheduledDate);
+      if (seenDebtOccurrences.has(occurrenceKey)) {
+        const nextScheduledDate = advanceDebtPaymentDate(scheduledDate);
+        if (nextScheduledDate === scheduledDate) break;
+        scheduledDate = nextScheduledDate;
+        continue;
+      }
+      seenDebtOccurrences.add(occurrenceKey);
+
       const paymentAmount = Math.min(item.minPayment, remainingBalance);
       const event = {
-        id: debtPaymentKey(item, scheduledDate),
+        id: occurrenceKey,
         title: item.name.trim(),
         amount: -paymentAmount,
         date: scheduledDate < ctx.today ? ctx.today : scheduledDate,
@@ -537,7 +547,7 @@ function buildDebtEvents(ctx: DecisionCoreContext, horizonEndDate: string): Fore
         plannedIncomeStatus: null,
         plannedDate: scheduledDate,
         debtId: item.id,
-        paymentKey: debtPaymentKey(item, scheduledDate),
+        paymentKey: occurrenceKey,
         isOverdue: scheduledDate < ctx.today,
         paymentSource: "debt" as const,
         linkedEntityId: item.id,
