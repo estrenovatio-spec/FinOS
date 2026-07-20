@@ -41,6 +41,7 @@ import {
 import { mergeTransactionComment } from "@/lib/transaction-note";
 import {
   canUseVoiceInput,
+  cancelVoiceRecording,
   finalizeVoiceCapture,
   mapVoiceError,
   parseVoiceTranscripts,
@@ -51,6 +52,7 @@ import { useHouseholdBalances, useStore } from "@/store/useStore";
 import type { CategoryDefinition, Locale, ParsedTransaction } from "@/types";
 
 const VOICE_FLOW_TIMEOUT_MS = 32_000;
+type VoiceUiState = "idle" | "recording" | "processing";
 
 type PendingMatchEntry = {
   input: string;
@@ -136,8 +138,8 @@ export function VoiceRecorder({
 
   const [text, setText] = useState("");
   const [comment, setComment] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [recording, setRecording] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceUiState>("idle");
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [matchQueue, setMatchQueue] = useState<PendingMatchEntry[]>([]);
@@ -145,8 +147,11 @@ export function VoiceRecorder({
   const primaryInputRef = useRef<HTMLTextAreaElement | null>(null);
   const trimmedText = text.trim();
   const canSubmit = trimmedText.length > 0;
+  const recording = voiceState === "recording";
+  const voiceProcessing = voiceState === "processing";
+  const busy = submitBusy || recording || voiceProcessing;
   const addDisabled = !canSubmit || busy;
-  const micDisabled = !voiceAvailable || (busy && !recording);
+  const micDisabled = !voiceAvailable || submitBusy || voiceProcessing;
   const voiceUnavailableTitle =
     locale === "ru"
       ? "Голосовой ввод недоступен в этом браузере"
@@ -158,6 +163,12 @@ export function VoiceRecorder({
       console.warn("[voice] SpeechRecognition unavailable or audio capture unsupported");
     }
     setVoiceAvailable(available);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void cancelVoiceRecording();
+    };
   }, []);
 
   const handleTextChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -516,14 +527,14 @@ export function VoiceRecorder({
   const processValue = useCallback(
     async (rawValue: string) => {
       const value = rawValue.trim();
-      if (!value || busy) return;
+      if (!value || submitBusy || voiceProcessing) return;
       const nonEmptyLines = value
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean);
       const isBulkLineList = nonEmptyLines.length > 1;
 
-      setBusy(true);
+      setSubmitBusy(true);
       try {
         const planning = isBulkLineList
           ? null
@@ -597,19 +608,20 @@ export function VoiceRecorder({
 
         toast(t(locale, "voiceTryManual"), "error");
       } finally {
-        setBusy(false);
+        setSubmitBusy(false);
       }
     },
     [
       applyPlanningInput,
-      busy,
       comment,
       locale,
       onSubmitted,
       parseLineToTransactions,
       pushOrdinaryTransactions,
       savingsGoals,
+      submitBusy,
       toast,
+      voiceProcessing,
     ],
   );
 
@@ -632,9 +644,9 @@ export function VoiceRecorder({
   );
 
   const onVoiceClick = useCallback(async () => {
-    if (busy) return;
+    if (submitBusy || voiceProcessing) return;
 
-    if (!recording) {
+    if (voiceState === "idle") {
       const started = await startVoiceRecording(locale);
       if (!started.ok) {
         if (started.error === "unavailable") {
@@ -643,30 +655,45 @@ export function VoiceRecorder({
           console.warn("[voice] microphone permission error");
         }
         toast(t(locale, mapVoiceError(started.error)), "error");
+        setVoiceState("idle");
         return;
       }
-      setRecording(true);
+      setVoiceState("recording");
       toast(t(locale, "voiceMicLive"), "success");
       return;
     }
 
-    setRecording(false);
-    setBusy(true);
+    if (voiceState !== "recording") return;
+
+    setVoiceState("processing");
     let result: Awaited<ReturnType<typeof finalizeVoiceCapture>>;
     try {
       result = await withVoiceTimeout(finalizeVoiceCapture(locale), VOICE_FLOW_TIMEOUT_MS);
     } catch {
       result = { text: "", error: "stt_failed" };
-    } finally {
-      setBusy(false);
     }
     if (!result.text) {
       toast(t(locale, mapVoiceError(result.error)), "error");
+      setVoiceState("idle");
       return;
     }
-    setText(result.text);
-    await processValue(result.text);
-  }, [busy, locale, processValue, recording, toast]);
+    try {
+      setText(result.text);
+      await processValue(result.text);
+    } finally {
+      setVoiceState("idle");
+    }
+  }, [locale, processValue, submitBusy, toast, voiceProcessing, voiceState]);
+
+  const voiceButtonIcon = voiceProcessing ? (
+    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+  ) : recording ? (
+    <Square className="h-4 w-4" aria-hidden />
+  ) : (
+    <Mic className="h-4 w-4" aria-hidden />
+  );
+
+  const voiceButtonLabel = recording ? t(locale, "voiceStopAria") : t(locale, "voiceMicLive");
 
   return (
     <section
@@ -705,29 +732,23 @@ export function VoiceRecorder({
                 className="h-[44px] w-9 shrink-0 border-primary/20 bg-primary/5 px-0"
                 disabled={micDisabled}
                 onClick={() => void onVoiceClick()}
-                aria-label={recording ? t(locale, "voiceStopAria") : t(locale, "voiceMicLive")}
+                aria-label={voiceButtonLabel}
                 title={voiceAvailable ? undefined : voiceUnavailableTitle}
               >
-                {busy && !recording ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : recording ? (
-                  <Square className="h-4 w-4" aria-hidden />
-                ) : (
-                  <Mic className="h-4 w-4" aria-hidden />
-                )}
+                {voiceButtonIcon}
               </Button>
             </div>
           </>
         ) : (
           <div className="flex items-stretch gap-2">
             <textarea
-              name="quick-entry"
-              value={text}
-              onChange={handleTextChange}
-              onInput={handleTextInput}
-              placeholder={t(locale, "fallbackPlaceholder")}
-              rows={2}
-              disabled={busy}
+                name="quick-entry"
+                value={text}
+                onChange={handleTextChange}
+                onInput={handleTextInput}
+                placeholder={t(locale, "fallbackPlaceholder")}
+                rows={2}
+                disabled={submitBusy || voiceProcessing}
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
@@ -736,20 +757,14 @@ export function VoiceRecorder({
             <Button
               type="button"
               variant={recording ? "destructive" : "outline"}
-              className="min-h-[64px] w-10 shrink-0 px-0"
-              disabled={micDisabled}
-              onClick={() => void onVoiceClick()}
-              aria-label={recording ? t(locale, "voiceStopAria") : t(locale, "voiceMicLive")}
-              title={voiceAvailable ? undefined : voiceUnavailableTitle}
-            >
-              {busy && !recording ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              ) : recording ? (
-                <Square className="h-4 w-4" aria-hidden />
-              ) : (
-                <Mic className="h-4 w-4" aria-hidden />
-              )}
-            </Button>
+                className="min-h-[64px] w-10 shrink-0 px-0"
+                disabled={micDisabled}
+                onClick={() => void onVoiceClick()}
+                aria-label={voiceButtonLabel}
+                title={voiceAvailable ? undefined : voiceUnavailableTitle}
+              >
+                {voiceButtonIcon}
+              </Button>
           </div>
         )}
 
@@ -775,7 +790,7 @@ export function VoiceRecorder({
                 placeholder={t(locale, "voiceCommentPlaceholder")}
                 rows={1}
                 maxLength={120}
-                disabled={busy}
+                disabled={submitBusy || voiceProcessing}
                 className="flex min-h-[40px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               />
             ) : null}
@@ -787,7 +802,7 @@ export function VoiceRecorder({
             placeholder={t(locale, "voiceCommentPlaceholder")}
             rows={1}
             maxLength={120}
-            disabled={busy}
+            disabled={submitBusy || voiceProcessing}
             className="flex min-h-[40px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           />
         )}
@@ -799,7 +814,7 @@ export function VoiceRecorder({
           disabled={addDisabled}
           onClick={(event) => void submitText(event)}
         >
-          {busy ? (
+          {submitBusy || voiceProcessing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t(locale, "voiceProcessing")}
