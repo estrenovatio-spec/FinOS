@@ -8,6 +8,7 @@ import {
   type MoneySetupIncomeSourceStatus,
 } from "@/lib/money-setup";
 import type { Locale } from "@/types";
+import type { DebtItem } from "@/types/planning";
 
 export type ExpectedIncomeEvent = {
   kind: "income";
@@ -74,6 +75,21 @@ export type ExpectedEventDisplayStatus = {
   label: string;
   tone: "neutral" | "warning" | "success";
   priority: number;
+};
+
+type ExpectedExpenseIdentityInput = Pick<
+  ExpectedExpenseEvent,
+  "amount" | "date" | "debtId" | "paymentSource" | "linkedEntityId" | "source"
+> & {
+  title?: string | null;
+};
+
+export type ResolvedExpectedExpenseIdentity = {
+  occurrenceDate: string;
+  canonicalDebtId: string | null;
+  stableKey: string;
+  normalizedTitle: string;
+  resolvedFromLegacyReference: boolean;
 };
 
 type ResolveExpectedEventDisplayStatusArgs =
@@ -238,6 +254,81 @@ export function cancelIncomeOccurrenceInSetup(
 
 export function expectedEventDate(event: ExpectedEvent): string {
   return event.kind === "income" ? event.occurrenceDate : event.date;
+}
+
+function normalizeDebtPaymentTitle(value: string | null | undefined): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/^плат[её]ж по долгу\s*[—:-]\s*/i, "")
+    .replace(/^debt payment\s*[—:-]\s*/i, "")
+    .trim()
+    .toLocaleLowerCase("ru");
+}
+
+function normalizeEventTitle(value: string | null | undefined): string {
+  if (typeof value !== "string") return "";
+  return value.trim().toLocaleLowerCase("ru");
+}
+
+function resolveCanonicalDebtId(
+  event: ExpectedExpenseIdentityInput,
+  debts: Array<Pick<DebtItem, "id" | "name" | "minPayment" | "nextPaymentDate">> | undefined,
+  occurrenceDate: string,
+): { canonicalDebtId: string | null; resolvedFromLegacyReference: boolean } {
+  const directDebtId =
+    event.debtId ??
+    (event.paymentSource === "debt" && event.linkedEntityId ? event.linkedEntityId : null);
+  if (directDebtId) {
+    return { canonicalDebtId: directDebtId, resolvedFromLegacyReference: false };
+  }
+
+  if (!debts || debts.length === 0) {
+    return { canonicalDebtId: null, resolvedFromLegacyReference: false };
+  }
+
+  const normalizedDebtName = normalizeDebtPaymentTitle(event.title);
+  if (!normalizedDebtName) {
+    return { canonicalDebtId: null, resolvedFromLegacyReference: false };
+  }
+
+  const amount = Math.abs(Math.round(event.amount));
+  const matches = debts.filter((debt) => {
+    if ((debt.nextPaymentDate ?? "").slice(0, 10) !== occurrenceDate) return false;
+    if (Math.abs(Math.round(debt.minPayment)) !== amount) return false;
+    return normalizeEventTitle(debt.name) === normalizedDebtName;
+  });
+
+  if (matches.length === 1) {
+    return { canonicalDebtId: matches[0]!.id, resolvedFromLegacyReference: true };
+  }
+
+  return { canonicalDebtId: null, resolvedFromLegacyReference: false };
+}
+
+export function resolveExpectedExpenseIdentity(
+  event: ExpectedExpenseIdentityInput,
+  debts?: Array<Pick<DebtItem, "id" | "name" | "minPayment" | "nextPaymentDate">>,
+): ResolvedExpectedExpenseIdentity {
+  const occurrenceDate = event.date.slice(0, 10);
+  const { canonicalDebtId, resolvedFromLegacyReference } = resolveCanonicalDebtId(
+    event,
+    debts,
+    occurrenceDate,
+  );
+  const normalizedTitle = normalizeDebtPaymentTitle(event.title) || normalizeEventTitle(event.title);
+  const stableKey = canonicalDebtId
+    ? `debt:${canonicalDebtId}:${occurrenceDate}`
+    : event.paymentSource && event.linkedEntityId
+      ? `${event.paymentSource}:${event.linkedEntityId}:${occurrenceDate}`
+      : `expense:${occurrenceDate}:${Math.abs(Math.round(event.amount))}:${normalizedTitle}`;
+
+  return {
+    occurrenceDate,
+    canonicalDebtId,
+    stableKey,
+    normalizedTitle,
+    resolvedFromLegacyReference,
+  };
 }
 
 export function areExpectedExpenseEventsEquivalent(

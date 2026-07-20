@@ -1,5 +1,6 @@
 import { getCategoryLabel } from "@/lib/categories";
 import { isExpectedEventVisibleToday } from "@/lib/expected-events";
+import { resolveExpectedExpenseIdentity } from "@/lib/expected-events";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
 import { isPendingTransaction } from "@/lib/transaction-confirmed";
 import type { DecisionCoreContext, DecisionTodayPayment } from "@/lib/decision-core/types";
@@ -50,6 +51,18 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
         (recurringItem ? recurringDisplayName(recurringItem, categoryLabel) : null) ||
         transaction.note.trim() ||
         categoryLabel;
+      const identity = resolveExpectedExpenseIdentity(
+        {
+          amount: transaction.amount,
+          date: transaction.date.slice(0, 10),
+          title,
+          debtId: null,
+          paymentSource: transaction.recurringId ? "recurring" : "manual",
+          linkedEntityId: transaction.recurringId ?? transaction.id,
+          source: "pending_transaction",
+        },
+        debts,
+      );
 
       return {
         id: transaction.id,
@@ -58,10 +71,14 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
         date: transaction.date.slice(0, 10),
         isOverdue: transaction.date.slice(0, 10) < today,
         source: "pending_transaction" as const,
-        debtId: null,
-        paymentKey: `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
-        paymentSource: transaction.recurringId ? ("recurring" as const) : ("manual" as const),
-        linkedEntityId: transaction.recurringId ?? transaction.id,
+        debtId: identity.canonicalDebtId,
+        paymentKey: identity.stableKey,
+        paymentSource: identity.canonicalDebtId
+          ? ("debt" as const)
+          : transaction.recurringId
+            ? ("recurring" as const)
+            : ("manual" as const),
+        linkedEntityId: identity.canonicalDebtId ?? transaction.recurringId ?? transaction.id,
       };
     });
 
@@ -102,7 +119,22 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
       linkedEntityId: debt.id,
     }));
 
-  return [...pendingExpensePayments, ...debtPayments].sort((left, right) => {
+  const dedupedPayments = new Map<string, DecisionTodayPayment>();
+  for (const payment of [...pendingExpensePayments, ...debtPayments]) {
+    const key = payment.paymentKey ?? `${payment.source}:${payment.id}:${payment.date}`;
+    const existing = dedupedPayments.get(key);
+    if (!existing) {
+      dedupedPayments.set(key, payment);
+      continue;
+    }
+    const existingPriority = existing.source === "debt_payment" ? 2 : 1;
+    const nextPriority = payment.source === "debt_payment" ? 2 : 1;
+    if (nextPriority > existingPriority) {
+      dedupedPayments.set(key, payment);
+    }
+  }
+
+  return [...dedupedPayments.values()].sort((left, right) => {
     const leftOverdue = left.isOverdue ? 1 : 0;
     const rightOverdue = right.isOverdue ? 1 : 0;
     if (leftOverdue !== rightOverdue) return rightOverdue - leftOverdue;

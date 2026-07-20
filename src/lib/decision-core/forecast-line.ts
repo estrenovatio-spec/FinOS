@@ -5,7 +5,10 @@ import {
   type BudgetPeriod,
 } from "@/lib/budget-period";
 import { buildForecastDays } from "@/lib/decision-core/forecast-days";
-import { areExpectedExpenseEventsEquivalent } from "@/lib/expected-events";
+import {
+  areExpectedExpenseEventsEquivalent,
+  resolveExpectedExpenseIdentity,
+} from "@/lib/expected-events";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
 import {
@@ -79,6 +82,20 @@ function debugExpectedPaymentEvent(
   createdBy: "pending_transaction_generator" | "recurring_generator" | "debt_generator",
 ) {
   if (process.env.FINOS_DEBUG_EXPECTED_EVENTS !== "1") return;
+  const identity = resolveExpectedExpenseIdentity(
+    {
+      amount: Math.abs(event.amount),
+      date: event.plannedDate ?? event.date,
+      title: event.title,
+      debtId: event.debtId ?? null,
+      paymentSource: event.paymentSource,
+      linkedEntityId: event.linkedEntityId ?? null,
+      source: event.source === "debt_payment" || event.source === "pending_transaction"
+        ? event.source
+        : undefined,
+    },
+    ctx.debts,
+  );
   const category =
     event.paymentSource === "debt"
       ? getCategoryLabel("banking", ctx.categories, ctx.locale)
@@ -94,8 +111,58 @@ function debugExpectedPaymentEvent(
     paymentSource: event.paymentSource ?? null,
     linkedEntityId: event.linkedEntityId ?? null,
     debtId: event.debtId ?? null,
+    occurrenceDate: identity.occurrenceDate,
+    stableKey: identity.stableKey,
+    resolvedFromLegacyReference: identity.resolvedFromLegacyReference,
     createdBy,
   });
+}
+
+function dedupeExpectedExpenseForecastEvents(
+  ctx: DecisionCoreContext,
+  events: ForecastEvent[],
+): ForecastEvent[] {
+  const deduped = new Map<string, ForecastEvent>();
+
+  for (const event of events) {
+    const identity = resolveExpectedExpenseIdentity(
+      {
+        amount: Math.abs(event.amount),
+        date: event.plannedDate ?? event.date,
+        title: event.title,
+        debtId: event.debtId ?? null,
+        paymentSource: event.paymentSource,
+        linkedEntityId: event.linkedEntityId ?? null,
+        source:
+          event.source === "debt_payment" || event.source === "pending_transaction"
+            ? event.source
+            : undefined,
+      },
+      ctx.debts,
+    );
+    const normalizedEvent: ForecastEvent = identity.canonicalDebtId
+      ? {
+          ...event,
+          debtId: identity.canonicalDebtId,
+          paymentSource: "debt",
+          linkedEntityId: identity.canonicalDebtId,
+          paymentKey: identity.stableKey,
+        }
+      : event;
+    const existing = deduped.get(identity.stableKey);
+    if (!existing) {
+      deduped.set(identity.stableKey, normalizedEvent);
+      continue;
+    }
+
+    const existingPriority = existing.source === "debt_payment" ? 2 : 1;
+    const nextPriority = normalizedEvent.source === "debt_payment" ? 2 : 1;
+    if (nextPriority > existingPriority) {
+      deduped.set(identity.stableKey, normalizedEvent);
+    }
+  }
+
+  return [...deduped.values()];
 }
 
 function hasMatchingActualTransaction(
@@ -179,11 +246,28 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
         (recurringItem ? recurringEventTitle(ctx, recurringItem) : null) ||
         transaction.note.trim() ||
         getCategoryLabel(transaction.categoryId, ctx.categories, ctx.locale);
+      const resolvedIdentity =
+        transaction.type === "expense"
+          ? resolveExpectedExpenseIdentity(
+              {
+                amount: transaction.amount,
+                date: transaction.date.slice(0, 10),
+                title,
+                debtId: null,
+                paymentSource: transaction.recurringId ? "recurring" : "manual",
+                linkedEntityId: transaction.recurringId ?? transaction.id,
+                source: "pending_transaction",
+              },
+              ctx.debts,
+            )
+          : null;
       const paymentSource =
         transaction.type === "expense"
-          ? transaction.recurringId
-            ? ("recurring" as const)
-            : ("manual" as const)
+          ? resolvedIdentity?.canonicalDebtId
+            ? ("debt" as const)
+            : transaction.recurringId
+              ? ("recurring" as const)
+              : ("manual" as const)
           : undefined;
       const event = {
         id: transaction.id,
@@ -200,8 +284,11 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
         paymentSource,
         linkedEntityId:
           transaction.type === "expense"
-            ? transaction.recurringId ?? transaction.id
+            ? (resolvedIdentity?.canonicalDebtId ?? transaction.recurringId ?? transaction.id)
             : null,
+        debtId: transaction.type === "expense" ? (resolvedIdentity?.canonicalDebtId ?? null) : null,
+        paymentKey:
+          transaction.type === "expense" ? (resolvedIdentity?.stableKey ?? null) : null,
       } satisfies ForecastEvent;
       if (transaction.type === "expense") {
         debugExpectedPaymentEvent(ctx, event, "pending_transaction_generator");
@@ -573,12 +660,13 @@ export function buildGeneratedExpectedPaymentEvents(
 ): ForecastEvent[] {
   const pendingEvents = buildPendingTransactionEvents(ctx).filter((event) => event.amount < 0);
   const debtEvents = buildDebtEvents(ctx, horizonEndDate);
+  const dedupedBaseEvents = dedupeExpectedExpenseForecastEvents(ctx, [...pendingEvents, ...debtEvents]);
   const recurringEvents = buildRecurringForecastEvents(
     ctx,
     horizonEndDate,
-    [...pendingEvents, ...debtEvents],
+    dedupedBaseEvents,
   ).filter((event) => event.amount < 0);
-  return [...pendingEvents, ...debtEvents, ...recurringEvents].sort(sortEvents);
+  return [...dedupedBaseEvents, ...recurringEvents].sort(sortEvents);
 }
 
 export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {

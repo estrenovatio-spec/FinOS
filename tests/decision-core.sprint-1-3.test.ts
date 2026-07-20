@@ -1834,6 +1834,68 @@ test("duplicate debt records with the same debtId and occurrence date generate o
   assert.equal(plannedFreeMoney.amount, 32150);
 });
 
+test("legacy pending debt payment without debtId is merged with the real debt event", () => {
+  const state = buildState({
+    today: "2026-07-20",
+    balances: { all: 50000, me: 50000, partner: 0 },
+    transactions: [
+      tx({
+        id: "legacy-bankrot-ksyu",
+        amount: 17850,
+        type: "expense",
+        categoryId: "banking",
+        date: "2026-07-20",
+        note: "Платёж по долгу — Банкрот Ксю",
+        confirmed: false,
+      }),
+    ],
+    debts: [
+      debt({
+        id: "bankrot-ksyu",
+        name: "Банкрот Ксю",
+        balance: 17850,
+        minPayment: 17850,
+        nextPaymentDate: "2026-07-20",
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+  });
+  const ctx = buildContext(state);
+  const result = decisionCore(state);
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  const sameDayDebtEvents = buildGeneratedExpectedPaymentEvents(
+    ctx,
+    ctx.forecast.horizonEndDate,
+  ).filter(
+    (event) =>
+      event.date === "2026-07-20" &&
+      event.amount === -17850 &&
+      event.debtId === "bankrot-ksyu",
+  );
+
+  assert.equal(result.todayPayments.length, 1);
+  assert.equal(result.todayPayments[0]?.title, "Банкрот Ксю");
+  assert.equal(result.todayPayments[0]?.source, "debt_payment");
+  assert.equal(result.todayPayments[0]?.debtId, "bankrot-ksyu");
+  assert.equal(result.todayPayments[0]?.paymentKey, "debt:bankrot-ksyu:2026-07-20");
+  assert.equal(sameDayDebtEvents.length, 1);
+  assert.equal(sameDayDebtEvents[0]?.source, "debt_payment");
+  assert.equal(
+    snapshot.forecast.events.filter(
+      (event) =>
+        event.date === "2026-07-20" &&
+        event.amount === -17850 &&
+        event.debtId === "bankrot-ksyu",
+    ).length,
+    1,
+  );
+  assert.equal(plannedFreeMoney.amount, 32150);
+});
+
 test("debt forecast schedule repeats monthly until the balance is fully covered", () => {
   const ctx = buildContext(
     buildState({
