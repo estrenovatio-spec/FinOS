@@ -1068,7 +1068,7 @@ export const DICT = {
     planningTabFunds: "Фонды",
     planningTabLimits: "Лимиты",
     planningTabEmergency: "Подушка",
-    planningTabRecurring: "Регулярные",
+    planningTabRecurring: "Будущие",
     planningGoalName: "Название цели",
     planningGoalTarget: "Сумма цели",
     planningGoalAdd: "Добавить цель",
@@ -1130,7 +1130,7 @@ export const DICT = {
     planningRecurringEveryMonths: "Раз в {count} мес.",
     planningRecurringYearly: "Ежегодно",
     planningRecurringNext: "Следующая: {date}",
-    planningRecurringEmpty: "Нет регулярных операций",
+    planningRecurringEmpty: "Пока нет будущих операций",
     planningRecurringFilterUnpaid: "Не оплачено {count}",
     planningRecurringFilterPaid: "Оплачено {count}",
     planningRecurringFilterAll: "Все {count}",
@@ -1140,7 +1140,7 @@ export const DICT = {
     planningRecurringPaidOn: "Оплачено: {date}",
     planningRecurringSkippedInPeriod: "Не было в этом периоде: {count}",
     planningRecurringHint:
-      "Когда наступит дата, нажмите «Оплатить». Если платёж не прошёл — выберите «Не оплатил» и решите, перенести, напомнить завтра или отменить только платёж этого месяца.",
+      "Добавьте будущий доход или платёж один раз. Если событие повторяется, выберите периодичность. Когда наступит дата, операция появится в Today и прогнозе как ожидаемая.",
     recurringPendingTitle: "Подтвердите регулярный расход",
     recurringPendingHint:
       "С баланса спишется только после подтверждения. Если платёж ещё не прошёл, выберите «Не оплатил» и решите, что сделать с этим ожидаемым платежом.",
@@ -2210,7 +2210,7 @@ export const DICT = {
     planningTabFunds: "Funds",
     planningTabLimits: "Limits",
     planningTabEmergency: "Emergency fund",
-    planningTabRecurring: "Recurring",
+    planningTabRecurring: "Future",
     planningGoalName: "Goal name",
     planningGoalTarget: "Target amount",
     planningGoalAdd: "Add goal",
@@ -2272,7 +2272,7 @@ export const DICT = {
     planningRecurringEveryMonths: "Every {count} months",
     planningRecurringYearly: "Yearly",
     planningRecurringNext: "Next: {date}",
-    planningRecurringEmpty: "No recurring items",
+    planningRecurringEmpty: "No future operations yet",
     planningRecurringFilterUnpaid: "Unpaid {count}",
     planningRecurringFilterPaid: "Paid {count}",
     planningRecurringFilterAll: "All {count}",
@@ -2282,7 +2282,7 @@ export const DICT = {
     planningRecurringPaidOn: "Paid: {date}",
     planningRecurringSkippedInPeriod: "Skipped this period: {count}",
     planningRecurringHint:
-      "When the date arrives, mark the payment as “Paid”. If it did not happen, choose “Not paid” and then move it, remind tomorrow, or cancel only this month's payment.",
+      "Add a future income or payment once. If it repeats, choose a schedule. When the date arrives, it will appear in Today and Forecast as an expected event.",
     recurringPendingTitle: "Confirm the recurring expense",
     recurringPendingHint:
       "It affects the balance only after confirmation. If the payment did not happen, choose “Not paid” and decide what to do with this expected payment.",

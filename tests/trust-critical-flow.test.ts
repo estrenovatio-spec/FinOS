@@ -319,6 +319,220 @@ test("debt payment creates an expense transaction, reduces balance, and does not
   useCloudStore.setState(previousCloud);
 });
 
+test("future one-time planned payment survives sync hydration and can be deleted without returning", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: [],
+    savingsGoals: [],
+    categoryBudgets: [],
+    recurringTransactions: [],
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    budgetMonthStartDay: 1,
+    cashOffsetMe: 97494,
+    cashOffsetPartner: 0,
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: null,
+    household,
+    lastSyncedAt: "2026-07-20T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  const transactionId = useStore.getState().addTransaction({
+    amount: 12000,
+    type: "expense",
+    categoryId: "auto",
+    currency: "RUB",
+    note: "ОСАГО",
+    date: "2027-03-15",
+    owner: "me",
+    confirmed: false,
+  });
+
+  const localPlanned = useStore.getState().transactions.find((tx) => tx.id === transactionId) ?? null;
+  assert.equal(localPlanned?.confirmed, false);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      useCloudStore.getState().pendingTransactionUpdateIds,
+      transactionId,
+    ),
+    true,
+  );
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [],
+    }),
+    "token-1",
+  );
+
+  assert.equal(
+    useStore.getState().transactions.some((tx) => tx.id === transactionId && tx.confirmed === false),
+    true,
+  );
+
+  const plannedTransaction = useStore.getState().transactions.find((tx) => tx.id === transactionId);
+  assert.ok(plannedTransaction);
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [plannedTransaction],
+    }),
+    "token-1",
+  );
+
+  assert.equal(
+    useStore.getState().transactions.filter((tx) => tx.id === transactionId).length,
+    1,
+  );
+
+  useStore.getState().deleteTransaction(transactionId);
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [],
+    }),
+    "token-1",
+  );
+
+  assert.equal(useStore.getState().transactions.some((tx) => tx.id === transactionId), false);
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("future one-time planned payment is confirmed through the expected-event flow without duplicate reappearance", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: [
+      tx({
+        id: "osago-planned",
+        amount: 12000,
+        type: "expense",
+        categoryId: "auto",
+        date: "2026-07-20",
+        note: "ОСАГО",
+        confirmed: false,
+      }),
+    ],
+    savingsGoals: [],
+    categoryBudgets: [],
+    recurringTransactions: [],
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    budgetMonthStartDay: 1,
+    cashOffsetMe: 97494,
+    cashOffsetPartner: 0,
+  });
+  useCloudStore.setState({
+    ...previousCloud,
+    pendingTransactionUpdateIds: {},
+  });
+
+  const match = matchInputToExpectedPayments({
+    state: buildMatcherState({
+      locale: "ru",
+      today: "2026-07-20",
+      forecastHorizonMonths: 3,
+      categories: getDefaultCategories(),
+      transactions: useStore.getState().transactions,
+      householdFilter: "me",
+      recurringTransactions: [],
+      debts: [],
+      moneySetup: useStore.getState().moneySetup,
+      categoryBudgets: [],
+      budgetMonthStartDay: 1,
+      balances: { all: 97494, me: 97494, partner: 0 },
+    }),
+    input: "оплатил осаго 12000",
+    parsed: {
+      amount: 12000,
+      type: "expense",
+      categoryId: "auto",
+      currency: "RUB",
+      note: "ОСАГО",
+      date: "2026-07-20",
+      owner: "me",
+    },
+    today: "2026-07-20",
+  });
+
+  assert.equal(match.kind, "single");
+  if (match.kind !== "single") return;
+
+  const confirmed = confirmExpectedPaymentFromInput({
+    candidate: match.candidate,
+    actual: buildSyntheticPaymentTransaction(match.candidate, "ОСАГО 12000", 12000),
+    transcript: "ОСАГО 12000",
+    actions: {
+      addTransaction: useStore.getState().addTransaction,
+      updateTransaction: useStore.getState().updateTransaction,
+      deleteTransaction: useStore.getState().deleteTransaction,
+      payDebt: useStore.getState().payDebt,
+      updateDebt: useStore.getState().updateDebt,
+      updateRecurring: useStore.getState().updateRecurring,
+    },
+    lookups: {
+      recurringTransactions: [],
+      debts: [],
+    },
+  });
+
+  assert.equal(confirmed, true);
+  const snapshot = decisionCoreSnapshot(
+    makeState({
+      today: "2026-07-20",
+      balances: { all: 85494, me: 85494, partner: 0 },
+      transactions: useStore.getState().transactions,
+    }),
+  );
+
+  assert.equal(
+    snapshot.forecast.events.some((event) => event.id === "osago-planned" && event.source === "pending_transaction"),
+    false,
+  );
+  assert.equal(
+    useStore.getState().transactions.filter((tx) => tx.id === "osago-planned" && tx.confirmed === false).length,
+    0,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
 test("Today planned free money card keeps the add-operation CTA wired as the primary action", () => {
   const state = makeState({
     balances: { all: 0, me: 0, partner: 0 },

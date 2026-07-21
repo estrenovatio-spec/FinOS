@@ -424,6 +424,56 @@ test("forecast respects recurring endDate after cloud hydration", () => {
   assert.deepEqual(recurringDates, ["2026-07-20", "2026-08-20"]);
 });
 
+test("applyHouseholdSync preserves yearly recurring schedule fields", () => {
+  const snapshot = resetCloudStores();
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      recurringTransactions: [
+        {
+          id: "osago-yearly",
+          amount: 15000,
+          type: "expense",
+          categoryId: "auto",
+          note: "ОСАГО",
+          owner: "me",
+          frequency: "yearly",
+          intervalMonths: null,
+          dayOfMonth: null,
+          nextRunDate: "2027-03-15",
+          endDate: null,
+          enabled: true,
+          skippedDates: [],
+          updatedAt: "2026-07-20T10:00:00.000Z",
+        },
+      ],
+    }),
+    "token-1",
+    { replace: true },
+  );
+
+  const recurring = useStore.getState().recurringTransactions[0];
+  assert.equal(recurring?.frequency, "yearly");
+  assert.equal(recurring?.nextRunDate, "2027-03-15");
+  assert.equal(recurring?.intervalMonths, null);
+  assert.equal(recurring?.dayOfMonth, null);
+
+  const snapshotAfterHydrate = decisionCoreSnapshot(
+    buildDecisionState({
+      today: "2027-03-01",
+      recurringTransactions: useStore.getState().recurringTransactions,
+      balances: { all: 30000, me: 30000, partner: 0 },
+    }),
+  );
+  const recurringDates = snapshotAfterHydrate.forecast.events
+    .filter((event) => event.recurringId === "osago-yearly")
+    .map((event) => event.date);
+
+  assert.deepEqual(recurringDates, ["2027-03-15"]);
+
+  restoreCloudStores(snapshot);
+});
+
 test("applyHouseholdSync preserves debt fields after cloud sync", () => {
   const snapshot = resetCloudStores();
 

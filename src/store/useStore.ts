@@ -829,18 +829,20 @@ export const useStore = create<StoreState>()(
           };
         });
         const created = get().transactions.find((t) => t.id === newId) ?? null;
-        if (created && created.confirmed !== false && !opts?.skipCloudPush) {
+        if (created && !opts?.skipCloudPush) {
           useCloudStore
             .getState()
             .markTransactionUpdatePending(created.id, created.updatedAt);
           void cloudPushTransaction(created);
           if (created.goalId && created.goalAmount) {
-            const goal = get().savingsGoals.find(
-              (g) => g.id === created.goalId,
-            );
-            if (goal) void cloudPushGoal(goal);
+              const goal = get().savingsGoals.find(
+                (g) => g.id === created.goalId,
+              );
+              if (goal) void cloudPushGoal(goal);
           }
-          applyVehicleAfterTransaction(get, set, created);
+          if (created.confirmed !== false) {
+            applyVehicleAfterTransaction(get, set, created);
+          }
         }
         return newId;
       },
