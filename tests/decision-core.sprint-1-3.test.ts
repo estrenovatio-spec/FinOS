@@ -2604,6 +2604,60 @@ test("one-time planned income appears only once within the horizon", () => {
   );
 });
 
+test("one-time planned expense appears in forecast and becomes today's expected payment on its date", () => {
+  const futureScenario = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 60000, me: 60000, partner: 0 },
+      transactions: [
+        tx({
+          id: "osago-planned",
+          amount: 12000,
+          type: "expense",
+          categoryId: "auto",
+          date: "2026-07-18",
+          note: "ОСАГО",
+          confirmed: false,
+        }),
+      ],
+    }),
+  );
+
+  const plannedExpense = futureScenario.ctx.forecast.events.find(
+    (event) => event.id === "osago-planned",
+  );
+
+  assert.equal(plannedExpense?.source, "pending_transaction");
+  assert.equal(plannedExpense?.date, "2026-07-18");
+  assert.equal(plannedExpense?.title, "ОСАГО");
+  assert.equal(plannedExpense?.amount, -12000);
+
+  const todayScenario = evaluate(
+    buildState({
+      today: "2026-07-18",
+      forecastHorizonMonths: 3,
+      balances: { all: 60000, me: 60000, partner: 0 },
+      transactions: [
+        tx({
+          id: "osago-planned",
+          amount: 12000,
+          type: "expense",
+          categoryId: "auto",
+          date: "2026-07-18",
+          note: "ОСАГО",
+          confirmed: false,
+        }),
+      ],
+    }),
+  );
+
+  assert.equal(todayScenario.result.todayPayments.length, 1);
+  assert.equal(todayScenario.result.todayPayments[0]?.title, "ОСАГО");
+  assert.equal(todayScenario.result.todayPayments[0]?.source, "pending_transaction");
+  assert.equal(todayScenario.result.todayPayments[0]?.amount, 12000);
+});
+
 test("monthly planned income expands across the whole forecast horizon", () => {
   const scenario = evaluate(
     buildState({

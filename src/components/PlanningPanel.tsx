@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialChart } from "@/components/FinancialChart";
 import { AiAnalysisTab } from "@/components/AiAnalysisTab";
 import {
+  getCategoriesByType,
   getCategoryLabel,
   getFallbackCategoryId,
   sortCategoriesByLabel,
@@ -52,7 +53,7 @@ import { resolveRecurringOccurrenceStatus } from "@/lib/recurring-occurrence-sta
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useCategories, useStore, useTransactions } from "@/store/useStore";
-import type { Locale, Transaction } from "@/types";
+import type { Locale, Transaction, TxType } from "@/types";
 import { EMERGENCY_GOAL_ID } from "@/types/planning";
 import type { DebtItem, RecurringFrequency, SavingsGoal } from "@/types/planning";
 
@@ -78,15 +79,6 @@ const DEFAULT_VISIBLE_TABS: PlanningTab[] = [
   "stats",
   "advisor",
 ];
-
-type RecurringPreset =
-  | "weekly_1"
-  | "monthly_1"
-  | "monthly_2"
-  | "monthly_3"
-  | "monthly_4"
-  | "monthly_6"
-  | "yearly_1";
 
 function replaceTokens(template: string, tokens: Record<string, string>): string {
   let s = template;
@@ -161,45 +153,6 @@ function recurringEndDateFromMonths(
     runDate = advanceRecurringDate(runDate, "monthly", dayOfMonth, intervalMonths);
   }
   return runDate;
-}
-
-function getRecurringPresetValue(
-  frequency: RecurringFrequency,
-  intervalMonths: number,
-): RecurringPreset {
-  if (frequency === "weekly") return "weekly_1";
-  if (frequency === "yearly") return "yearly_1";
-  const interval = Math.max(1, Math.min(60, Math.round(intervalMonths || 1)));
-  if (interval === 2) return "monthly_2";
-  if (interval === 3) return "monthly_3";
-  if (interval === 4) return "monthly_4";
-  if (interval === 6) return "monthly_6";
-  return "monthly_1";
-}
-
-function applyRecurringPreset(preset: RecurringPreset): {
-  frequency: RecurringFrequency;
-  intervalMonths: number;
-} {
-  if (preset === "weekly_1") {
-    return { frequency: "weekly", intervalMonths: 1 };
-  }
-  if (preset === "yearly_1") {
-    return { frequency: "yearly", intervalMonths: 1 };
-  }
-  if (preset === "monthly_2") {
-    return { frequency: "monthly", intervalMonths: 2 };
-  }
-  if (preset === "monthly_3") {
-    return { frequency: "monthly", intervalMonths: 3 };
-  }
-  if (preset === "monthly_4") {
-    return { frequency: "monthly", intervalMonths: 4 };
-  }
-  if (preset === "monthly_6") {
-    return { frequency: "monthly", intervalMonths: 6 };
-  }
-  return { frequency: "monthly", intervalMonths: 1 };
 }
 
 function debtOwnerLabel(owner: DebtItem["owner"], locale: Locale): string {
@@ -315,8 +268,10 @@ export function PlanningPanel({
   const setCategoryBudget = useStore((s) => s.setCategoryBudget);
   const removeCategoryBudget = useStore((s) => s.removeCategoryBudget);
   const addRecurring = useStore((s) => s.addRecurring);
+  const addTransaction = useStore((s) => s.addTransaction);
   const updateRecurring = useStore((s) => s.updateRecurring);
   const removeRecurring = useStore((s) => s.removeRecurring);
+  const deleteTransaction = useStore((s) => s.deleteTransaction);
   const addDebt = useStore((s) => s.addDebt);
   const updateDebt = useStore((s) => s.updateDebt);
   const payDebt = useStore((s) => s.payDebt);
@@ -361,10 +316,12 @@ export function PlanningPanel({
   const [fundInfoOpen, setFundInfoOpen] = useState(false);
   const [limitCategoryId, setLimitCategoryId] = useState("");
   const [limitAmount, setLimitAmount] = useState("");
+  const [recType, setRecType] = useState<TxType>("expense");
+  const [recCategoryId, setRecCategoryId] = useState(() => getFallbackCategoryId("expense"));
   const [recAmount, setRecAmount] = useState("");
   const [recNote, setRecNote] = useState("");
-  const [recFrequency, setRecFrequency] = useState<RecurringFrequency>("monthly");
-  const [recIntervalMonths, setRecIntervalMonths] = useState(1);
+  const [recComment, setRecComment] = useState("");
+  const [recRepeat, setRecRepeat] = useState<"once" | RecurringFrequency>("monthly");
   const [recStartDate, setRecStartDate] = useState(() => todayIso());
   const [recEndMode, setRecEndMode] = useState<"never" | "date" | "months">("never");
   const [recEndDate, setRecEndDate] = useState("");
@@ -585,15 +542,36 @@ export function PlanningPanel({
 
   const handleAddRecurring = () => {
     const amount = Number(recAmount.replace(/\s/g, ""));
-    if (!amount || !recStartDate) return;
+    const title = recNote.trim();
+    if (!amount || !recStartDate || !title) return;
+    const categoryId = recCategoryId || getFallbackCategoryId(recType);
+    const note = [title, recComment.trim()].filter(Boolean).join(" · ").slice(0, 120);
+    if (recRepeat === "once") {
+      addTransaction({
+        amount,
+        type: recType,
+        categoryId,
+        currency: "RUB",
+        note,
+        date: recStartDate,
+        owner: entryOwner,
+        confirmed: false,
+      });
+      setRecAmount("");
+      setRecNote("");
+      setRecComment("");
+      setRecEndMode("never");
+      setRecEndDate("");
+      setRecDurationMonths("12");
+      return;
+    }
     const start = new Date(`${recStartDate}T12:00:00`);
-    const dayOfMonth = recFrequency === "monthly" ? start.getDate() : null;
-    const intervalMonths =
-      recFrequency === "monthly" ? Math.max(1, Math.min(60, Math.round(recIntervalMonths))) : null;
+    const dayOfMonth = recRepeat === "monthly" ? start.getDate() : null;
+    const intervalMonths = recRepeat === "monthly" ? 1 : null;
     const endDate =
       recEndMode === "date"
         ? recEndDate || null
-        : recEndMode === "months" && recFrequency === "monthly"
+        : recEndMode === "months" && recRepeat === "monthly"
           ? recurringEndDateFromMonths(
               recStartDate,
               intervalMonths ?? 1,
@@ -602,11 +580,11 @@ export function PlanningPanel({
           : null;
     addRecurring({
       amount,
-      type: "expense",
-      categoryId: getFallbackCategoryId("expense"),
-      note: recNote.trim(),
+      type: recType,
+      categoryId,
+      note,
       owner: entryOwner,
-      frequency: recFrequency,
+      frequency: recRepeat,
       intervalMonths,
       dayOfMonth,
       nextRunDate: recStartDate,
@@ -614,6 +592,7 @@ export function PlanningPanel({
     });
     setRecAmount("");
     setRecNote("");
+    setRecComment("");
     setRecEndMode("never");
     setRecEndDate("");
     setRecDurationMonths("12");
@@ -705,13 +684,23 @@ export function PlanningPanel({
   };
 
   const recurringEndPreview = useMemo(() => {
-    if (recEndMode !== "months" || recFrequency !== "monthly") return null;
+    if (recEndMode !== "months" || recRepeat !== "monthly") return null;
     return recurringEndDateFromMonths(
       recStartDate,
-      Math.max(1, Math.min(60, Math.round(recIntervalMonths))),
+      1,
       Number(recDurationMonths) || 1,
     );
-  }, [recDurationMonths, recEndMode, recFrequency, recIntervalMonths, recStartDate]);
+  }, [recDurationMonths, recEndMode, recRepeat, recStartDate]);
+
+  const recurringFormCategories = useMemo(
+    () => getCategoriesByType(categories, recType, locale),
+    [categories, locale, recType],
+  );
+
+  useEffect(() => {
+    if (recurringFormCategories.some((category) => category.id === recCategoryId)) return;
+    setRecCategoryId(getFallbackCategoryId(recType));
+  }, [recCategoryId, recType, recurringFormCategories]);
 
   const recurringPeriod = useMemo(
     () => getCurrentBudgetPeriod(budgetMonthStartDay),
@@ -801,6 +790,15 @@ export function PlanningPanel({
         return a.originalIndex - b.originalIndex;
       });
   }, [recurringCardsBase, recurringFilter]);
+
+  const futurePlannedTransactions = useMemo(() => {
+    const today = todayIso();
+    return transactions
+      .filter((transaction) => transaction.confirmed === false)
+      .filter((transaction) => transaction.recurringId == null)
+      .filter((transaction) => transaction.date.slice(0, 10) >= today)
+      .sort((left, right) => left.date.localeCompare(right.date));
+  }, [transactions]);
 
   const recurringPaidCount = useMemo(() => {
     return recurringCardsBase.filter((card) => card.paid).length;
@@ -1740,6 +1738,56 @@ export function PlanningPanel({
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {t(locale, "planningRecurringHint")}
               </p>
+              {futurePlannedTransactions.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    {locale === "ru" ? "Разовые будущие операции" : "One-time future operations"}
+                  </p>
+                  {futurePlannedTransactions.map((transaction) => {
+                    const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
+                    const title = transaction.note.trim() || categoryLabel;
+                    return (
+                      <div
+                        key={transaction.id}
+                        className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="mb-1 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
+                              {transaction.type === "income"
+                                ? locale === "ru"
+                                  ? "Разовый доход"
+                                  : "One-time income"
+                                : locale === "ru"
+                                  ? "Разовый платёж"
+                                  : "One-time payment"}
+                            </p>
+                            <p className="font-medium leading-tight">{title}</p>
+                            <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                              {transaction.type === "income" ? "+" : "−"}
+                              {formatMoney(transaction.amount, locale)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {formatTransactionDate(transaction.date, locale)}
+                              {" · "}
+                              {locale === "ru" ? "Ожидается" : "Expected"}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0 text-destructive"
+                            onClick={() => deleteTransaction(transaction.id)}
+                            aria-label={locale === "ru" ? "Удалить будущую операцию" : "Delete future operation"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               {recurringTransactions.length > 0 ? (
                 <div className="grid grid-cols-3 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1">
                   {(["unpaid", "paid", "all"] as const).map((filter) => (
@@ -1766,9 +1814,9 @@ export function PlanningPanel({
                   ))}
                 </div>
               ) : null}
-              {recurringTransactions.length === 0 ? (
+              {recurringTransactions.length === 0 && futurePlannedTransactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t(locale, "planningRecurringEmpty")}</p>
-              ) : recurringCards.length === 0 ? (
+              ) : recurringTransactions.length > 0 && recurringCards.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
                   {t(locale, "planningRecurringFilterEmpty")}
                 </p>
@@ -1923,7 +1971,35 @@ export function PlanningPanel({
                 })
               )}
               <div className="space-y-2 border-t pt-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    {locale === "ru" ? "Добавить будущую операцию" : "Add future operation"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {recRepeat === "once"
+                      ? locale === "ru"
+                        ? "Операция появится в прогнозе и потребует подтверждения в выбранную дату."
+                        : "The operation will appear in Forecast and will need confirmation on the selected date."
+                      : locale === "ru"
+                        ? "Будет создано правило для будущих операций."
+                        : "A rule for future operations will be created."}
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">
+                      {locale === "ru" ? "Тип" : "Type"}
+                    </span>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={recType}
+                      onChange={(e) => setRecType(e.target.value as TxType)}
+                      aria-label={locale === "ru" ? "Тип операции" : "Operation type"}
+                    >
+                      <option value="expense">{locale === "ru" ? "Расход" : "Expense"}</option>
+                      <option value="income">{locale === "ru" ? "Доход" : "Income"}</option>
+                    </select>
+                  </div>
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">
                       {t(locale, "planningRecurringAmount")}
@@ -1937,10 +2013,10 @@ export function PlanningPanel({
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">
-                      {t(locale, "planningRecurringName")}
+                      {locale === "ru" ? "Название" : "Name"}
                     </span>
                     <Input
-                      placeholder={t(locale, "planningRecurringName")}
+                      placeholder={locale === "ru" ? "Например, ОСАГО" : "For example, insurance"}
                       value={recNote}
                       onChange={(e) => setRecNote(e.target.value)}
                     />
@@ -1949,36 +2025,45 @@ export function PlanningPanel({
                 <div className="grid grid-cols-1 gap-2">
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Повторять" : "Repeat"}
+                      {locale === "ru" ? "Категория" : "Category"}
                     </span>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={getRecurringPresetValue(recFrequency, recIntervalMonths)}
+                      value={recCategoryId}
+                      onChange={(e) => setRecCategoryId(e.target.value)}
+                      aria-label={locale === "ru" ? "Категория" : "Category"}
+                    >
+                      {recurringFormCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {getCategoryLabel(category.id, categories, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">
+                      {locale === "ru" ? "Повторение" : "Repeat"}
+                    </span>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={recRepeat}
                       onChange={(e) => {
-                        const next = applyRecurringPreset(e.target.value as RecurringPreset);
-                        setRecFrequency(next.frequency);
-                        setRecIntervalMonths(next.intervalMonths);
-                        if (next.frequency !== "monthly" && recEndMode === "months") {
+                        const next = e.target.value as "once" | RecurringFrequency;
+                        setRecRepeat(next);
+                        if (next !== "monthly" && recEndMode === "months") {
                           setRecEndMode("never");
                         }
+                        if (next === "once") {
+                          setRecEndMode("never");
+                          setRecEndDate("");
+                        }
                       }}
-                      aria-label={locale === "ru" ? "Повторять" : "Repeat"}
+                      aria-label={locale === "ru" ? "Повторение" : "Repeat"}
                     >
-                      <option value="weekly_1">{locale === "ru" ? "Каждую неделю" : "Every week"}</option>
-                      <option value="monthly_1">{locale === "ru" ? "Каждый месяц" : "Every month"}</option>
-                      <option value="monthly_2">
-                        {locale === "ru" ? "Раз в 2 месяца" : "Every 2 months"}
-                      </option>
-                      <option value="monthly_3">
-                        {locale === "ru" ? "Раз в 3 месяца" : "Every 3 months"}
-                      </option>
-                      <option value="monthly_4">
-                        {locale === "ru" ? "Раз в 4 месяца" : "Every 4 months"}
-                      </option>
-                      <option value="monthly_6">
-                        {locale === "ru" ? "Раз в 6 месяцев" : "Every 6 months"}
-                      </option>
-                      <option value="yearly_1">{locale === "ru" ? "Каждый год" : "Every year"}</option>
+                      <option value="once">{locale === "ru" ? "Один раз" : "One time"}</option>
+                      <option value="weekly">{locale === "ru" ? "Каждую неделю" : "Every week"}</option>
+                      <option value="monthly">{locale === "ru" ? "Каждый месяц" : "Every month"}</option>
+                      <option value="yearly">{locale === "ru" ? "Каждый год" : "Every year"}</option>
                     </select>
                   </div>
                   <Input
@@ -1986,8 +2071,19 @@ export function PlanningPanel({
                     className="w-full"
                     value={recStartDate}
                     onChange={(e) => setRecStartDate(e.target.value)}
-                    aria-label={t(locale, "planningRecurringDate")}
+                    aria-label={locale === "ru" ? "Дата первой операции" : "First operation date"}
                   />
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">
+                      {locale === "ru" ? "Комментарий" : "Comment"}
+                    </span>
+                    <Input
+                      placeholder={locale === "ru" ? "Необязательно" : "Optional"}
+                      value={recComment}
+                      onChange={(e) => setRecComment(e.target.value)}
+                    />
+                  </div>
+                  {recRepeat !== "once" ? (
                   <div className="w-full space-y-2 rounded-md border border-border/70 p-3">
 	                    <p className="text-xs font-medium text-foreground">
 	                      {locale === "ru" ? "Когда закончится?" : "When should it end?"}
@@ -2009,7 +2105,7 @@ export function PlanningPanel({
 	                      >
 	                        {locale === "ru" ? "До даты" : "Until date"}
 	                      </Button>
-	                      {recFrequency === "monthly" ? (
+	                      {recRepeat === "monthly" ? (
 	                        <Button
 	                          type="button"
 	                          variant={recEndMode === "months" ? "default" : "outline"}
@@ -2032,7 +2128,7 @@ export function PlanningPanel({
                           />
                         </div>
                       ) : null}
-	                    {recEndMode === "months" && recFrequency === "monthly" ? (
+	                    {recEndMode === "months" && recRepeat === "monthly" ? (
 	                      <div className="space-y-1">
                           <span className="text-xs text-muted-foreground">
                             {locale === "ru" ? "Количество месяцев" : "Months count"}
@@ -2054,8 +2150,9 @@ export function PlanningPanel({
 	                      </div>
 	                    ) : null}
                   </div>
+                  ) : null}
                   <Button className="w-full" onClick={handleAddRecurring}>
-                    {t(locale, "planningRecurringAdd")}
+                    {locale === "ru" ? "Добавить будущую операцию" : "Add future operation"}
                   </Button>
                 </div>
               </div>
