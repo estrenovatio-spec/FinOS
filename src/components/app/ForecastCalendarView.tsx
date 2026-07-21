@@ -519,6 +519,8 @@ export function ForecastCalendarView({
                                                     kind: "expense",
                                                     event: {
                                                       date: event.date,
+                                                      recurringOccurrenceDate:
+                                                        event.recurringOccurrenceDate ?? null,
                                                       debtId: event.debtId ?? null,
                                                       paymentSource: event.paymentSource,
                                                       linkedEntityId: event.linkedEntityId ?? null,
@@ -565,6 +567,8 @@ export function ForecastCalendarView({
                                                   title: event.title,
                                                   amount: Math.abs(event.amount),
                                                   date: event.date,
+                                                  recurringOccurrenceDate:
+                                                    event.recurringOccurrenceDate ?? null,
                                                   debtId: event.debtId ?? null,
                                                   source:
                                                     event.source === "debt_payment"

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/categories";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 import { formatTransactionDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { t } from "@/lib/i18n";
@@ -70,6 +71,9 @@ export function PendingRecurringCard() {
               title,
               amount: tx.amount,
               date: tx.date,
+              recurringOccurrenceDate: tx.recurringId
+                ? resolveRecurringOccurrenceDate(tx)
+                : null,
             };
             return (
               <div

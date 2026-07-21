@@ -273,6 +273,8 @@ export function FocusedForecastCard({
                                     kind: "expense",
                                     event: {
                                       date: event.date,
+                                      recurringOccurrenceDate:
+                                        event.recurringOccurrenceDate ?? null,
                                       debtId: event.debtId ?? null,
                                       paymentSource: event.paymentSource,
                                       linkedEntityId: event.linkedEntityId ?? null,

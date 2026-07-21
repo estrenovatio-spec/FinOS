@@ -47,6 +47,8 @@ import {
   effectiveSkippedDates,
   recurringDisplayName,
 } from "@/lib/planning/recurring-skipped";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
+import { resolveRecurringOccurrenceStatus } from "@/lib/recurring-occurrence-status";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useCategories, useStore, useTransactions } from "@/store/useStore";
@@ -723,26 +725,40 @@ export function PlanningPanel({
         const periodTransactions = transactions.filter(
           (tx) =>
             tx.recurringId === item.id &&
-            isDateInBudgetPeriod(tx.date, recurringPeriod),
+            isDateInBudgetPeriod(resolveRecurringOccurrenceDate(tx), recurringPeriod),
         );
         const paidTransactions = periodTransactions.filter((tx) => tx.confirmed !== false);
         const pendingTransactions = periodTransactions.filter((tx) => tx.confirmed === false);
         const skippedInPeriod = (item.skippedDates ?? []).filter((date) =>
           isDateInBudgetPeriod(date, recurringPeriod),
         );
-        const pendingDates = pendingTransactions.map((tx) => tx.date).sort();
-        const relevantOccurrenceDate = pendingDates[0] ?? item.nextRunDate;
-        const confirmedForRelevantOccurrence = paidTransactions.some(
-          (tx) => tx.date === relevantOccurrenceDate,
-        );
-        const lastPaidDate =
-          paidTransactions
-            .map((tx) => tx.date)
-            .sort()
-            .at(-1) ?? null;
-        const pending = pendingTransactions.length > 0;
-        const paid = confirmedForRelevantOccurrence;
-        const overdue = item.enabled && !pending && !paid && item.nextRunDate <= today;
+        const pendingDates = pendingTransactions
+          .map((tx) => resolveRecurringOccurrenceDate(tx))
+          .sort();
+        const paidDates = paidTransactions
+          .map((tx) => resolveRecurringOccurrenceDate(tx))
+          .sort();
+        const fallbackOccurrenceDate =
+          isDateInBudgetPeriod(item.nextRunDate, recurringPeriod)
+            ? item.nextRunDate
+            : (skippedInPeriod[0] ?? item.nextRunDate);
+        const relevantOccurrenceDate =
+          pendingDates[0] ??
+          paidDates.at(-1) ??
+          skippedInPeriod[0] ??
+          fallbackOccurrenceDate;
+        const resolvedOccurrence = resolveRecurringOccurrenceStatus({
+          item,
+          transactions,
+          occurrenceDate: relevantOccurrenceDate,
+          today,
+        });
+        const pending =
+          resolvedOccurrence.status === "pending" ||
+          resolvedOccurrence.status === "rescheduled";
+        const paid = resolvedOccurrence.status === "paid";
+        const overdue = resolvedOccurrence.status === "overdue";
+        const lastPaidDate = paid ? resolvedOccurrence.paidAt : null;
         const status: "paid" | "pending" | "overdue" | "upcoming" | "paused" =
           pending
             ? "pending"
@@ -760,8 +776,10 @@ export function PlanningPanel({
           status,
           lastPaidDate,
           skippedInPeriod,
-          relevantOccurrenceDate,
-          sortDate: relevantOccurrenceDate,
+          relevantOccurrenceDate: resolvedOccurrence.occurrenceDate,
+          sortDate: pending
+            ? resolvedOccurrence.scheduledDate
+            : resolvedOccurrence.occurrenceDate,
           originalIndex,
         };
       });

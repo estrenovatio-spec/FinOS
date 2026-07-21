@@ -225,6 +225,7 @@ export function TodayScreen({
         title: payment.title,
         amount: payment.amount,
         date: payment.date,
+        recurringOccurrenceDate: payment.recurringOccurrenceDate ?? null,
         debtId: payment.debtId ?? null,
         source:
           payment.source === "debt_payment"
@@ -444,6 +445,7 @@ export function TodayScreen({
                         title: payment.title,
                         amount: payment.amount,
                         date: payment.date,
+                        recurringOccurrenceDate: payment.recurringOccurrenceDate ?? null,
                         debtId: payment.debtId ?? null,
                         source:
                           payment.source === "debt_payment"
@@ -463,6 +465,7 @@ export function TodayScreen({
                         title: payment.title,
                         amount: payment.amount,
                         date: payment.date,
+                        recurringOccurrenceDate: payment.recurringOccurrenceDate ?? null,
                         debtId: payment.debtId ?? null,
                         source:
                           payment.source === "debt_payment"
@@ -479,6 +482,7 @@ export function TodayScreen({
                       kind: "expense",
                       event: {
                         date: payment.date,
+                        recurringOccurrenceDate: payment.recurringOccurrenceDate ?? null,
                         debtId: payment.debtId ?? null,
                         paymentSource: payment.paymentSource,
                         linkedEntityId: payment.linkedEntityId ?? null,

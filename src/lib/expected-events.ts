@@ -25,6 +25,7 @@ export type ExpectedExpenseEvent = {
   title: string;
   amount: number;
   date: string;
+  recurringOccurrenceDate?: string | null;
   debtId?: string | null;
   source?: "pending_transaction" | "debt_payment";
   paymentSource?: "debt" | "recurring" | "manual";
@@ -103,7 +104,10 @@ type ResolveExpectedEventDisplayStatusArgs =
     }
   | {
       kind: "expense";
-      event: Pick<ExpectedExpenseEvent, "date" | "debtId" | "paymentSource" | "linkedEntityId">;
+      event: Pick<
+        ExpectedExpenseEvent,
+        "date" | "recurringOccurrenceDate" | "debtId" | "paymentSource" | "linkedEntityId"
+      >;
       history: ExpectedEventHistoryEntry[] | undefined;
       today: string;
       locale: Locale;
@@ -253,7 +257,9 @@ export function cancelIncomeOccurrenceInSetup(
 }
 
 export function expectedEventDate(event: ExpectedEvent): string {
-  return event.kind === "income" ? event.occurrenceDate : event.date;
+  return event.kind === "income"
+    ? event.occurrenceDate
+    : (event.recurringOccurrenceDate ?? event.date);
 }
 
 function normalizeDebtPaymentTitle(value: string | null | undefined): string {
@@ -380,12 +386,17 @@ export function expectedEventKey(event: ExpectedEvent): string {
     ? `income:${event.incomeSourceId}:${event.occurrenceDate}`
     : event.debtId
       ? `debt:${event.debtId}:${event.date}`
+      : event.paymentSource === "recurring" && event.linkedEntityId
+        ? `recurring:${event.linkedEntityId}:${event.recurringOccurrenceDate ?? event.date}`
       : `expense:${event.transactionId}:${event.date}`;
 }
 
 function matchesExpenseHistoryEntry(
   entry: ExpectedEventHistoryEntry,
-  event: Pick<ExpectedExpenseEvent, "date" | "debtId" | "paymentSource" | "linkedEntityId">,
+  event: Pick<
+    ExpectedExpenseEvent,
+    "date" | "recurringOccurrenceDate" | "debtId" | "paymentSource" | "linkedEntityId"
+  >,
 ): boolean {
   if (entry.kind !== "expense") return false;
 
@@ -408,7 +419,10 @@ function matchesExpenseHistoryEntry(
 }
 
 export function expectedExpenseStatusLabel(args: {
-  event: Pick<ExpectedExpenseEvent, "date" | "debtId" | "paymentSource" | "linkedEntityId">;
+  event: Pick<
+    ExpectedExpenseEvent,
+    "date" | "recurringOccurrenceDate" | "debtId" | "paymentSource" | "linkedEntityId"
+  >;
   history: ExpectedEventHistoryEntry[] | undefined;
   today: string;
   locale: Locale;
@@ -468,6 +482,19 @@ export function resolveExpectedEventDisplayStatus(
         locale === "ru"
           ? `Перенесено с ${formatTransactionDate(rescheduledEntry.originalDate, locale)} на ${formatTransactionDate(event.date, locale)}`
           : `Rescheduled from ${formatTransactionDate(rescheduledEntry.originalDate, locale)} to ${formatTransactionDate(event.date, locale)}`,
+      tone: "warning",
+      priority: 4,
+    };
+  }
+
+  const originalDate = event.recurringOccurrenceDate ?? null;
+  if (originalDate && originalDate !== event.date) {
+    return {
+      key: "rescheduled",
+      label:
+        locale === "ru"
+          ? `Перенесено с ${formatTransactionDate(originalDate, locale)} на ${formatTransactionDate(event.date, locale)}`
+          : `Rescheduled from ${formatTransactionDate(originalDate, locale)} to ${formatTransactionDate(event.date, locale)}`,
       tone: "warning",
       priority: 4,
     };
