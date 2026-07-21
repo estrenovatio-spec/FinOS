@@ -16,6 +16,7 @@ const patchSchema = z.object({
   goalAmount: z.number().nullable().optional(),
   confirmed: z.boolean().optional(),
   recurringId: z.string().nullable().optional(),
+  recurringOccurrenceDate: z.string().nullable().optional(),
   odometerKm: z.number().finite().min(0).nullable().optional(),
   fuelLiters: z.number().finite().min(0).nullable().optional(),
   vehicleId: z.string().min(1).nullable().optional(),

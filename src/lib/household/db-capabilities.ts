@@ -5,6 +5,7 @@ export type HouseholdDbCapabilities = {
   txOdometerKm: boolean;
   txFuelLiters: boolean;
   txVehicleId: boolean;
+  txRecurringOccurrenceDate: boolean;
   vehicleGarage: boolean;
   savingsGoalMonthlyContribution: boolean;
   savingsGoalKind: boolean;
@@ -15,6 +16,7 @@ const DEFAULT_CAPS: HouseholdDbCapabilities = {
   txOdometerKm: false,
   txFuelLiters: false,
   txVehicleId: false,
+  txRecurringOccurrenceDate: false,
   vehicleGarage: false,
   savingsGoalMonthlyContribution: false,
   savingsGoalKind: false,
@@ -50,7 +52,7 @@ export async function getHouseholdDbCapabilities(): Promise<HouseholdDbCapabilit
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND (
-          (table_name = 'Transaction' AND column_name IN ('odometerKm', 'fuelLiters', 'vehicleId'))
+          (table_name = 'Transaction' AND column_name IN ('odometerKm', 'fuelLiters', 'vehicleId', 'recurringOccurrenceDate'))
           OR (table_name = 'Household' AND column_name IN ('vehicleGarageMode', 'vehicleMemberPrefs'))
           OR (table_name = 'Vehicle' AND column_name = 'id')
           OR (table_name = 'SavingsGoal' AND column_name IN ('monthlyContribution', 'kind', 'emergencyMonths'))
@@ -72,6 +74,7 @@ export async function getHouseholdDbCapabilities(): Promise<HouseholdDbCapabilit
       txOdometerKm: txCols.has("odometerKm"),
       txFuelLiters: txCols.has("fuelLiters"),
       txVehicleId: txCols.has("vehicleId"),
+      txRecurringOccurrenceDate: txCols.has("recurringOccurrenceDate"),
       savingsGoalMonthlyContribution: savingsGoalCols.has("monthlyContribution"),
       savingsGoalKind: savingsGoalCols.has("kind"),
       savingsGoalEmergencyMonths: savingsGoalCols.has("emergencyMonths"),
@@ -90,5 +93,10 @@ export async function getHouseholdDbCapabilities(): Promise<HouseholdDbCapabilit
 
 /** Prisma SELECT по Transaction безопасен только если все опциональные колонки на месте. */
 export function canUsePrismaTransactionModel(caps: HouseholdDbCapabilities): boolean {
-  return caps.txOdometerKm && caps.txFuelLiters && caps.txVehicleId;
+  return (
+    caps.txOdometerKm &&
+    caps.txFuelLiters &&
+    caps.txVehicleId &&
+    caps.txRecurringOccurrenceDate
+  );
 }

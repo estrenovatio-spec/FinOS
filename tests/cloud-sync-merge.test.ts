@@ -44,6 +44,42 @@ function makeSyncPayload(overrides: Partial<SyncPayload>): SyncPayload {
   };
 }
 
+function tx(
+  partial: {
+    id: string;
+    amount: number;
+    type: "income" | "expense";
+    categoryId: string;
+    date: string;
+    note?: string;
+    owner?: "me" | "partner";
+    confirmed?: boolean;
+    recurringId?: string | null;
+    recurringOccurrenceDate?: string | null;
+  },
+) {
+  return {
+    id: partial.id,
+    amount: partial.amount,
+    type: partial.type,
+    categoryId: partial.categoryId,
+    currency: "RUB" as const,
+    note: partial.note ?? "",
+    date: partial.date,
+    owner: partial.owner ?? "me",
+    confirmed: partial.confirmed,
+    goalId: null,
+    goalAmount: null,
+    recurringId: partial.recurringId ?? null,
+    recurringOccurrenceDate: partial.recurringOccurrenceDate ?? null,
+    odometerKm: null,
+    fuelLiters: null,
+    vehicleId: null,
+    transferPairId: null,
+    businessTxId: null,
+  };
+}
+
 test("mergeMoneySetup keeps richer local income sources when remote money setup is empty", () => {
   const local = makeMoneySetup({
     incomeSources: [
@@ -596,6 +632,183 @@ test("applyHouseholdSync resolves legacy paid plus skipped recurring conflict in
   assert.deepEqual(
     useStore.getState().recurringTransactions[0]?.skippedDates ?? [],
     [],
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("applyHouseholdSync keeps only the confirmed recurring occurrence after sync", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    transactions: [
+      tx({
+        id: "mortgage-pending-local",
+        amount: 19000,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-17",
+        note: "Ипотека",
+        confirmed: false,
+        recurringId: "mortgage-recurring",
+        recurringOccurrenceDate: "2026-07-16",
+      }),
+    ],
+    recurringTransactions: [
+      {
+        id: "mortgage-recurring",
+        amount: 19000,
+        type: "expense",
+        categoryId: "housing",
+        note: "Ипотека",
+        skippedDates: [],
+        owner: "me",
+        frequency: "monthly",
+        intervalMonths: 1,
+        dayOfMonth: 16,
+        nextRunDate: "2026-08-16",
+        enabled: true,
+      },
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-19T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [
+        tx({
+          id: "mortgage-paid-remote",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-17",
+          note: "Ипотека",
+          confirmed: true,
+          recurringId: "mortgage-recurring",
+          recurringOccurrenceDate: "2026-07-16",
+        }),
+      ],
+      recurringTransactions: [
+        {
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          skippedDates: [],
+          owner: "me",
+          frequency: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 16,
+          nextRunDate: "2026-08-16",
+          enabled: true,
+        },
+      ],
+    }),
+    "token-1",
+    { replace: true },
+  );
+
+  const syncedTransactions = useStore.getState().transactions.filter(
+    (item) => item.recurringId === "mortgage-recurring",
+  );
+  assert.equal(syncedTransactions.length, 1);
+  assert.equal(syncedTransactions[0]?.confirmed, true);
+  assert.equal(syncedTransactions[0]?.recurringOccurrenceDate, "2026-07-16");
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("applyHouseholdSync repairs legacy recurring transaction without recurringOccurrenceDate", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    transactions: [],
+    categories: getDefaultCategories(),
+    recurringTransactions: [],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-19T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [
+        tx({
+          id: "mortgage-paid",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-17",
+          note: "Ипотека",
+          confirmed: true,
+          recurringId: "mortgage-recurring",
+        }),
+      ],
+      recurringTransactions: [
+        {
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          skippedDates: [],
+          owner: "me",
+          frequency: "monthly",
+          intervalMonths: 1,
+          dayOfMonth: 16,
+          nextRunDate: "2026-08-16",
+          enabled: true,
+        },
+      ],
+    }),
+    "token-1",
+    { replace: true },
+  );
+
+  assert.equal(
+    useStore.getState().transactions.find((item) => item.id === "mortgage-paid")
+      ?.recurringOccurrenceDate,
+    "2026-07-17",
   );
 
   useStore.setState(previousStore);
