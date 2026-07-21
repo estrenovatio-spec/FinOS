@@ -1130,7 +1130,7 @@ export const DICT = {
     planningRecurringEveryMonths: "Раз в {count} мес.",
     planningRecurringYearly: "Ежегодно",
     planningRecurringNext: "Следующая: {date}",
-    planningRecurringEmpty: "Пока нет будущих операций",
+    planningRecurringEmpty: "Пока нет регулярных операций",
     planningRecurringSectionPlanned: "Запланировано",
     planningRecurringSectionDue: "К оплате",
     planningRecurringSectionPaid: "Оплачено",
@@ -1143,7 +1143,7 @@ export const DICT = {
     planningRecurringPaidOn: "Оплачено: {date}",
     planningRecurringSkippedInPeriod: "Не было в этом периоде: {count}",
     planningRecurringHint:
-      "Добавьте будущий доход или платёж один раз. Если событие повторяется, выберите периодичность. Когда наступит дата, операция появится в Today и прогнозе как ожидаемая.",
+      "Здесь видны регулярные и запланированные операции. До даты они находятся в «Запланировано», в день события переходят в «К оплате», а после подтверждения — в «Оплачено».",
     recurringPendingTitle: "Подтвердите регулярный расход",
     recurringPendingHint:
       "С баланса спишется только после подтверждения. Если платёж ещё не прошёл, выберите «Не оплатил» и решите, что сделать с этим ожидаемым платежом.",
@@ -2275,7 +2275,7 @@ export const DICT = {
     planningRecurringEveryMonths: "Every {count} months",
     planningRecurringYearly: "Yearly",
     planningRecurringNext: "Next: {date}",
-    planningRecurringEmpty: "No future operations yet",
+    planningRecurringEmpty: "No recurring operations yet",
     planningRecurringSectionPlanned: "Planned",
     planningRecurringSectionDue: "Due",
     planningRecurringSectionPaid: "Paid",
@@ -2288,7 +2288,7 @@ export const DICT = {
     planningRecurringPaidOn: "Paid: {date}",
     planningRecurringSkippedInPeriod: "Skipped this period: {count}",
     planningRecurringHint:
-      "Add a future income or payment once. If it repeats, choose a schedule. When the date arrives, it will appear in Today and Forecast as an expected event.",
+      "This tab shows recurring and scheduled operations. Before the date they stay in Planned, on the due date they move to Due, and after confirmation they appear in Paid.",
     recurringPendingTitle: "Confirm the recurring expense",
     recurringPendingHint:
       "It affects the balance only after confirmation. If the payment did not happen, choose “Not paid” and decide what to do with this expected payment.",

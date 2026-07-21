@@ -1844,7 +1844,7 @@ export function PlanningPanel({
                                     size="icon"
                                     className="h-10 w-10 shrink-0 text-destructive"
                                     onClick={() => deleteTransaction(transaction.id)}
-                                    aria-label={locale === "ru" ? "Удалить будущую операцию" : "Delete future operation"}
+                                    aria-label={locale === "ru" ? "Удалить операцию" : "Delete operation"}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -2009,7 +2009,7 @@ export function PlanningPanel({
               <div className="space-y-2 border-t pt-3">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
-                    {locale === "ru" ? "Добавить будущую операцию" : "Add future operation"}
+                    {locale === "ru" ? "Добавить операцию" : "Add operation"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {recRepeat === "once"
@@ -2017,8 +2017,8 @@ export function PlanningPanel({
                         ? "Операция появится в прогнозе и потребует подтверждения в выбранную дату."
                         : "The operation will appear in Forecast and will need confirmation on the selected date."
                       : locale === "ru"
-                        ? "Будет создано правило для будущих операций."
-                        : "A rule for future operations will be created."}
+                        ? "Будет создано регулярное правило."
+                        : "A recurring rule will be created."}
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2188,7 +2188,7 @@ export function PlanningPanel({
                   </div>
                   ) : null}
                   <Button className="w-full" onClick={handleAddRecurring}>
-                    {locale === "ru" ? "Добавить будущую операцию" : "Add future operation"}
+                    {locale === "ru" ? "Добавить операцию" : "Add operation"}
                   </Button>
                 </div>
               </div>
