@@ -302,6 +302,23 @@ test("expected expense status explains when a payment was moved to a new date", 
   assert.equal(label, "Перенесено с 17.07.2026 на 18.07.2026");
 });
 
+test("expected expense status uses recurring occurrence date as the canonical original date", () => {
+  const label = expectedExpenseStatusLabel({
+    event: {
+      date: "2026-07-18",
+      recurringOccurrenceDate: "2026-07-17",
+      debtId: null,
+      paymentSource: "recurring",
+      linkedEntityId: "mortgage-recurring",
+    },
+    history: [],
+    today: "2026-07-18",
+    locale: "ru",
+  });
+
+  assert.equal(label, "Перенесено с 17.07.2026 на 18.07.2026");
+});
+
 test("Today, Forecast Calendar, and Focused Forecast Card use the same expected-event status helper", () => {
   const status = resolveExpectedEventDisplayStatus({
     kind: "expense",

@@ -25,6 +25,7 @@ type TxRow = {
   createdBy: string | null;
   confirmed: boolean;
   recurringId: string | null;
+  recurringOccurrenceDate: string | null;
   odometerKm: number | null;
   fuelLiters: number | null;
   vehicleId: string | null;
@@ -36,6 +37,9 @@ function mapRawRow(row: TxRow, caps: HouseholdDbCapabilities): Transaction {
   return dbTransactionToApp({
     ...row,
     type: row.type as Transaction["type"],
+    recurringOccurrenceDate: caps.txRecurringOccurrenceDate
+      ? row.recurringOccurrenceDate ?? null
+      : null,
     odometerKm: caps.txOdometerKm ? row.odometerKm : null,
     fuelLiters: caps.txFuelLiters ? row.fuelLiters : null,
     vehicleId: caps.txVehicleId ? row.vehicleId : null,
@@ -109,6 +113,7 @@ export function stripUnsupportedTransactionFields(
   if (!caps.txOdometerKm) delete out.odometerKm;
   if (!caps.txFuelLiters) delete out.fuelLiters;
   if (!caps.txVehicleId) delete out.vehicleId;
+  if (!caps.txRecurringOccurrenceDate) delete out.recurringOccurrenceDate;
   return out;
 }
 
@@ -136,6 +141,7 @@ export async function createTransactionForHousehold(
     INSERT INTO "Transaction" (
       id, "householdId", amount, type, "categoryId", currency, note, date, owner,
       "goalId", "goalAmount", "createdBy", confirmed, "recurringId", "createdAt", "updatedAt"
+      ${caps.txRecurringOccurrenceDate ? Prisma.sql`, "recurringOccurrenceDate"` : Prisma.empty}
       ${caps.txOdometerKm ? Prisma.sql`, "odometerKm"` : Prisma.empty}
       ${caps.txFuelLiters ? Prisma.sql`, "fuelLiters"` : Prisma.empty}
       ${caps.txVehicleId ? Prisma.sql`, "vehicleId"` : Prisma.empty}
@@ -144,6 +150,7 @@ export async function createTransactionForHousehold(
       ${String(data.categoryId)}, ${String(data.currency)}, ${String(data.note)}, ${String(data.date)},
       ${String(data.owner)}, ${data.goalId as string | null}, ${data.goalAmount as number | null},
       ${data.createdBy as string | null}, ${Boolean(data.confirmed)}, ${data.recurringId as string | null},
+      ${caps.txRecurringOccurrenceDate ? Prisma.sql`, ${data.recurringOccurrenceDate as string | null}` : Prisma.empty}
       NOW(), NOW()
       ${caps.txOdometerKm ? Prisma.sql`, ${data.odometerKm as number | null}` : Prisma.empty}
       ${caps.txFuelLiters ? Prisma.sql`, ${data.fuelLiters as number | null}` : Prisma.empty}
@@ -166,6 +173,7 @@ export async function updateTransactionForHousehold(
       | "goalAmount"
       | "confirmed"
       | "recurringId"
+      | "recurringOccurrenceDate"
       | "createdBy"
       | "odometerKm"
       | "fuelLiters"
@@ -195,6 +203,9 @@ export async function updateTransactionForHousehold(
       ...(patch.goalAmount !== undefined ? { goalAmount: patch.goalAmount } : {}),
       ...(patch.confirmed !== undefined ? { confirmed: patch.confirmed } : {}),
       ...(patch.recurringId !== undefined ? { recurringId: patch.recurringId } : {}),
+      ...(patch.recurringOccurrenceDate !== undefined
+        ? { recurringOccurrenceDate: patch.recurringOccurrenceDate }
+        : {}),
       ...(patch.odometerKm !== undefined ? { odometerKm: patch.odometerKm } : {}),
       ...(patch.fuelLiters !== undefined ? { fuelLiters: patch.fuelLiters } : {}),
       ...(patch.vehicleId !== undefined ? { vehicleId: patch.vehicleId } : {}),
@@ -224,6 +235,9 @@ export async function updateTransactionForHousehold(
   if (patch.goalAmount !== undefined) sets.push(Prisma.sql`"goalAmount" = ${patch.goalAmount}`);
   if (patch.confirmed !== undefined) sets.push(Prisma.sql`confirmed = ${patch.confirmed}`);
   if (patch.recurringId !== undefined) sets.push(Prisma.sql`"recurringId" = ${patch.recurringId}`);
+  if (caps.txRecurringOccurrenceDate && patch.recurringOccurrenceDate !== undefined) {
+    sets.push(Prisma.sql`"recurringOccurrenceDate" = ${patch.recurringOccurrenceDate}`);
+  }
   if (caps.txOdometerKm && patch.odometerKm !== undefined) {
     sets.push(Prisma.sql`"odometerKm" = ${patch.odometerKm}`);
   }
@@ -347,6 +361,9 @@ export async function findTransactionInHousehold(
     createdBy: hit.createdBy ?? null,
     confirmed: hit.confirmed !== false,
     recurringId: hit.recurringId ?? null,
+    recurringOccurrenceDate: caps.txRecurringOccurrenceDate
+      ? hit.recurringOccurrenceDate ?? null
+      : null,
     odometerKm: hit.odometerKm ?? null,
     fuelLiters: hit.fuelLiters ?? null,
     vehicleId: hit.vehicleId ?? null,

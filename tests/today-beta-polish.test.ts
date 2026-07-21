@@ -224,6 +224,44 @@ test("expected income hero shows confirm and skip actions", () => {
   assert.equal(view.hero.secondaryCtaLabel, "Не пришёл");
 });
 
+test("overdue income hero keeps the planned amount visible", () => {
+  const view = buildTodayScreenView({
+    decision: makeDecision({
+      mainAction: {
+        type: "resolve_income_delay",
+        title: "Доход ещё не пришёл",
+        text: "Студия ожидалась 20.07.2026: 27 000 ₽.",
+        description: "Ожидался 20.07.2026.",
+        reason: "Если деньги уже пришли, отметьте это. Если нет, перенесите дату или отмените только это ожидание.",
+        amount: 27000,
+        dueDate: "2026-07-20",
+        relatedEntityId: "studio-income",
+        priority: "high",
+        command: {
+          type: "confirm_income_source",
+          incomeSourceId: "studio-income",
+          incomeTitle: "Студия",
+          plannedDate: "2026-07-20",
+          plannedAmount: 27000,
+          status: "overdue_unconfirmed",
+        },
+      },
+    }),
+    locale: "ru",
+    transactionCount: 3,
+    moneySetup: {
+      ...emptyMoneySetup(),
+      nextIncomeDate: "2026-07-20",
+      expectedIncomeAmount: 27000,
+    },
+    balances: { all: 40000, me: 40000, partner: 0 },
+  });
+
+  assert.match(view.hero.amount ?? "", /27[\s\u00a0]000 ₽/);
+  assert.equal(view.hero.ctaLabel, "Получил");
+  assert.equal(view.hero.secondaryCtaLabel, "Не пришёл");
+});
+
 test("hero without urgent action does not show forced CTA", () => {
   const view = buildTodayScreenView({
     decision: makeDecision(),

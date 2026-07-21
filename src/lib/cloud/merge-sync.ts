@@ -2,6 +2,7 @@ import { migrateCategoryId, sanitizeCategories } from "@/lib/categories";
 import type { SyncPayload } from "@/lib/household/types";
 import { emptyMoneySetup, normalizeMoneySetup, type MoneySetup } from "@/lib/money-setup";
 import { sanitizeRecurringTransactionsSkippedDates } from "@/lib/planning/recurring-skipped";
+import { repairRecurringLinkedTransactions } from "@/lib/recurring-occurrence";
 import type { CategoryDefinition, Transaction } from "@/types";
 import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
 
@@ -24,6 +25,7 @@ function normalizeTx(tx: Transaction): Transaction {
     owner: tx.owner === "partner" ? "partner" : "me",
     confirmed: tx.confirmed !== false,
     recurringId: tx.recurringId ?? null,
+    recurringOccurrenceDate: tx.recurringOccurrenceDate ?? null,
   };
 }
 
@@ -36,14 +38,16 @@ export function mergeTransactions(
 ): Transaction[] {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   if (remote.length === 0) {
-    return local
-      .filter((tx) => !deletedTransactionIds?.has(tx.id))
-      .map(normalizeTx)
-      .sort((a, b) => {
-        const byDate = b.date.localeCompare(a.date);
-        if (byDate !== 0) return byDate;
-        return b.id.localeCompare(a.id);
-      });
+    return repairRecurringLinkedTransactions(
+      local
+        .filter((tx) => !deletedTransactionIds?.has(tx.id))
+        .map(normalizeTx)
+        .sort((a, b) => {
+          const byDate = b.date.localeCompare(a.date);
+          if (byDate !== 0) return byDate;
+          return b.id.localeCompare(a.id);
+        }),
+    );
   }
   const map = new Map<string, Transaction>();
 
@@ -71,11 +75,13 @@ export function mergeTransactions(
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => {
-    const byDate = b.date.localeCompare(a.date);
-    if (byDate !== 0) return byDate;
-    return b.id.localeCompare(a.id);
-  });
+  return repairRecurringLinkedTransactions(
+    Array.from(map.values()).sort((a, b) => {
+      const byDate = b.date.localeCompare(a.date);
+      if (byDate !== 0) return byDate;
+      return b.id.localeCompare(a.id);
+    }),
+  );
 }
 
 export function mergeCategories(

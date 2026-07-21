@@ -68,6 +68,7 @@ function tx(
     goalId: null,
     goalAmount: null,
     recurringId: partial.recurringId ?? null,
+    recurringOccurrenceDate: partial.recurringOccurrenceDate ?? null,
     odometerKm: null,
     fuelLiters: null,
     vehicleId: null,
@@ -481,6 +482,143 @@ test("moving a recurring payment inside the same period does not create extra fr
   const afterAmount = calculatePlannedFreeMoneyUntilPeriodEnd(afterState, afterSnapshot).amount;
 
   assert.equal(beforeAmount, afterAmount);
+});
+
+test("editing a recurring payment amount preserves its occurrence identity", () => {
+  const previousStore = useStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    recurringTransactions: [
+      recurring({
+        id: "internet-recurring",
+        amount: 800,
+        type: "expense",
+        categoryId: "utilities",
+        note: "Интернет",
+        nextRunDate: "2026-07-18",
+        frequency: "monthly",
+        dayOfMonth: 18,
+      }),
+    ],
+    transactions: [
+      tx({
+        id: "internet-pending",
+        amount: 800,
+        type: "expense",
+        categoryId: "utilities",
+        date: "2026-07-18",
+        note: "Интернет",
+        confirmed: false,
+        recurringId: "internet-recurring",
+        recurringOccurrenceDate: "2026-07-18",
+      }),
+    ],
+  });
+
+  useStore.getState().updateTransaction("internet-pending", { amount: 855 });
+
+  const snapshot = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-18",
+    forecastHorizonMonths: 3,
+    categories: useStore.getState().categories,
+    transactions: useStore.getState().transactions,
+    householdFilter: "me",
+    recurringTransactions: useStore.getState().recurringTransactions,
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    balances: { all: 10000, me: 10000, partner: 0 },
+  });
+
+  const julyInternetEvents = snapshot.forecast.events.filter(
+    (event) =>
+      event.linkedEntityId === "internet-recurring" &&
+      event.date === "2026-07-18" &&
+      (event.source === "pending_transaction" || event.source === "recurring"),
+  );
+
+  assert.equal(useStore.getState().transactions[0]?.recurringOccurrenceDate, "2026-07-18");
+  assert.equal(useStore.getState().transactions[0]?.amount, 855);
+  assert.equal(julyInternetEvents.length, 1);
+  assert.equal(julyInternetEvents[0]?.amount, -855);
+
+  useStore.setState(previousStore);
+});
+
+test("deleting a confirmed recurring payment reopens the same occurrence as pending", () => {
+  const previousStore = useStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    recurringTransactions: [
+      recurring({
+        id: "mortgage-recurring",
+        amount: 19000,
+        type: "expense",
+        categoryId: "housing",
+        note: "Ипотека",
+        nextRunDate: "2026-08-16",
+        frequency: "monthly",
+        dayOfMonth: 16,
+      }),
+    ],
+    transactions: [
+      tx({
+        id: "mortgage-paid",
+        amount: 19000,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-17",
+        note: "Ипотека",
+        confirmed: true,
+        recurringId: "mortgage-recurring",
+        recurringOccurrenceDate: "2026-07-16",
+      }),
+    ],
+  });
+
+  useStore.getState().deleteTransaction("mortgage-paid");
+
+  const recurringTransactions = useStore
+    .getState()
+    .transactions.filter((item) => item.recurringId === "mortgage-recurring");
+
+  assert.equal(recurringTransactions.length, 1);
+  assert.equal(recurringTransactions[0]?.confirmed, false);
+  assert.equal(recurringTransactions[0]?.date, "2026-07-16");
+  assert.equal(recurringTransactions[0]?.recurringOccurrenceDate, "2026-07-16");
+
+  const snapshot = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-16",
+    forecastHorizonMonths: 3,
+    categories: useStore.getState().categories,
+    transactions: useStore.getState().transactions,
+    householdFilter: "me",
+    recurringTransactions: useStore.getState().recurringTransactions,
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    balances: { all: 50000, me: 50000, partner: 0 },
+  });
+
+  assert.equal(snapshot.todayPayments.length, 1);
+  assert.equal(snapshot.todayPayments[0]?.title, "Ипотека");
+  assert.equal(snapshot.todayPayments[0]?.recurringOccurrenceDate, "2026-07-16");
+
+  useStore.setState(previousStore);
 });
 
 test("advisor context keeps expected income visible instead of collapsing it into 'no income'", () => {

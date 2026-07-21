@@ -19,6 +19,7 @@ const bodySchema = z.object({
   goalAmount: z.number().nullable().optional(),
   confirmed: z.boolean().optional(),
   recurringId: z.string().nullable().optional(),
+  recurringOccurrenceDate: z.string().nullable().optional(),
   odometerKm: z.number().nullable().optional(),
   fuelLiters: z.number().nullable().optional(),
   vehicleId: z.string().nullable().optional(),

@@ -4,6 +4,7 @@ import { sanitizeRecurringTransactionsSkippedDates } from "@/lib/planning/recurr
 import { mergeSyncPayload } from "@/lib/cloud/merge-sync";
 import { emptyMoneySetup, normalizeMoneySetup, pruneMoneySetupIds } from "@/lib/money-setup";
 import { cashOffsetsForViewer } from "@/lib/balance-offsets";
+import { repairRecurringLinkedTransactions } from "@/lib/recurring-occurrence";
 import {
   cloudPushCategory,
   cloudPushCategoryBudget,
@@ -85,6 +86,14 @@ export function applyHouseholdSync(
 
   if (opts?.replace) {
     const savingsGoals = remote.savingsGoals.map((g) => applyGoalMonthlyToGoal(g));
+    const recurringTransactions = sanitizeRecurringTransactionsSkippedDates(
+      remote.recurringTransactions ?? [],
+      remote.transactions,
+    );
+    const transactions = repairRecurringLinkedTransactions(
+      remote.transactions,
+      recurringTransactions,
+    );
     useCloudStore.getState().setLastSyncedRemoteTxIds(remote.transactions.map((t) => t.id));
     useCloudStore.getState().setLastSyncedRemoteCategoryIds(remote.categories.map((c) => c.id));
     useCloudStore.getState().setLastSyncedRemoteGoalIds((remote.savingsGoals ?? []).map((g) => g.id));
@@ -102,14 +111,11 @@ export function applyHouseholdSync(
     useCloudStore.getState().setPendingGoalIds([]);
     useCloudStore.getState().touchSync();
     useStore.setState({
-      transactions: remote.transactions,
+      transactions,
       categories: remote.categories,
       savingsGoals,
       categoryBudgets: remote.categoryBudgets ?? [],
-      recurringTransactions: sanitizeRecurringTransactionsSkippedDates(
-        remote.recurringTransactions ?? [],
-        remote.transactions,
-      ),
+      recurringTransactions,
       debts: remote.debts ?? [],
       moneySetup: prunedMoneySetup,
       cashOffsetMe: syncedOffsets.cashOffsetMe,
@@ -146,6 +152,14 @@ export function applyHouseholdSync(
   );
 
   const savingsGoals = merged.savingsGoals.map((g) => applyGoalMonthlyToGoal(g));
+  const recurringTransactions = sanitizeRecurringTransactionsSkippedDates(
+    merged.recurringTransactions,
+    merged.transactions,
+  );
+  const transactions = repairRecurringLinkedTransactions(
+    merged.transactions,
+    recurringTransactions,
+  );
   for (const id of pendingTransactionUpdates) {
     if (remoteTxIds.has(id)) {
       useCloudStore.getState().clearTransactionUpdatePending(id);
@@ -158,11 +172,11 @@ export function applyHouseholdSync(
   }
 
   useStore.setState({
-    transactions: merged.transactions,
+    transactions,
     categories: merged.categories,
     savingsGoals,
     categoryBudgets: merged.categoryBudgets,
-    recurringTransactions: merged.recurringTransactions,
+    recurringTransactions,
     debts: merged.debts,
     moneySetup: pruneMoneySetupIds(
       normalizeMoneySetup(merged.moneySetup ?? emptyMoneySetup()),

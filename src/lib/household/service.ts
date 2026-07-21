@@ -785,6 +785,7 @@ export async function importLocalSnapshot(
         goalAmount: tx.goalAmount ?? null,
         confirmed: tx.confirmed !== false,
         recurringId: tx.recurringId ?? null,
+        recurringOccurrenceDate: tx.recurringOccurrenceDate ?? null,
         ...(tx.createdBy && memberIds.includes(tx.createdBy)
           ? { createdBy: tx.createdBy }
           : {}),
@@ -867,6 +868,7 @@ export async function updateCloudTransaction(
       | "goalAmount"
       | "confirmed"
       | "recurringId"
+      | "recurringOccurrenceDate"
       | "createdBy"
       | "odometerKm"
       | "fuelLiters"

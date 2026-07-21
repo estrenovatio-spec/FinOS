@@ -5,6 +5,7 @@ import type { CategoryDefinition, Transaction } from "@/types";
 
 type DbTransactionWithFuelLiters = DbTransaction & {
   fuelLiters?: number | null;
+  recurringOccurrenceDate?: string | null;
 };
 
 export function dbCategoryToApp(row: Category): CategoryDefinition {
@@ -33,6 +34,7 @@ export function dbTransactionToApp(row: DbTransactionWithFuelLiters): Transactio
     goalAmount: row.goalAmount ?? null,
     confirmed: row.confirmed,
     recurringId: row.recurringId ?? null,
+    recurringOccurrenceDate: row.recurringOccurrenceDate ?? null,
     odometerKm: row.odometerKm ?? null,
     fuelLiters: row.fuelLiters ?? null,
     vehicleId: row.vehicleId ?? null,
@@ -59,7 +61,10 @@ export function appTransactionToDb(
   householdId: string,
   tx: Transaction,
   createdBy?: string,
-): Omit<DbTransaction, "createdAt" | "updatedAt"> & { fuelLiters?: number | null } {
+): Omit<DbTransaction, "createdAt" | "updatedAt"> & {
+  fuelLiters?: number | null;
+  recurringOccurrenceDate?: string | null;
+} {
   return {
     id: tx.id,
     householdId,
@@ -75,6 +80,7 @@ export function appTransactionToDb(
     goalAmount: tx.goalAmount ?? null,
     confirmed: tx.confirmed !== false,
     recurringId: tx.recurringId ?? null,
+    recurringOccurrenceDate: tx.recurringOccurrenceDate ?? null,
     odometerKm:
       tx.odometerKm != null && Number.isFinite(tx.odometerKm)
         ? Math.max(0, Math.round(tx.odometerKm))

@@ -386,6 +386,7 @@ export function buildSyntheticPaymentTransaction(
     owner: candidate.owner,
     confirmed: true,
     recurringId: candidate.recurringId,
+    recurringOccurrenceDate: candidate.recurringId ? candidate.originalDate : null,
   };
 }
 

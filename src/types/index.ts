@@ -31,6 +31,8 @@ export interface Transaction {
   confirmed?: boolean;
   /** Шаблон регулярного платежа */
   recurringId?: string | null;
+  /** Исходная запланированная дата occurrence регулярной серии */
+  recurringOccurrenceDate?: string | null;
   /** Пробег на спидометре (заправка / ТО) */
   odometerKm?: number | null;
   /** Литры топлива при заправке */
@@ -56,6 +58,7 @@ export interface ParsedTransaction {
   goalAmount?: number | null;
   confirmed?: boolean;
   recurringId?: string | null;
+  recurringOccurrenceDate?: string | null;
   incomeSourceId?: string | null;
   incomeOccurrenceDate?: string | null;
   odometerKm?: number | null;

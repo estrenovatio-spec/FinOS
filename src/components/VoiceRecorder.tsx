@@ -210,6 +210,7 @@ export function VoiceRecorder({
         kind: "expense",
         event: {
           date: candidate.originalDate,
+          recurringOccurrenceDate: candidate.recurringId ? candidate.originalDate : null,
           debtId: candidate.debtId,
           paymentSource: candidate.paymentSource,
           linkedEntityId: candidate.linkedEntityId,
