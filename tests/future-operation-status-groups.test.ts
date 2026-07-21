@@ -125,3 +125,9 @@ test("planning panel uses planned due and paid sections instead of the old unpai
   assert.match(planningPanelSource, /resolveFutureRecurringOperationGroup/);
   assert.doesNotMatch(planningPanelSource, /setRecurringFilter/);
 });
+
+test("planning panel syncs one-time future date from the input before submit", () => {
+  assert.match(planningPanelSource, /recStartDateInputRef/);
+  assert.match(planningPanelSource, /normalizeIsoDate\(recStartDateInputRef\.current\?\.value\)/);
+  assert.match(planningPanelSource, /onInput=\{\(e\) => handleRecStartDateInput\(e\.currentTarget\.value\)\}/);
+});

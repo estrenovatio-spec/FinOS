@@ -10,7 +10,7 @@ import {
   Shield,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   HomeSectionCardHeader,
@@ -31,7 +31,7 @@ import {
 } from "@/lib/categories";
 import { formatBudgetPeriodLabel, getCurrentBudgetPeriod, isDateInBudgetPeriod } from "@/lib/budget-period";
 import { formatMoney } from "@/lib/format-money";
-import { formatPlanningDeadline, formatTransactionDate } from "@/lib/format-date";
+import { formatPlanningDeadline, formatTransactionDate, normalizeIsoDate } from "@/lib/format-date";
 import {
   advanceRecurringDate,
   avgMonthlyExpenses,
@@ -328,6 +328,7 @@ export function PlanningPanel({
   const [recComment, setRecComment] = useState("");
   const [recRepeat, setRecRepeat] = useState<"once" | RecurringFrequency>("monthly");
   const [recStartDate, setRecStartDate] = useState(() => todayIso());
+  const recStartDateInputRef = useRef<HTMLInputElement | null>(null);
   const [recEndMode, setRecEndMode] = useState<"never" | "date" | "months">("never");
   const [recEndDate, setRecEndDate] = useState("");
   const [recDurationMonths, setRecDurationMonths] = useState("12");
@@ -544,10 +545,21 @@ export function PlanningPanel({
     setLimitAmount("");
   };
 
+  const handleRecStartDateInput = useCallback((value: string) => {
+    const normalized = normalizeIsoDate(value);
+    if (normalized) {
+      setRecStartDate(normalized);
+    }
+  }, []);
+
   const handleAddRecurring = () => {
     const amount = Number(recAmount.replace(/\s/g, ""));
     const title = recNote.trim();
-    if (!amount || !recStartDate || !title) return;
+    const effectiveRecStartDate =
+      normalizeIsoDate(recStartDateInputRef.current?.value) ??
+      normalizeIsoDate(recStartDate) ??
+      todayIso();
+    if (!amount || !title) return;
     const categoryId = recCategoryId || getFallbackCategoryId(recType);
     const note = [title, recComment.trim()].filter(Boolean).join(" · ").slice(0, 120);
     if (recRepeat === "once") {
@@ -557,10 +569,11 @@ export function PlanningPanel({
         categoryId,
         currency: "RUB",
         note,
-        date: recStartDate,
+        date: effectiveRecStartDate,
         owner: entryOwner,
         confirmed: false,
       });
+      setRecStartDate(effectiveRecStartDate);
       setRecAmount("");
       setRecNote("");
       setRecComment("");
@@ -569,7 +582,7 @@ export function PlanningPanel({
       setRecDurationMonths("12");
       return;
     }
-    const start = new Date(`${recStartDate}T12:00:00`);
+    const start = new Date(`${effectiveRecStartDate}T12:00:00`);
     const dayOfMonth = recRepeat === "monthly" ? start.getDate() : null;
     const intervalMonths = recRepeat === "monthly" ? 1 : null;
     const endDate =
@@ -577,7 +590,7 @@ export function PlanningPanel({
         ? recEndDate || null
         : recEndMode === "months" && recRepeat === "monthly"
           ? recurringEndDateFromMonths(
-              recStartDate,
+              effectiveRecStartDate,
               intervalMonths ?? 1,
               Number(recDurationMonths) || 1,
             )
@@ -591,9 +604,10 @@ export function PlanningPanel({
       frequency: recRepeat,
       intervalMonths,
       dayOfMonth,
-      nextRunDate: recStartDate,
+      nextRunDate: effectiveRecStartDate,
       endDate,
     });
+    setRecStartDate(effectiveRecStartDate);
     setRecAmount("");
     setRecNote("");
     setRecComment("");
@@ -2105,8 +2119,10 @@ export function PlanningPanel({
                   <Input
                     type="date"
                     className="w-full"
-                    value={recStartDate}
-                    onChange={(e) => setRecStartDate(e.target.value)}
+                    ref={recStartDateInputRef}
+                    defaultValue={recStartDate}
+                    onChange={(e) => handleRecStartDateInput(e.currentTarget.value)}
+                    onInput={(e) => handleRecStartDateInput(e.currentTarget.value)}
                     aria-label={locale === "ru" ? "Дата первой операции" : "First operation date"}
                   />
                   <div className="space-y-1">
