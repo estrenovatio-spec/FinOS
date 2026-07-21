@@ -10,7 +10,7 @@ import {
   Shield,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   HomeSectionCardHeader,
@@ -31,7 +31,7 @@ import {
 } from "@/lib/categories";
 import { formatBudgetPeriodLabel, getCurrentBudgetPeriod, isDateInBudgetPeriod } from "@/lib/budget-period";
 import { formatMoney } from "@/lib/format-money";
-import { formatPlanningDeadline, formatTransactionDate } from "@/lib/format-date";
+import { formatPlanningDeadline, formatTransactionDate, normalizeIsoDate } from "@/lib/format-date";
 import {
   advanceRecurringDate,
   avgMonthlyExpenses,
@@ -48,6 +48,11 @@ import {
   effectiveSkippedDates,
   recurringDisplayName,
 } from "@/lib/planning/recurring-skipped";
+import {
+  resolveFutureOneTimeTransactionGroup,
+  resolveFutureRecurringOperationGroup,
+  type FutureOperationGroup,
+} from "@/lib/planning/future-operation-groups";
 import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 import { resolveRecurringOccurrenceStatus } from "@/lib/recurring-occurrence-status";
 import { t } from "@/lib/i18n";
@@ -323,6 +328,7 @@ export function PlanningPanel({
   const [recComment, setRecComment] = useState("");
   const [recRepeat, setRecRepeat] = useState<"once" | RecurringFrequency>("monthly");
   const [recStartDate, setRecStartDate] = useState(() => todayIso());
+  const recStartDateInputRef = useRef<HTMLInputElement | null>(null);
   const [recEndMode, setRecEndMode] = useState<"never" | "date" | "months">("never");
   const [recEndDate, setRecEndDate] = useState("");
   const [recDurationMonths, setRecDurationMonths] = useState("12");
@@ -343,7 +349,6 @@ export function PlanningPanel({
   const [editDebtDate, setEditDebtDate] = useState("");
   const [editDebtOwner, setEditDebtOwner] = useState<DebtItem["owner"]>("all");
   const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
-  const [recurringFilter, setRecurringFilter] = useState<"unpaid" | "paid" | "all">("unpaid");
   const [planningTab, setPlanningTab] = useState<PlanningTab>(
     activeTab && visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0] ?? "goals",
   );
@@ -540,10 +545,21 @@ export function PlanningPanel({
     setLimitAmount("");
   };
 
+  const handleRecStartDateInput = useCallback((value: string) => {
+    const normalized = normalizeIsoDate(value);
+    if (normalized) {
+      setRecStartDate(normalized);
+    }
+  }, []);
+
   const handleAddRecurring = () => {
     const amount = Number(recAmount.replace(/\s/g, ""));
     const title = recNote.trim();
-    if (!amount || !recStartDate || !title) return;
+    const effectiveRecStartDate =
+      normalizeIsoDate(recStartDateInputRef.current?.value) ??
+      normalizeIsoDate(recStartDate) ??
+      todayIso();
+    if (!amount || !title) return;
     const categoryId = recCategoryId || getFallbackCategoryId(recType);
     const note = [title, recComment.trim()].filter(Boolean).join(" · ").slice(0, 120);
     if (recRepeat === "once") {
@@ -553,10 +569,11 @@ export function PlanningPanel({
         categoryId,
         currency: "RUB",
         note,
-        date: recStartDate,
+        date: effectiveRecStartDate,
         owner: entryOwner,
         confirmed: false,
       });
+      setRecStartDate(effectiveRecStartDate);
       setRecAmount("");
       setRecNote("");
       setRecComment("");
@@ -565,7 +582,7 @@ export function PlanningPanel({
       setRecDurationMonths("12");
       return;
     }
-    const start = new Date(`${recStartDate}T12:00:00`);
+    const start = new Date(`${effectiveRecStartDate}T12:00:00`);
     const dayOfMonth = recRepeat === "monthly" ? start.getDate() : null;
     const intervalMonths = recRepeat === "monthly" ? 1 : null;
     const endDate =
@@ -573,7 +590,7 @@ export function PlanningPanel({
         ? recEndDate || null
         : recEndMode === "months" && recRepeat === "monthly"
           ? recurringEndDateFromMonths(
-              recStartDate,
+              effectiveRecStartDate,
               intervalMonths ?? 1,
               Number(recDurationMonths) || 1,
             )
@@ -587,9 +604,10 @@ export function PlanningPanel({
       frequency: recRepeat,
       intervalMonths,
       dayOfMonth,
-      nextRunDate: recStartDate,
+      nextRunDate: effectiveRecStartDate,
       endDate,
     });
+    setRecStartDate(effectiveRecStartDate);
     setRecAmount("");
     setRecNote("");
     setRecComment("");
@@ -706,6 +724,7 @@ export function PlanningPanel({
     () => getCurrentBudgetPeriod(budgetMonthStartDay),
     [budgetMonthStartDay],
   );
+  const futureOperationToday = useMemo(() => todayIso(), []);
   const recurringCardsBase = useMemo(() => {
     const today = todayIso();
     return recurringTransactions
@@ -763,8 +782,11 @@ export function PlanningPanel({
           paid,
           pending,
           status,
+          resolvedStatus: resolvedOccurrence.status,
           lastPaidDate,
           skippedInPeriod,
+          scheduledDate: resolvedOccurrence.scheduledDate,
+          occurrenceDate: resolvedOccurrence.occurrenceDate,
           relevantOccurrenceDate: resolvedOccurrence.occurrenceDate,
           sortDate: pending
             ? resolvedOccurrence.scheduledDate
@@ -774,36 +796,71 @@ export function PlanningPanel({
       });
   }, [recurringPeriod, recurringTransactions, transactions]);
 
-  const recurringCards = useMemo(() => {
-    return recurringCardsBase
-      .filter((card) => {
-        if (recurringFilter === "paid") return card.paid;
-        if (recurringFilter === "unpaid") return !card.paid;
-        return true;
-      })
-      .sort((a, b) => {
-        if (recurringFilter === "paid") {
-          return (b.lastPaidDate ?? "").localeCompare(a.lastPaidDate ?? "");
-        }
-        const dateDiff = a.sortDate.localeCompare(b.sortDate);
-        if (dateDiff !== 0) return dateDiff;
-        return a.originalIndex - b.originalIndex;
-      });
-  }, [recurringCardsBase, recurringFilter]);
-
-  const futurePlannedTransactions = useMemo(() => {
-    const today = todayIso();
+  const futureOperationTransactions = useMemo(() => {
     return transactions
-      .filter((transaction) => transaction.confirmed === false)
       .filter((transaction) => transaction.recurringId == null)
-      .filter((transaction) => transaction.date.slice(0, 10) >= today)
+      .filter(
+        (transaction) =>
+          transaction.confirmed === false ||
+          transaction.date.slice(0, 10) >= recurringPeriod.from,
+      )
       .sort((left, right) => left.date.localeCompare(right.date));
-  }, [transactions]);
+  }, [recurringPeriod.from, transactions]);
 
-  const recurringPaidCount = useMemo(() => {
-    return recurringCardsBase.filter((card) => card.paid).length;
-  }, [recurringCardsBase]);
-  const recurringUnpaidCount = recurringCardsBase.length - recurringPaidCount;
+  const futureOperationSections = useMemo(() => {
+    type FutureOperationListItem =
+      | {
+          kind: "one-time";
+          key: string;
+          sortDate: string;
+          transaction: Transaction;
+        }
+      | {
+          kind: "recurring";
+          key: string;
+          sortDate: string;
+          card: (typeof recurringCardsBase)[number];
+        };
+
+    const sections: Record<FutureOperationGroup, FutureOperationListItem[]> = {
+      planned: [],
+      due: [],
+      paid: [],
+    };
+
+    for (const transaction of futureOperationTransactions) {
+      const group = resolveFutureOneTimeTransactionGroup(transaction, futureOperationToday);
+      sections[group].push({
+        kind: "one-time",
+        key: transaction.id,
+        sortDate: transaction.date.slice(0, 10),
+        transaction,
+      });
+    }
+
+    for (const card of recurringCardsBase) {
+      const group = resolveFutureRecurringOperationGroup(
+        {
+          paid: card.paid,
+          resolvedStatus: card.resolvedStatus,
+          scheduledDate: card.scheduledDate,
+        },
+        futureOperationToday,
+      );
+      sections[group].push({
+        kind: "recurring",
+        key: card.item.id,
+        sortDate: group === "paid" ? card.lastPaidDate ?? card.occurrenceDate : card.scheduledDate,
+        card,
+      });
+    }
+
+    sections.planned.sort((left, right) => left.sortDate.localeCompare(right.sortDate));
+    sections.due.sort((left, right) => left.sortDate.localeCompare(right.sortDate));
+    sections.paid.sort((left, right) => right.sortDate.localeCompare(left.sortDate));
+
+    return sections;
+  }, [futureOperationToday, futureOperationTransactions, recurringCardsBase]);
 
   const showToggle = (
     <Button
@@ -1738,234 +1795,227 @@ export function PlanningPanel({
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {t(locale, "planningRecurringHint")}
               </p>
-              {futurePlannedTransactions.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    {locale === "ru" ? "Разовые будущие операции" : "One-time future operations"}
-                  </p>
-                  {futurePlannedTransactions.map((transaction) => {
-                    const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
-                    const title = transaction.note.trim() || categoryLabel;
-                    return (
-                      <div
-                        key={transaction.id}
-                        className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="mb-1 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
-                              {transaction.type === "income"
-                                ? locale === "ru"
-                                  ? "Разовый доход"
-                                  : "One-time income"
-                                : locale === "ru"
-                                  ? "Разовый платёж"
-                                  : "One-time payment"}
-                            </p>
-                            <p className="font-medium leading-tight">{title}</p>
-                            <p className="mt-0.5 text-sm font-semibold tabular-nums">
-                              {transaction.type === "income" ? "+" : "−"}
-                              {formatMoney(transaction.amount, locale)}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {formatTransactionDate(transaction.date, locale)}
-                              {" · "}
-                              {locale === "ru" ? "Ожидается" : "Expected"}
-                            </p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-10 w-10 shrink-0 text-destructive"
-                            onClick={() => deleteTransaction(transaction.id)}
-                            aria-label={locale === "ru" ? "Удалить будущую операцию" : "Delete future operation"}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {recurringTransactions.length > 0 ? (
-                <div className="grid grid-cols-3 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1">
-                  {(["unpaid", "paid", "all"] as const).map((filter) => (
-                    <Button
-                      key={filter}
-                      type="button"
-                      variant={recurringFilter === filter ? "default" : "ghost"}
-                      size="sm"
-                      className="h-auto min-h-9 px-1 text-[11px] leading-tight"
-                      onClick={() => setRecurringFilter(filter)}
-                    >
-                      {filter === "unpaid"
-                        ? replaceTokens(t(locale, "planningRecurringFilterUnpaid"), {
-                            count: String(recurringUnpaidCount),
-                          })
-                        : filter === "paid"
-                          ? replaceTokens(t(locale, "planningRecurringFilterPaid"), {
-                              count: String(recurringPaidCount),
-                            })
-                          : replaceTokens(t(locale, "planningRecurringFilterAll"), {
-                              count: String(recurringTransactions.length),
-                            })}
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-              {recurringTransactions.length === 0 && futurePlannedTransactions.length === 0 ? (
+              {futureOperationSections.planned.length === 0 &&
+              futureOperationSections.due.length === 0 &&
+              futureOperationSections.paid.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t(locale, "planningRecurringEmpty")}</p>
-              ) : recurringTransactions.length > 0 && recurringCards.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                  {t(locale, "planningRecurringFilterEmpty")}
-                </p>
               ) : (
-                recurringCards.map(({ item, status, lastPaidDate, skippedInPeriod }) => {
-                  const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
-                  const title = recurringDisplayName(item, categoryLabel);
-                  const skipped = effectiveSkippedDates(item, transactions);
-                  const skipTotal = skipped.length * item.amount;
+                ([
+                  ["planned", t(locale, "planningRecurringSectionPlanned")],
+                  ["due", t(locale, "planningRecurringSectionDue")],
+                  ["paid", t(locale, "planningRecurringSectionPaid")],
+                ] as const).map(([groupKey, groupLabel]) => {
+                  const items = futureOperationSections[groupKey];
+                  if (items.length === 0) return null;
+
                   return (
-                    <div
-                      key={item.id}
-                      data-plan-entity-id={item.id}
-                      className={cn(
-                        "rounded-lg border p-3",
-                        item.enabled
-                          ? "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25"
-                          : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
-                      )}
-                    >
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                        <div className="min-w-0">
-                          <p
+                    <div key={groupKey} className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        {groupLabel}
+                      </p>
+                      {items.map((entry) => {
+                        if (entry.kind === "one-time") {
+                          const transaction = entry.transaction;
+                          const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
+                          const title = transaction.note.trim() || categoryLabel;
+                          const isPaid = transaction.confirmed !== false;
+                          return (
+                            <div
+                              key={entry.key}
+                              className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="mb-1 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
+                                    {transaction.type === "income"
+                                      ? locale === "ru"
+                                        ? "Разовый доход"
+                                        : "One-time income"
+                                      : locale === "ru"
+                                        ? "Разовый платёж"
+                                        : "One-time payment"}
+                                  </p>
+                                  <p className="font-medium leading-tight">{title}</p>
+                                  <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                                    {transaction.type === "income" ? "+" : "−"}
+                                    {formatMoney(transaction.amount, locale)}
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {formatTransactionDate(transaction.date, locale)}
+                                    {" · "}
+                                    {isPaid
+                                      ? locale === "ru"
+                                        ? "Оплачено"
+                                        : "Paid"
+                                      : locale === "ru"
+                                        ? "Ожидается"
+                                        : "Expected"}
+                                  </p>
+                                </div>
+                                {!isPaid ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0 text-destructive"
+                                    onClick={() => deleteTransaction(transaction.id)}
+                                    aria-label={locale === "ru" ? "Удалить операцию" : "Delete operation"}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        const { item, status, lastPaidDate, skippedInPeriod } = entry.card;
+                        const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
+                        const title = recurringDisplayName(item, categoryLabel);
+                        const skipped = effectiveSkippedDates(item, transactions);
+                        const skipTotal = skipped.length * item.amount;
+                        return (
+                          <div
+                            key={entry.key}
+                            data-plan-entity-id={item.id}
                             className={cn(
-                              "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
-                              status === "paid"
-                                ? "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-100"
-                                : item.enabled
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100"
-                                : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
+                              "rounded-lg border p-3",
+                              item.enabled
+                                ? "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25"
+                                : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
                             )}
                           >
-                            {status === "paid"
-                              ? t(locale, "planningRecurringStatusPaid")
-                              : status === "pending"
-                                ? t(locale, "planningRecurringStatusPending")
-                                : item.enabled
-                              ? t(locale, "planningRecurringStatusActive")
-                              : t(locale, "planningRecurringStatusPaused")}
-                          </p>
-                          <p className="font-medium leading-tight">{title}</p>
-                          <p className="mt-0.5 text-sm font-semibold tabular-nums">
-                            {formatMoney(item.amount, locale)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {item.frequency === "weekly"
-                              ? t(locale, "planningRecurringWeekly")
-                              : item.frequency === "monthly"
-                                ? (item.intervalMonths ?? 1) > 1
-                                  ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                                      count: String(item.intervalMonths ?? 1),
-                                    })
-                                  : t(locale, "planningRecurringMonthly")
-                                : t(locale, "planningRecurringYearly")}
-                            {" · "}
-                            {replaceTokens(t(locale, "planningRecurringNext"), {
-                              date: formatTransactionDate(item.nextRunDate, locale),
-                            })}
-                          </p>
-                          {item.endDate ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {locale === "ru"
-                                ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
-                                : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
-                            </p>
-                          ) : null}
-                          {lastPaidDate ? (
-                            <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
-                              {replaceTokens(t(locale, "planningRecurringPaidOn"), {
-                                date: formatTransactionDate(lastPaidDate, locale),
-                              })}
-                            </p>
-                          ) : null}
-                          {skippedInPeriod.length > 0 && !lastPaidDate ? (
-                            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                              {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
-                                count: String(skippedInPeriod.length),
-                              })}
-                            </p>
-                          ) : null}
-                          <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-                            <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
-                            <Input
-                              type="date"
-                              className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
-                              value={item.nextRunDate}
-                              onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
-                            />
-                          </label>
-                          <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-                            <span className="shrink-0">
-                              {locale === "ru" ? "До даты" : "Until"}
-                            </span>
-                            <Input
-                              type="date"
-                              className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
-                              value={item.endDate ?? ""}
-                              onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
-                            />
-                          </label>
-                        </div>
-                        {skipped.length > 0 ? (
-                          <div className="min-w-[8.5rem] rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
-                            <p className="font-semibold text-amber-900 dark:text-amber-100">
-                              {t(locale, "planningRecurringSkippedTitle")}
-                            </p>
-                            <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                              {skipped.map((d) => (
-                                <li key={d} className="tabular-nums">
-                                  {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
-                                    date: formatTransactionDate(d, locale),
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                              <div className="min-w-0">
+                                <p
+                                  className={cn(
+                                    "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                                    status === "paid"
+                                      ? "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-100"
+                                      : item.enabled
+                                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100"
+                                        : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
+                                  )}
+                                >
+                                  {status === "paid"
+                                    ? t(locale, "planningRecurringStatusPaid")
+                                    : status === "pending"
+                                      ? t(locale, "planningRecurringStatusPending")
+                                      : item.enabled
+                                        ? t(locale, "planningRecurringStatusActive")
+                                        : t(locale, "planningRecurringStatusPaused")}
+                                </p>
+                                <p className="font-medium leading-tight">{title}</p>
+                                <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                                  {formatMoney(item.amount, locale)}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {item.frequency === "weekly"
+                                    ? t(locale, "planningRecurringWeekly")
+                                    : item.frequency === "monthly"
+                                      ? (item.intervalMonths ?? 1) > 1
+                                        ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
+                                            count: String(item.intervalMonths ?? 1),
+                                          })
+                                        : t(locale, "planningRecurringMonthly")
+                                      : t(locale, "planningRecurringYearly")}
+                                  {" · "}
+                                  {replaceTokens(t(locale, "planningRecurringNext"), {
+                                    date: formatTransactionDate(item.nextRunDate, locale),
                                   })}
-                                </li>
-                              ))}
-                            </ul>
-                            <p className="mt-1.5 font-semibold tabular-nums text-foreground">
-                              {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
-                                amount: formatMoney(skipTotal, locale),
-                                count: String(skipped.length),
-                              })}
-                            </p>
+                                </p>
+                                {item.endDate ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {locale === "ru"
+                                      ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
+                                      : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
+                                  </p>
+                                ) : null}
+                                {lastPaidDate ? (
+                                  <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
+                                    {replaceTokens(t(locale, "planningRecurringPaidOn"), {
+                                      date: formatTransactionDate(lastPaidDate, locale),
+                                    })}
+                                  </p>
+                                ) : null}
+                                {skippedInPeriod.length > 0 && !lastPaidDate ? (
+                                  <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                    {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
+                                      count: String(skippedInPeriod.length),
+                                    })}
+                                  </p>
+                                ) : null}
+                                <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
+                                  <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
+                                  <Input
+                                    type="date"
+                                    className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
+                                    value={item.nextRunDate}
+                                    onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
+                                  />
+                                </label>
+                                <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
+                                  <span className="shrink-0">
+                                    {locale === "ru" ? "До даты" : "Until"}
+                                  </span>
+                                  <Input
+                                    type="date"
+                                    className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
+                                    value={item.endDate ?? ""}
+                                    onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
+                                  />
+                                </label>
+                              </div>
+                              {skipped.length > 0 ? (
+                                <div className="min-w-[8.5rem] rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
+                                  <p className="font-semibold text-amber-900 dark:text-amber-100">
+                                    {t(locale, "planningRecurringSkippedTitle")}
+                                  </p>
+                                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                                    {skipped.map((d) => (
+                                      <li key={d} className="tabular-nums">
+                                        {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
+                                          date: formatTransactionDate(d, locale),
+                                        })}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <p className="mt-1.5 font-semibold tabular-nums text-foreground">
+                                    {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
+                                      amount: formatMoney(skipTotal, locale),
+                                      count: String(skipped.length),
+                                    })}
+                                  </p>
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                  "min-h-10",
+                                  item.enabled
+                                    ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                                    : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
+                                )}
+                                onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
+                              >
+                                {item.enabled
+                                  ? t(locale, "planningRecurringPause")
+                                  : t(locale, "planningRecurringResume")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 text-destructive"
+                                onClick={() => removeRecurring(item.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            "min-h-10",
-                            item.enabled
-                              ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
-                              : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
-                          )}
-                          onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
-                        >
-                          {item.enabled
-                            ? t(locale, "planningRecurringPause")
-                            : t(locale, "planningRecurringResume")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 text-destructive"
-                          onClick={() => removeRecurring(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        );
+                      })}
                     </div>
                   );
                 })
@@ -1973,7 +2023,7 @@ export function PlanningPanel({
               <div className="space-y-2 border-t pt-3">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
-                    {locale === "ru" ? "Добавить будущую операцию" : "Add future operation"}
+                    {locale === "ru" ? "Добавить операцию" : "Add operation"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {recRepeat === "once"
@@ -1981,8 +2031,8 @@ export function PlanningPanel({
                         ? "Операция появится в прогнозе и потребует подтверждения в выбранную дату."
                         : "The operation will appear in Forecast and will need confirmation on the selected date."
                       : locale === "ru"
-                        ? "Будет создано правило для будущих операций."
-                        : "A rule for future operations will be created."}
+                        ? "Будет создано регулярное правило."
+                        : "A recurring rule will be created."}
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2069,8 +2119,10 @@ export function PlanningPanel({
                   <Input
                     type="date"
                     className="w-full"
-                    value={recStartDate}
-                    onChange={(e) => setRecStartDate(e.target.value)}
+                    ref={recStartDateInputRef}
+                    defaultValue={recStartDate}
+                    onChange={(e) => handleRecStartDateInput(e.currentTarget.value)}
+                    onInput={(e) => handleRecStartDateInput(e.currentTarget.value)}
                     aria-label={locale === "ru" ? "Дата первой операции" : "First operation date"}
                   />
                   <div className="space-y-1">
@@ -2152,7 +2204,7 @@ export function PlanningPanel({
                   </div>
                   ) : null}
                   <Button className="w-full" onClick={handleAddRecurring}>
-                    {locale === "ru" ? "Добавить будущую операцию" : "Add future operation"}
+                    {locale === "ru" ? "Добавить операцию" : "Add operation"}
                   </Button>
                 </div>
               </div>
