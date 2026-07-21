@@ -62,6 +62,10 @@ import { buildGoalDepositTransaction } from "@/lib/planning/goal-transfer";
 import { normalizeAppCurrency } from "@/lib/app-currency";
 import { roundMoneyUp } from "@/lib/format-money";
 import {
+  extractCompactMultiAmountInput,
+  extractSeparatedMoneyAmounts,
+} from "@/lib/multiple-amounts";
+import {
   emptyMoneySetup,
   normalizeMoneySetup,
   pruneMoneySetupIds,
@@ -539,9 +543,17 @@ function normalizeIncoming(
     data.type,
     categories,
   );
-  const raw = transcript
-    ? resolveTransactionAmount(transcript, data.amount, locale)
-    : data.amount;
+  const compactMulti = transcript ? extractCompactMultiAmountInput(transcript) : null;
+  const separatedAmounts = transcript
+    ? (compactMulti?.amounts ?? extractSeparatedMoneyAmounts(transcript))
+    : [];
+  const shouldKeepParsedAmount =
+    separatedAmounts.length > 1 &&
+    separatedAmounts.some((amount) => roundMoneyUp(amount) === roundMoneyUp(data.amount));
+  const raw =
+    transcript && !shouldKeepParsedAmount
+      ? resolveTransactionAmount(transcript, data.amount, locale)
+      : data.amount;
   return {
     ...data,
     categoryId,

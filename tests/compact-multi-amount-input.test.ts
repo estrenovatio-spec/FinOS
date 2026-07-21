@@ -7,6 +7,7 @@ import {
   extractSeparatedMoneyAmounts,
 } from "@/lib/multiple-amounts";
 import { parseTranscriptServerMany } from "@/lib/parse-voice-server";
+import { useStore } from "@/store/useStore";
 
 test("compact helper extracts one label with multiple amounts", () => {
   assert.deepEqual(extractCompactMultiAmountInput("еда 300 500 700"), {
@@ -14,6 +15,17 @@ test("compact helper extracts one label with multiple amounts", () => {
     amounts: [300, 500, 700],
   });
   assert.deepEqual(extractSeparatedMoneyAmounts("такси 200 350"), [200, 350]);
+});
+
+test("compact helper also extracts trailing labels after several amounts", () => {
+  assert.deepEqual(extractCompactMultiAmountInput("100 200 300 продукты"), {
+    label: "продукты",
+    amounts: [100, 200, 300],
+  });
+  assert.deepEqual(extractCompactMultiAmountInput("500 700 900 бензин"), {
+    label: "бензин",
+    amounts: [500, 700, 900],
+  });
 });
 
 test("compact helper does not trigger for mixed entities", () => {
@@ -83,4 +95,51 @@ test("server voice parser fallback keeps compact multi-amount expansion", async 
       process.env.OPENAI_API_KEY = previousOpenAiKey;
     }
   }
+});
+
+test("store keeps split amounts instead of reparsing the whole compact phrase into one giant number", () => {
+  const previousState = useStore.getState();
+
+  useStore.setState({
+    ...previousState,
+    locale: "ru",
+    categories: getDefaultCategories(),
+    transactions: [],
+  });
+
+  const parsed = fallbackParseMany("еда 1078 510 419", "ru", getDefaultCategories());
+  assert.equal(parsed.length, 3);
+
+  for (const item of parsed) {
+    useStore.getState().addTransaction(item, "еда 1078 510 419");
+  }
+
+  assert.deepEqual(
+    useStore
+      .getState()
+      .transactions.map((item) => item.amount)
+      .sort((a, b) => b - a),
+    [1078, 510, 419],
+  );
+
+  useStore.setState(previousState);
+});
+
+test("fallback parser keeps multiple separate operations for all supported compact examples", () => {
+  assert.deepEqual(
+    fallbackParseMany("еда 100 200 300", "ru", getDefaultCategories()).map((item) => item.amount),
+    [100, 200, 300],
+  );
+  assert.deepEqual(
+    fallbackParseMany("такси 500 700", "ru", getDefaultCategories()).map((item) => item.amount),
+    [500, 700],
+  );
+  assert.deepEqual(
+    fallbackParseMany("100 200 300 продукты", "ru", getDefaultCategories()).map((item) => item.amount),
+    [100, 200, 300],
+  );
+  assert.deepEqual(
+    fallbackParseMany("500, 700, 900 бензин", "ru", getDefaultCategories()).map((item) => item.amount),
+    [500, 700, 900],
+  );
 });

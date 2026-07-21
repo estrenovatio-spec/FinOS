@@ -79,14 +79,38 @@ export function extractCompactMultiAmountInput(
   const normalized = trimmed.replace(/\s+/g, " ");
   const tokens = normalized.split(" ");
   const firstAmountIndex = tokens.findIndex(isStandaloneAmountToken);
-  if (firstAmountIndex <= 0) return null;
+  if (firstAmountIndex > 0) {
+    const labelTokens = tokens.slice(0, firstAmountIndex);
+    const amountTokens = tokens.slice(firstAmountIndex);
+    if (amountTokens.length < 2 || !amountTokens.every(isStandaloneAmountToken)) {
+      return null;
+    }
+    if (labelTokens.length > 3 || labelTokens.some((token) => /\d/.test(token))) {
+      return null;
+    }
 
-  const labelTokens = tokens.slice(0, firstAmountIndex);
-  const amountTokens = tokens.slice(firstAmountIndex);
-  if (amountTokens.length < 2 || !amountTokens.every(isStandaloneAmountToken)) {
-    return null;
+    const amounts = amountTokens
+      .map((token) => parseMoneyAmount(token))
+      .filter(
+        (amount): amount is number =>
+          amount != null && Number.isFinite(amount) && amount > 0,
+      );
+    if (amounts.length !== amountTokens.length) return null;
+    if (looksLikeModelNumberSequence(labelTokens, amounts)) return null;
+
+    return {
+      label: labelTokens.join(" ").trim(),
+      amounts,
+    };
   }
-  if (labelTokens.length > 3 || labelTokens.some((token) => /\d/.test(token))) {
+
+  if (firstAmountIndex !== 0) return null;
+  const firstLabelIndex = tokens.findIndex((token) => !isStandaloneAmountToken(token));
+  if (firstLabelIndex < 2) return null;
+  const amountTokens = tokens.slice(0, firstLabelIndex);
+  const labelTokens = tokens.slice(firstLabelIndex);
+  if (labelTokens.length === 0 || labelTokens.length > 3) return null;
+  if (!amountTokens.every(isStandaloneAmountToken) || labelTokens.some((token) => /\d/.test(token))) {
     return null;
   }
 
@@ -97,7 +121,6 @@ export function extractCompactMultiAmountInput(
         amount != null && Number.isFinite(amount) && amount > 0,
     );
   if (amounts.length !== amountTokens.length) return null;
-  if (looksLikeModelNumberSequence(labelTokens, amounts)) return null;
 
   return {
     label: labelTokens.join(" ").trim(),
