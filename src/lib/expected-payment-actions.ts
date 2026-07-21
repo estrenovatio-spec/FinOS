@@ -13,6 +13,7 @@ type StoreActions = {
       categoryId?: string;
       date?: string;
       confirmed?: boolean;
+      recurringOccurrenceDate?: string | null;
       note?: string;
     },
   ) => void;
@@ -89,6 +90,7 @@ export function confirmExpectedPaymentFromInput(args: {
         amount,
         date: paymentDate,
         confirmed: true,
+        recurringOccurrenceDate: args.candidate.originalDate,
         note: args.actual.note,
         categoryId: args.actual.categoryId,
       });
@@ -99,6 +101,7 @@ export function confirmExpectedPaymentFromInput(args: {
       amount: remaining,
       date: paymentDate,
       confirmed: false,
+      recurringOccurrenceDate: args.candidate.originalDate,
     });
     args.actions.addTransaction(
       {
@@ -106,6 +109,7 @@ export function confirmExpectedPaymentFromInput(args: {
         amount,
         confirmed: true,
         recurringId: args.candidate.recurringId,
+        recurringOccurrenceDate: args.candidate.originalDate,
       },
       args.transcript,
     );
@@ -141,6 +145,7 @@ export function confirmExpectedPaymentFromInput(args: {
         owner: recurringItem.owner,
         confirmed: true,
         recurringId: recurringItem.id,
+        recurringOccurrenceDate: args.candidate.originalDate,
       },
       args.transcript,
     );
@@ -156,6 +161,7 @@ export function confirmExpectedPaymentFromInput(args: {
           owner: recurringItem.owner,
           confirmed: false,
           recurringId: recurringItem.id,
+          recurringOccurrenceDate: args.candidate.originalDate,
         },
         recurringItem.note || args.candidate.title,
       );

@@ -14,6 +14,7 @@ import { resolvePrimaryDecision } from "@/lib/decision-core/primary-decision";
 import { calculateDecisionSafeSpending, buildSafeUntil } from "@/lib/decision-core/safe-until";
 import { buildStatus } from "@/lib/decision-core/status";
 import { buildTodayPayments } from "@/lib/decision-core/today-payments";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 import type {
   DecisionCoreContext,
   DecisionCoreResult,
@@ -92,7 +93,9 @@ export function decisionCoreSnapshot(state: DecisionCoreState): DecisionCoreSnap
       transaction.type === "expense" &&
       transaction.date.slice(0, 10) < ctx.today &&
       isExpectedEventVisibleToday(
-        `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
+        transaction.recurringId
+          ? `recurring:${transaction.recurringId}:${resolveRecurringOccurrenceDate(transaction)}`
+          : `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
         ctx.expectedEventReminderStates,
         ctx.today,
       ),

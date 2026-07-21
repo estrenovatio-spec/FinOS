@@ -1,5 +1,6 @@
 import type { Transaction } from "@/types";
 import type { RecurringTransaction } from "@/types/planning";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 
 export function recurringDisplayName(
   item: RecurringTransaction,
@@ -42,7 +43,7 @@ export function hasConfirmedRecurringOccurrenceInBucket(
     (tx) =>
       tx.recurringId === item.id &&
       tx.confirmed !== false &&
-      occurrenceBucket(item, tx.date) === bucket,
+      occurrenceBucket(item, resolveRecurringOccurrenceDate(tx)) === bucket,
   );
 }
 

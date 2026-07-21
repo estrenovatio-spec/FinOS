@@ -51,6 +51,7 @@ function tx(
     goalId: null,
     goalAmount: null,
     recurringId: partial.recurringId ?? null,
+    recurringOccurrenceDate: partial.recurringOccurrenceDate ?? null,
     odometerKm: null,
     fuelLiters: null,
     vehicleId: null,
@@ -3060,6 +3061,92 @@ test("legacy paid plus skipped recurring conflict resolves to paid in forecast a
 
   assert.deepEqual(julyMortgageEvents, []);
   assert.equal(scenario.result.todayPayments.length, 0);
+});
+
+test("recurring payment confirmed on the next day keeps the original occurrence identity", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-17",
+      balances: { all: 90000, me: 90000, partner: 0 },
+      transactions: [
+        tx({
+          id: "mortgage-paid",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-17",
+          note: "Ипотека",
+          confirmed: true,
+          recurringId: "mortgage-recurring",
+          recurringOccurrenceDate: "2026-07-16",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "mortgage-recurring",
+          amount: 19000,
+          type: "expense",
+          categoryId: "housing",
+          note: "Ипотека",
+          nextRunDate: "2026-08-16",
+          frequency: "monthly",
+          dayOfMonth: 16,
+        }),
+      ],
+      moneySetup: {
+        ...emptyMoneySetup(),
+        hasNoRequiredFixedExpenses: true,
+      },
+    }),
+  );
+
+  const julyMortgageEvents = scenario.ctx.forecast.events.filter(
+    (event) =>
+      event.linkedEntityId === "mortgage-recurring" &&
+      (event.source === "pending_transaction" || event.source === "recurring") &&
+      event.date.startsWith("2026-07"),
+  );
+
+  assert.deepEqual(julyMortgageEvents, []);
+  assert.equal(scenario.result.todayPayments.length, 0);
+  assert.equal(
+    scenario.ctx.transactions.find((item) => item.id === "mortgage-paid")?.recurringOccurrenceDate,
+    "2026-07-16",
+  );
+});
+
+test("yearly recurring occurrence still clears skipped status when paid on the next day", () => {
+  const item = recurring({
+    id: "insurance",
+    amount: 12000,
+    type: "expense",
+    categoryId: "car",
+    note: "ОСАГО",
+    nextRunDate: "2027-07-20",
+    frequency: "yearly",
+    dayOfMonth: 19,
+    skippedDates: ["2026-07-19"],
+  });
+
+  const transactions = [
+    tx({
+      id: "insurance-paid",
+      amount: 12000,
+      type: "expense",
+      categoryId: "car",
+      date: "2026-07-20",
+      note: "ОСАГО",
+      confirmed: true,
+      recurringId: "insurance",
+      recurringOccurrenceDate: "2026-07-19",
+    }),
+  ];
+
+  assert.equal(
+    hasConfirmedRecurringOccurrenceInBucket(item, "2026-07-19", transactions),
+    true,
+  );
+  assert.deepEqual(effectiveSkippedDates(item, transactions), []);
 });
 
 test("snoozed overdue income is hidden today without changing the forecast date, and returns tomorrow", () => {

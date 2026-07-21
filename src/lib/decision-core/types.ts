@@ -47,6 +47,7 @@ export type DecisionTodayPayment = {
   title: string;
   amount: number;
   date: string;
+  recurringOccurrenceDate?: string | null;
   isOverdue?: boolean;
   source?: "pending_transaction" | "recurring" | "debt_payment";
   debtId?: string | null;
@@ -296,6 +297,7 @@ export type ForecastEvent = {
   balanceAfter: number;
   source: ForecastEventSource;
   recurringId?: string | null;
+  recurringOccurrenceDate?: string | null;
   incomeSourceId?: string | null;
   incomeOccurrenceId?: string | null;
   incomeOccurrenceDate?: string | null;

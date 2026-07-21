@@ -2,6 +2,7 @@ import { getCategoryLabel } from "@/lib/categories";
 import { isExpectedEventVisibleToday } from "@/lib/expected-events";
 import { resolveExpectedExpenseIdentity } from "@/lib/expected-events";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 import { isPendingTransaction } from "@/lib/transaction-confirmed";
 import type { DecisionCoreContext, DecisionTodayPayment } from "@/lib/decision-core/types";
 import type { DebtItem } from "@/types/planning";
@@ -36,7 +37,9 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
     .filter((transaction) => transaction.date.slice(0, 10) <= today)
     .filter((transaction) =>
       isExpectedEventVisibleToday(
-        `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
+        transaction.recurringId
+          ? `recurring:${transaction.recurringId}:${resolveRecurringOccurrenceDate(transaction)}`
+          : `expense:${transaction.id}:${transaction.date.slice(0, 10)}`,
         ctx.expectedEventReminderStates,
         today,
       ),
@@ -54,7 +57,10 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
       const identity = resolveExpectedExpenseIdentity(
         {
           amount: transaction.amount,
-          date: transaction.date.slice(0, 10),
+          date:
+            transaction.recurringId != null
+              ? resolveRecurringOccurrenceDate(transaction)
+              : transaction.date.slice(0, 10),
           title,
           debtId: null,
           paymentSource: transaction.recurringId ? "recurring" : "manual",
@@ -69,6 +75,10 @@ export function buildTodayPayments(ctx: DecisionCoreContext): DecisionTodayPayme
         title,
         amount: transaction.amount,
         date: transaction.date.slice(0, 10),
+        recurringOccurrenceDate:
+          transaction.recurringId != null
+            ? resolveRecurringOccurrenceDate(transaction)
+            : null,
         isOverdue: transaction.date.slice(0, 10) < today,
         source: "pending_transaction" as const,
         debtId: identity.canonicalDebtId,

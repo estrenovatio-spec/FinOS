@@ -11,6 +11,7 @@ import {
 } from "@/lib/expected-events";
 import { advanceRecurringDate } from "@/lib/planning/analytics";
 import { recurringDisplayName } from "@/lib/planning/recurring-skipped";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 import {
   extractIncomeOccurrenceDateFromTransactionNote,
   extractIncomeSourceIdFromTransactionNote,
@@ -171,7 +172,11 @@ function hasMatchingActualTransaction(
   runDate: string,
 ): boolean {
   return transactions.some((tx) => {
-    return tx.date.slice(0, 10) === runDate && tx.recurringId === item.id;
+    return (
+      tx.recurringId === item.id &&
+      tx.type === item.type &&
+      resolveRecurringOccurrenceDate(tx) === runDate
+    );
   });
 }
 
@@ -251,7 +256,10 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
           ? resolveExpectedExpenseIdentity(
               {
                 amount: transaction.amount,
-                date: transaction.date.slice(0, 10),
+                date:
+                  transaction.recurringId != null
+                    ? resolveRecurringOccurrenceDate(transaction)
+                    : transaction.date.slice(0, 10),
                 title,
                 debtId: null,
                 paymentSource: transaction.recurringId ? "recurring" : "manual",
@@ -276,11 +284,19 @@ function buildPendingTransactionEvents(ctx: DecisionCoreContext): ForecastEvent[
         date: transaction.date.slice(0, 10),
         balanceAfter: 0,
         source: "pending_transaction" as const,
+        recurringId: transaction.recurringId ?? null,
+        recurringOccurrenceDate:
+          transaction.recurringId != null
+            ? resolveRecurringOccurrenceDate(transaction)
+            : null,
         incomeSourceId: null,
         incomeOccurrenceId: null,
         incomeOccurrenceDate: null,
         plannedIncomeStatus: null,
-        plannedDate: null,
+        plannedDate:
+          transaction.recurringId != null
+            ? resolveRecurringOccurrenceDate(transaction)
+            : null,
         paymentSource,
         linkedEntityId:
           transaction.type === "expense"
@@ -324,6 +340,7 @@ function buildRecurringForecastEvents(
         balanceAfter: 0,
         source: "recurring" as const,
         recurringId: item.id,
+        recurringOccurrenceDate: runDate,
         incomeSourceId: null,
         incomeOccurrenceId: null,
         incomeOccurrenceDate: null,

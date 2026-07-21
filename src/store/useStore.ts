@@ -108,6 +108,11 @@ import {
   sanitizeRecurringSkippedDates,
   sanitizeRecurringTransactionsSkippedDates,
 } from "@/lib/planning/recurring-skipped";
+import {
+  isTransactionForRecurringOccurrence,
+  repairRecurringLinkedTransactions,
+  resolveRecurringOccurrenceDate,
+} from "@/lib/recurring-occurrence";
 import { recurringToParsedTransaction } from "@/lib/planning/recurring-run";
 import { useCloudStore } from "@/store/useCloudStore";
 import { resolveTransactionAmount } from "@/lib/parse-amount";
@@ -254,6 +259,8 @@ interface StoreState {
       odometerKm?: number | null;
       fuelLiters?: number | null;
       vehicleId?: string | null;
+      recurringId?: string | null;
+      recurringOccurrenceDate?: string | null;
       note?: string;
     },
   ) => void;
@@ -777,6 +784,10 @@ export const useStore = create<StoreState>()(
             goalAmount: goalId && goalAmount ? goalAmount : null,
             confirmed: data.confirmed === false ? false : true,
             recurringId: data.recurringId ?? null,
+            recurringOccurrenceDate:
+              data.recurringId != null
+                ? (data.recurringOccurrenceDate ?? normalized.date)
+                : null,
             updatedAt: new Date().toISOString(),
             ...(createdBy ? { createdBy } : {}),
             ...(data.odometerKm != null && Number.isFinite(data.odometerKm)
@@ -1064,6 +1075,16 @@ export const useStore = create<StoreState>()(
                     noteIncomeOccurrenceDate,
                   )
                 : tx.note;
+            const nextRecurringId =
+              patch.recurringId !== undefined ? patch.recurringId : tx.recurringId;
+            const recurringOccurrenceDate =
+              nextRecurringId != null
+                ? (
+                    patch.recurringOccurrenceDate ??
+                    tx.recurringOccurrenceDate ??
+                    tx.date.slice(0, 10)
+                  )
+                : null;
             updated = {
               ...tx,
               amount,
@@ -1073,6 +1094,8 @@ export const useStore = create<StoreState>()(
               type,
               owner,
               note,
+              recurringId: nextRecurringId,
+              recurringOccurrenceDate,
               ...(patch.createdBy !== undefined
                 ? { createdBy: patch.createdBy }
                 : {}),
@@ -1114,6 +1137,8 @@ export const useStore = create<StoreState>()(
             type: after.type,
             goalId: after.goalId,
             goalAmount: after.goalAmount,
+            recurringId: after.recurringId,
+            recurringOccurrenceDate: after.recurringOccurrenceDate,
             odometerKm: after.odometerKm,
             fuelLiters: after.fuelLiters,
             vehicleId: after.vehicleId,
@@ -1149,9 +1174,14 @@ export const useStore = create<StoreState>()(
                 .map((t) => t.id)
             : [id];
         let goalAfterDelete: SavingsGoal | null = null;
+        let reopenedRecurringTransaction: Transaction | null = null;
         set((state) => {
           const deleteSet = new Set(idsToDelete);
           const primary = state.transactions.find((t) => t.id === id);
+          const recurringItem =
+            primary?.recurringId != null
+              ? state.recurringTransactions.find((item) => item.id === primary.recurringId) ?? null
+              : null;
           const savingsGoals = revertTransactionGoal(
             state.savingsGoals,
             primary?.goalId,
@@ -1161,9 +1191,42 @@ export const useStore = create<StoreState>()(
             goalAfterDelete =
               savingsGoals.find((g) => g.id === primary.goalId) ?? null;
           }
+          const remainingTransactions = state.transactions.filter(
+            (t) => !deleteSet.has(t.id),
+          );
+          if (
+            primary &&
+            primary.recurringId &&
+            primary.confirmed !== false &&
+            recurringItem &&
+            recurringItem.enabled
+          ) {
+            const occurrenceDate = resolveRecurringOccurrenceDate(primary);
+            const occurrenceExists = remainingTransactions.some((transaction) =>
+              isTransactionForRecurringOccurrence(
+                transaction,
+                primary.recurringId as string,
+                occurrenceDate,
+                primary.type,
+              ),
+            );
+            if (!occurrenceExists) {
+              reopenedRecurringTransaction = {
+                ...primary,
+                id: crypto.randomUUID(),
+                date: occurrenceDate,
+                confirmed: false,
+                recurringOccurrenceDate: occurrenceDate,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+          }
           return {
-            transactions: state.transactions.filter(
-              (t) => !deleteSet.has(t.id),
+            transactions: repairRecurringLinkedTransactions(
+              reopenedRecurringTransaction
+                ? [reopenedRecurringTransaction, ...remainingTransactions]
+                : remainingTransactions,
+              state.recurringTransactions,
             ),
             savingsGoals,
           };
@@ -1768,7 +1831,13 @@ export const useStore = create<StoreState>()(
             const transactions = get().transactions;
             const exists =
               transactions.some(
-                (t) => t.recurringId === item.id && t.date === runDate,
+                (t) =>
+                  isTransactionForRecurringOccurrence(
+                    t,
+                    item.id,
+                    runDate,
+                    item.type,
+                  ),
               ) || hasManualRecurringPayment(transactions, item, runDate);
             if (!exists) {
               const parsed = recurringToParsedTransaction(item, runDate);
@@ -1776,6 +1845,7 @@ export const useStore = create<StoreState>()(
                 ...parsed,
                 confirmed: parsed.type === "income",
                 recurringId: item.id,
+                recurringOccurrenceDate: runDate,
               });
             }
             runDate = advanceRecurringDate(
@@ -1820,12 +1890,15 @@ export const useStore = create<StoreState>()(
           if (item) {
             const isTechnicalDuplicate = hasConfirmedRecurringOccurrenceInBucket(
               item,
-              tx.date,
+              resolveRecurringOccurrenceDate(tx),
               get().transactions,
             );
             if (!isTechnicalDuplicate) {
               get().updateRecurring(item.id, {
-                skippedDates: appendSkippedDate(item.skippedDates, tx.date),
+                skippedDates: appendSkippedDate(
+                  item.skippedDates,
+                  resolveRecurringOccurrenceDate(tx),
+                ),
               });
             }
           }
@@ -1928,11 +2001,34 @@ export const useStore = create<StoreState>()(
             note: String(tx.note ?? ""),
             date: String(tx.date ?? new Date().toISOString().slice(0, 10)),
             owner: (tx.owner ?? "me") as BudgetOwner,
+            createdBy:
+              typeof tx.createdBy === "string" ? tx.createdBy : null,
+            goalId: tx.goalId ?? null,
+            goalAmount: normalizeGoalAmount(tx.goalAmount),
+            confirmed: tx.confirmed !== false,
+            recurringId:
+              typeof tx.recurringId === "string" ? tx.recurringId : null,
+            recurringOccurrenceDate:
+              typeof tx.recurringOccurrenceDate === "string"
+                ? tx.recurringOccurrenceDate
+                : null,
+            odometerKm:
+              tx.odometerKm != null && Number.isFinite(Number(tx.odometerKm))
+                ? Math.max(0, Math.round(Number(tx.odometerKm)))
+                : null,
+            fuelLiters:
+              tx.fuelLiters != null && Number.isFinite(Number(tx.fuelLiters))
+                ? Math.max(0, Math.round(Number(tx.fuelLiters) * 100) / 100)
+                : null,
+            vehicleId:
+              typeof tx.vehicleId === "string" ? tx.vehicleId : null,
+            updatedAt:
+              typeof tx.updatedAt === "string" ? tx.updatedAt : undefined,
           };
         });
 
         return {
-          transactions,
+          transactions: repairRecurringLinkedTransactions(transactions),
           categories,
           isRecording: false,
           locale: (raw.locale === "en" ? "en" : "ru") as Locale,

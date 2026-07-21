@@ -182,6 +182,8 @@ export async function cloudPushTransactionUpdate(
       | "type"
       | "goalId"
       | "goalAmount"
+      | "recurringId"
+      | "recurringOccurrenceDate"
       | "odometerKm"
       | "fuelLiters"
       | "vehicleId"
