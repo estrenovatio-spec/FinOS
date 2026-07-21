@@ -394,7 +394,8 @@ function buildHero(input: TodayPresentationInput): TodayHeroView {
     amount:
       decision.mainAction.type === "pay_today" ||
       decision.mainAction.type === "pay_overdue" ||
-      decision.mainAction.type === "confirm_income"
+      decision.mainAction.type === "confirm_income" ||
+      decision.mainAction.type === "resolve_income_delay"
         ? rub(decision.mainAction.amount ?? null, locale)
         : null,
     due: buildHeroDue(decision, locale),
