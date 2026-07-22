@@ -4,30 +4,32 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 48 22% 97%;
+    --foreground: 210 20% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --primary: 142 76% 36%;
+    --card-foreground: 210 20% 14%;
+    --primary: 150 61% 34%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 48 18% 94%;
+    --secondary-foreground: 210 18% 18%;
+    --muted: 45 18% 94%;
+    --muted-foreground: 215 10% 45%;
+    --accent: 48 18% 93%;
+    --accent-foreground: 210 18% 18%;
+    --destructive: 2 72% 55%;
     --destructive-foreground: 0 0% 98%;
-    --border: 142 28% 72%;
-    --input: 142 24% 78%;
-    --ring: 142 76% 36%;
-    --radius: 0.75rem;
-    --tg-bg: #ffffff;
+    --border: 210 16% 86%;
+    --input: 210 18% 84%;
+    --ring: 150 61% 34%;
+    --radius: 1.125rem;
+    --tg-bg: #f8f7f3;
     --tg-text: #0a0a0a;
-    --tg-secondary: #f4f4f5;
+    --tg-secondary: #f1efe9;
     --tg-viewport-height: 100dvh;
     --app-viewport-height: var(--tg-viewport-height, 100dvh);
     --app-bottom-nav-height: 4.5rem;
+    --surface-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(15, 23, 42, 0.03);
+    --surface-shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.03);
   }
 
   html,
@@ -56,5 +58,43 @@
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+    line-height: 1.5;
+    letter-spacing: -0.011em;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply transition-colors duration-150;
+  }
+
+  select,
+  textarea {
+    border-radius: calc(var(--radius) - 0.125rem);
+    border: 1px solid hsl(var(--border) / 0.85);
+    background: hsl(var(--background) / 0.92);
+    color: hsl(var(--foreground));
+  }
+
+  select {
+    min-height: 2.75rem;
+    padding: 0.625rem 0.95rem;
+  }
+
+  textarea {
+    padding: 0.875rem 1rem;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground) / 0.85);
   }
 }

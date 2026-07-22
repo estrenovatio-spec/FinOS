@@ -875,7 +875,6 @@ export function PlanningPanel({
       key: string;
       label: string;
       items: Array<(typeof futureOperationSections.planned)[number]>;
-      compactLabel?: string;
     }> = [];
 
     if (plannedFutureOperations.currentMonth.length > 0) {
@@ -891,7 +890,6 @@ export function PlanningPanel({
         key: `later-${bucket.monthKey}`,
         label: formatMonthYearLong(`${bucket.monthKey}-15`, locale),
         items: bucket.items,
-        compactLabel: t(locale, "planningRecurringSectionLater"),
       });
     }
 
@@ -913,6 +911,16 @@ export function PlanningPanel({
 
     return sections;
   }, [futureOperationSections, locale, plannedFutureOperations]);
+
+  function futureSectionPillClassName(sectionKey: string) {
+    if (sectionKey === "paid") {
+      return "border-emerald-200/80 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100";
+    }
+    if (sectionKey === "due") {
+      return "border-amber-300/80 bg-amber-100/80 text-amber-950 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/50 dark:text-amber-100";
+    }
+    return "border-amber-200/80 bg-amber-50 text-amber-900 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-100";
+  }
 
   const renderFutureOperationCard = (
     entry:
@@ -2060,7 +2068,7 @@ export function PlanningPanel({
                 futureOperationDisplaySections.map((section) => (
                   <div key={section.key} className="space-y-2">
                     {(() => {
-                      const isFutureMonthSection = Boolean(section.compactLabel);
+                      const isFutureMonthSection = section.key.startsWith("later-");
                       const isExpanded = expandedFutureMonths[section.key] ?? false;
                       const ToggleIcon = isExpanded ? ChevronUp : ChevronDown;
                       return (
@@ -2068,7 +2076,7 @@ export function PlanningPanel({
                           {isFutureMonthSection ? (
                             <button
                               type="button"
-                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/90 px-3.5 py-2 text-left transition-colors hover:bg-accent/40"
+                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/55 px-3.5 py-2 text-left transition-colors hover:bg-amber-100/55 dark:border-amber-800/60 dark:bg-amber-950/20 dark:hover:bg-amber-950/35"
                               onClick={() =>
                                 setExpandedFutureMonths((current) => ({
                                   ...current,
@@ -2078,12 +2086,14 @@ export function PlanningPanel({
                               aria-expanded={isExpanded}
                             >
                               <div className="flex min-w-0 items-center gap-2">
-                                <p className="inline-flex min-h-8 items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-sm font-semibold tracking-[0.08em] text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100">
+                                <p
+                                  className={cn(
+                                    "inline-flex min-h-8 items-center rounded-full px-3 py-1 text-sm font-semibold tracking-[0.08em]",
+                                    futureSectionPillClassName(section.key),
+                                  )}
+                                >
                                   {section.label}
                                 </p>
-                                <span className="rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] text-foreground/80 shadow-sm">
-                                  {section.compactLabel}
-                                </span>
                               </div>
                               <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
                                 <span className="text-xs font-medium">
@@ -2096,7 +2106,12 @@ export function PlanningPanel({
                             </button>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <p className="inline-flex min-h-8 items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-sm font-semibold tracking-[0.08em] text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100">
+                              <p
+                                className={cn(
+                                  "inline-flex min-h-8 items-center rounded-full px-3 py-1 text-sm font-semibold tracking-[0.08em]",
+                                  futureSectionPillClassName(section.key),
+                                )}
+                              >
                                 {section.label}
                               </p>
                             </div>

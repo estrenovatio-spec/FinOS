@@ -40,7 +40,7 @@ export function AppBottomNav({
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background supports-[backdrop-filter]:bg-background/95"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/92 backdrop-blur-xl supports-[backdrop-filter]:bg-background/84"
       style={{
         minHeight: "calc(var(--app-bottom-nav-height) + max(env(safe-area-inset-bottom), 0px))",
         paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
@@ -56,14 +56,14 @@ export function AppBottomNav({
               type="button"
               onClick={() => onChange(id)}
               className={[
-                "flex min-h-[var(--app-bottom-nav-height)] flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[9px] font-medium leading-tight transition-colors sm:px-1 sm:text-[10px]",
+                "flex min-h-[var(--app-bottom-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium leading-tight transition-all duration-150 sm:px-1.5",
                 selected
-                  ? "text-primary"
+                  ? "bg-foreground/[0.04] text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               ].join(" ")}
               aria-current={selected ? "page" : undefined}
             >
-              <Icon className="h-5 w-5 shrink-0" aria-hidden />
+              <Icon className="h-[1.15rem] w-[1.15rem] shrink-0" aria-hidden />
               <span className="max-w-full text-center whitespace-normal">{t(locale, labelKey)}</span>
             </button>
           );

@@ -163,10 +163,10 @@ export default function HomePage() {
   return (
     <main
       className={[
-        "mx-auto flex min-h-[var(--app-viewport-height,100dvh)] max-w-lg flex-col gap-2 px-4",
+        "mx-auto flex min-h-[var(--app-viewport-height,100dvh)] max-w-xl flex-col gap-4 px-4 pb-[calc(var(--app-bottom-nav-height)+1.25rem+env(safe-area-inset-bottom))] pt-3 sm:px-5",
         previewMode
-          ? "pb-[calc(var(--app-bottom-nav-height)+1rem+env(safe-area-inset-bottom))]"
-          : "pb-[calc(var(--app-bottom-nav-height)+1rem+env(safe-area-inset-bottom))]",
+          ? ""
+          : "",
       ].join(" ")}
       lang={locale}
     >

@@ -10,7 +10,7 @@ export const homeSectionPadX = "px-3";
 export const homeSectionContentClassName = `${homeSectionPadX} pb-4 pt-0`;
 
 const titleClass =
-  "m-0 flex min-w-0 items-center gap-2 p-0 text-base font-medium leading-snug tracking-normal";
+  "m-0 flex min-w-0 items-center gap-2.5 p-0 text-[1.02rem] font-semibold leading-6 tracking-[-0.018em]";
 
 /** Hide / Show buttons on home section cards */
 export const sectionToggleButtonClassName = "h-8 shrink-0 gap-1 px-1.5 text-sm";
@@ -30,15 +30,15 @@ export function HomeSectionCardHeader({
 }: HomeSectionCardHeaderProps) {
   return (
     <CardHeader
-      className={`flex flex-row items-center justify-between gap-2 space-y-0 py-2.5 ${homeSectionPadX}`}
+      className={`flex flex-row items-center justify-between gap-3 space-y-0 py-3 ${homeSectionPadX}`}
     >
       <div className="min-w-0 flex-1">
         <CardTitle className={titleClass}>
-          <Icon className="h-4 w-4 shrink-0 text-primary" />
+          <Icon className="h-[1.05rem] w-[1.05rem] shrink-0 text-foreground/70" />
           <span className="truncate">{title}</span>
         </CardTitle>
         {subtitle ? (
-          <p className="mt-0.5 text-xs font-normal text-muted-foreground">{subtitle}</p>
+          <p className="mt-1 text-[13px] font-normal leading-5 text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
@@ -57,9 +57,9 @@ export function HomeSectionCollapsedBar({
   action: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5">
-      <span className="flex min-w-0 items-center gap-2 text-base font-medium leading-snug">
-        <Icon className="h-4 w-4 shrink-0 text-primary" />
+    <div className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-border/80 bg-card/92 px-4 py-3 shadow-[var(--surface-shadow-soft)]">
+      <span className="flex min-w-0 items-center gap-2.5 text-[1.02rem] font-semibold leading-6 tracking-[-0.018em]">
+        <Icon className="h-[1.05rem] w-[1.05rem] shrink-0 text-foreground/70" />
         <span className="truncate">{title}</span>
       </span>
       {action}

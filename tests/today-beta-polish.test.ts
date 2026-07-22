@@ -1554,7 +1554,7 @@ test("setActualCash ignores confirmed income that is dated in the future", () =>
         categoryId: "salary",
         currency: "RUB",
         note: "Зарплата",
-        date: "2026-07-21",
+        date: "2026-07-23",
         owner: "me",
         goalId: null,
         goalAmount: null,

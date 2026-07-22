@@ -34,13 +34,13 @@ export function PreviewAppShell({
 
   return (
     <>
-      {active === "today" ? <div className="space-y-2">{todayContent}</div> : null}
+      {active === "today" ? <div className="space-y-4">{todayContent}</div> : null}
       {active === "operations" ? (
-        <div className="space-y-2">{operationsContent}</div>
+        <div className="space-y-4">{operationsContent}</div>
       ) : null}
-      {active === "forecast" ? <div className="space-y-2">{forecastContent}</div> : null}
-      {active === "plan" ? <div className="space-y-2">{planContent}</div> : null}
-      {active === "settings" ? <div className="space-y-2">{settingsContent}</div> : null}
+      {active === "forecast" ? <div className="space-y-4">{forecastContent}</div> : null}
+      {active === "plan" ? <div className="space-y-4">{planContent}</div> : null}
+      {active === "settings" ? <div className="space-y-4">{settingsContent}</div> : null}
       <AppBottomNav active={active} onChange={changeTab} />
     </>
   );

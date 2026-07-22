@@ -168,7 +168,6 @@ test("planned items after the current month are grouped into later month buckets
 
 test("planning panel uses planned due and paid sections instead of the old unpaid grouping", () => {
   assert.match(planningPanelSource, /planningRecurringSectionPlanned/);
-  assert.match(planningPanelSource, /planningRecurringSectionLater/);
   assert.match(planningPanelSource, /planningRecurringSectionDue/);
   assert.match(planningPanelSource, /planningRecurringSectionPaid/);
   assert.match(planningPanelSource, /resolveFutureOneTimeTransactionGroup/);
@@ -176,7 +175,7 @@ test("planning panel uses planned due and paid sections instead of the old unpai
   assert.match(planningPanelSource, /splitPlannedFutureOperationsByMonth/);
   assert.match(planningPanelSource, /expandedFutureMonths/);
   assert.match(planningPanelSource, /aria-expanded/);
-  assert.match(planningPanelSource, /section\.compactLabel/);
+  assert.match(planningPanelSource, /section\.key\.startsWith\("later-"\)/);
   assert.doesNotMatch(planningPanelSource, /setRecurringFilter/);
 });
 
