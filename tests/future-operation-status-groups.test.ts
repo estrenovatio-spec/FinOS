@@ -131,3 +131,11 @@ test("planning panel syncs one-time future date from the input before submit", (
   assert.match(planningPanelSource, /normalizeIsoDate\(recStartDateInputRef\.current\?\.value\)/);
   assert.match(planningPanelSource, /onInput=\{\(e\) => handleRecStartDateInput\(e\.currentTarget\.value\)\}/);
 });
+
+test("planning panel keeps one-time operations only while they are still pending", () => {
+  assert.match(planningPanelSource, /\.filter\(\(transaction\) => transaction\.confirmed === false\)/);
+  assert.doesNotMatch(
+    planningPanelSource,
+    /transaction\.confirmed === false\s*\|\|\s*transaction\.date\.slice\(0, 10\) >= recurringPeriod\.from/,
+  );
+});

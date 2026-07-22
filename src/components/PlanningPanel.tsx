@@ -799,13 +799,9 @@ export function PlanningPanel({
   const futureOperationTransactions = useMemo(() => {
     return transactions
       .filter((transaction) => transaction.recurringId == null)
-      .filter(
-        (transaction) =>
-          transaction.confirmed === false ||
-          transaction.date.slice(0, 10) >= recurringPeriod.from,
-      )
+      .filter((transaction) => transaction.confirmed === false)
       .sort((left, right) => left.date.localeCompare(right.date));
-  }, [recurringPeriod.from, transactions]);
+  }, [transactions]);
 
   const futureOperationSections = useMemo(() => {
     type FutureOperationListItem =
@@ -1818,7 +1814,6 @@ export function PlanningPanel({
                           const transaction = entry.transaction;
                           const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
                           const title = transaction.note.trim() || categoryLabel;
-                          const isPaid = transaction.confirmed !== false;
                           return (
                             <div
                               key={entry.key}
@@ -1843,26 +1838,18 @@ export function PlanningPanel({
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     {formatTransactionDate(transaction.date, locale)}
                                     {" · "}
-                                    {isPaid
-                                      ? locale === "ru"
-                                        ? "Оплачено"
-                                        : "Paid"
-                                      : locale === "ru"
-                                        ? "Ожидается"
-                                        : "Expected"}
+                                    {locale === "ru" ? "Ожидается" : "Expected"}
                                   </p>
                                 </div>
-                                {!isPaid ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-10 w-10 shrink-0 text-destructive"
-                                    onClick={() => deleteTransaction(transaction.id)}
-                                    aria-label={locale === "ru" ? "Удалить операцию" : "Delete operation"}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                ) : null}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-10 w-10 shrink-0 text-destructive"
+                                  onClick={() => deleteTransaction(transaction.id)}
+                                  aria-label={locale === "ru" ? "Удалить операцию" : "Delete operation"}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
                           );
