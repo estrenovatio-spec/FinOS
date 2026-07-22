@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Mic, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Mic, PiggyBank, Sparkles } from "lucide-react";
 import { ExpectedEventActionDialog } from "@/components/ExpectedEventActionDialog";
 import { QuickAddOperationDialog } from "@/components/today/QuickAddOperationDialog";
 import { TodayHero } from "@/components/today/TodayHero";
@@ -29,6 +29,7 @@ import {
   calculatePlannedFreeMoneyUntilPeriodEnd,
 } from "@/lib/free-money";
 import { hasPartnerBudget } from "@/lib/owner-labels";
+import type { TodayOverviewItem } from "@/components/today/today-screen-presenter";
 import { useViewerMappedTransactions, useHouseholdBalances, useStore } from "@/store/useStore";
 
 export function TodayScreen({
@@ -224,6 +225,24 @@ export function TodayScreen({
     ].filter((value): value is string => Boolean(value && value.trim()));
     return candidates.find((candidate) => candidate.trim() !== heroReason)?.trim() ?? null;
   }, [decision.allowed.reason, decision.peaceIndex.note, decision.safeUntil.note, view.hero.reason]);
+  const primaryMoneyItem = useMemo(
+    () =>
+      !zeroState
+        ? (view.overviewItems.find((item) => item.id === "planned-free-money") ??
+          view.overviewItems[0] ??
+          null)
+        : null,
+    [view.overviewItems, zeroState],
+  );
+  const deferredOverviewItems = useMemo(
+    () =>
+      zeroState
+        ? view.overviewItems
+        : view.overviewItems.filter(
+            (item) => item.id !== "planned-free-money" && item.id !== "current-balance",
+          ),
+    [view.overviewItems, zeroState],
+  );
 
   function openExpectedEventWorkflow(
     nextEvent: ExpectedEvent,
@@ -368,11 +387,8 @@ export function TodayScreen({
 
   return (
     <div className="space-y-6 pb-24">
-      {!zeroState ? (
-        <TodayOverview
-          items={view.overviewItems}
-          onItemAction={handleOverviewAction}
-        />
+      {!zeroState && primaryMoneyItem ? (
+        <TodayPrimaryMoneyBlock item={primaryMoneyItem} onAction={handleOverviewAction} />
       ) : null}
 
       {view.compactAlert ? (
@@ -502,57 +518,6 @@ export function TodayScreen({
         </section>
       ) : null}
 
-      {zeroState ? (
-        <TodayOverview
-          items={view.overviewItems}
-          onItemAction={handleOverviewAction}
-        />
-      ) : null}
-
-      <Dialog open={financialPlanMenuOpen} onOpenChange={setFinancialPlanMenuOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {locale === "ru" ? "Настроить финансовый план" : "Set up financial plan"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => openFinancialPlanTarget("balance_and_income")}
-            >
-              {locale === "ru" ? "Баланс и доходы" : "Balance and income"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => openFinancialPlanTarget("recurring")}
-            >
-              {locale === "ru" ? "Регулярные платежи" : "Recurring payments"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => openFinancialPlanTarget("debts")}
-            >
-              {locale === "ru" ? "Долги" : "Debts"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => openFinancialPlanTarget("limits")}
-            >
-              {locale === "ru" ? "Лимиты" : "Limits"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {view.payments ? (
         <section className="space-y-3 rounded-[28px] border border-border/45 bg-card/90 px-5 py-5 shadow-none">
           <div className="space-y-1">
@@ -633,6 +598,13 @@ export function TodayScreen({
         </section>
       ) : null}
 
+      {zeroState || deferredOverviewItems.length > 0 ? (
+        <TodayOverview
+          items={deferredOverviewItems}
+          onItemAction={handleOverviewAction}
+        />
+      ) : null}
+
       {!zeroState && todayInsight ? (
         <section className="rounded-[28px] border border-border/45 bg-card/90 px-5 py-5 shadow-none">
           <div className="flex items-start gap-3">
@@ -677,7 +649,152 @@ export function TodayScreen({
         showHouseholdToggle={showHouseholdToggle}
         initialSection={moneySetupSection}
       />
+
+      <Dialog open={financialPlanMenuOpen} onOpenChange={setFinancialPlanMenuOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {locale === "ru" ? "Настроить финансовый план" : "Set up financial plan"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("balance_and_income")}
+            >
+              {locale === "ru" ? "Баланс и доходы" : "Balance and income"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("recurring")}
+            >
+              {locale === "ru" ? "Регулярные платежи" : "Recurring payments"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("debts")}
+            >
+              {locale === "ru" ? "Долги" : "Debts"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => openFinancialPlanTarget("limits")}
+            >
+              {locale === "ru" ? "Лимиты" : "Limits"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function TodayPrimaryMoneyBlock({
+  item,
+  onAction,
+}: {
+  item: TodayOverviewItem;
+  onAction?: (
+    actionKey: NonNullable<
+      TodayOverviewItem["actionKey"] | TodayOverviewItem["secondaryActionKey"]
+    >,
+  ) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const expandable = Boolean(item.details && item.details.length > 0);
+  const Chevron = expanded ? ChevronUp : ChevronDown;
+
+  return (
+    <section className="space-y-4 px-1 pt-1">
+      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+        <PiggyBank className="h-4 w-4 shrink-0" />
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em]">{item.label}</p>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-2">
+            <p className="text-[3.4rem] font-semibold leading-[0.92] tracking-[-0.05em] text-foreground sm:text-[4.4rem]">
+              {item.value}
+            </p>
+            {item.valueNote ? (
+              <p className="text-base font-medium text-foreground/80">{item.valueNote}</p>
+            ) : null}
+            {item.caption ? (
+              <p className="max-w-[38rem] text-sm leading-6 text-muted-foreground">{item.caption}</p>
+            ) : null}
+          </div>
+          {expandable ? (
+            <button
+              type="button"
+              className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/90 text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setExpanded((current) => !current)}
+              aria-label={expanded ? "Скрыть детали" : "Показать детали"}
+            >
+              <Chevron className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {item.actionLabel && item.actionKey ? (
+            <Button
+              type="button"
+              className="h-12 flex-1 rounded-2xl text-sm font-semibold"
+              onClick={() => onAction?.(item.actionKey!)}
+            >
+              {item.actionLabel}
+            </Button>
+          ) : null}
+          {item.secondaryActionLabel && item.secondaryActionKey ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-12 justify-start rounded-2xl px-0 text-sm font-medium text-muted-foreground hover:text-foreground sm:flex-1 sm:justify-center sm:px-4"
+              onClick={() => onAction?.(item.secondaryActionKey!)}
+            >
+              {item.secondaryActionLabel}
+            </Button>
+          ) : null}
+        </div>
+
+        {expanded && item.details ? (
+          <div className="space-y-2 rounded-2xl border border-border/50 bg-muted/20 p-4">
+            {item.details.map((detail, index) => {
+              const toneClassName =
+                detail.tone === "positive"
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : detail.tone === "negative"
+                    ? "text-foreground"
+                    : detail.tone === "total"
+                      ? "font-semibold text-foreground"
+                      : "text-foreground";
+              return (
+                <div key={`${item.id}-hero-detail-${index}`}>
+                  {detail.tone === "total" ? (
+                    <div className="border-t border-border/70 pt-3" />
+                  ) : null}
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 text-sm">
+                    <p className="break-words text-muted-foreground">{detail.label}</p>
+                    <p className={`shrink-0 whitespace-nowrap text-right ${toneClassName}`}>
+                      {detail.value}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 import type { TodayHeroView } from "@/components/today/today-screen-presenter";
 
 const HERO_TONE_STYLES = {
-  calm: "border-emerald-500/15 bg-emerald-500/[0.04]",
-  risk: "border-amber-500/20 bg-amber-500/[0.05]",
-  action: "border-primary/15 bg-primary/[0.045]",
-  setup: "border-sky-500/15 bg-sky-500/[0.05]",
+  calm: "border-emerald-500/12 bg-emerald-500/[0.03]",
+  risk: "border-amber-500/18 bg-amber-500/[0.045]",
+  action: "border-primary/12 bg-primary/[0.035]",
+  setup: "border-sky-500/12 bg-sky-500/[0.04]",
 } as const;
 
 export function TodayHero({
@@ -37,27 +37,27 @@ export function TodayHero({
   return (
     <section
       className={cn(
-        "space-y-4 rounded-[28px] border px-5 py-5 shadow-none backdrop-blur-sm",
+        "space-y-3 rounded-[24px] border px-4 py-4 shadow-none backdrop-blur-sm",
         HERO_TONE_STYLES[hero.tone],
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-background/80 px-3 py-1 text-[11px] font-medium tracking-[0.12em] text-foreground/75">
+        <span className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-background/85 px-3 py-1 text-[10px] font-medium tracking-[0.14em] text-foreground/70">
           <StatusIcon className="h-3.5 w-3.5" />
           {hero.statusLabel}
         </span>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium tracking-[0.08em] text-muted-foreground">
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           Ближайшее действие
         </p>
         <div className="space-y-1.5">
-          <p className="text-[1.45rem] font-semibold leading-tight tracking-tight text-foreground">
+          <p className="text-[1.2rem] font-semibold leading-tight tracking-tight text-foreground sm:text-[1.35rem]">
             {hero.title}
           </p>
           {hero.amount ? (
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
+            <p className="text-lg font-semibold tracking-tight text-foreground">
               {hero.amount}
             </p>
           ) : null}
@@ -75,13 +75,13 @@ export function TodayHero({
       {hero.ctaLabel ? (
         hero.secondaryCtaLabel ? (
           <div className="grid grid-cols-2 gap-2">
-            <Button type="button" className="w-full" onClick={onAction} disabled={actionBusy}>
+            <Button type="button" className="h-11 w-full rounded-2xl" onClick={onAction} disabled={actionBusy}>
               {hero.ctaLabel}
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="h-11 w-full rounded-2xl"
               onClick={onSecondaryAction ?? undefined}
               disabled={actionBusy}
             >
@@ -89,7 +89,12 @@ export function TodayHero({
             </Button>
           </div>
         ) : (
-          <Button type="button" className="w-full sm:w-auto" onClick={onAction} disabled={actionBusy}>
+          <Button
+            type="button"
+            className="h-11 w-full rounded-2xl sm:w-auto"
+            onClick={onAction}
+            disabled={actionBusy}
+          >
             {hero.ctaLabel}
           </Button>
         )

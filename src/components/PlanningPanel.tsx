@@ -928,6 +928,15 @@ export function PlanningPanel({
       | (typeof futureOperationSections.due)[number]
       | (typeof futureOperationSections.paid)[number],
   ) => {
+      const pendingCardClassName =
+        "border-amber-200/90 bg-amber-50/80 dark:border-amber-800/60 dark:bg-amber-950/30";
+      const pendingBadgeClassName =
+        "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-100";
+      const paidCardClassName =
+        "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25";
+      const paidBadgeClassName =
+        "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100";
+
       if (entry.kind === "one-time") {
         const transaction = entry.transaction;
         const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
@@ -935,11 +944,16 @@ export function PlanningPanel({
         return (
           <div
             key={entry.key}
-            className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
+            className={cn("rounded-lg border p-3", pendingCardClassName)}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="mb-1 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
+                <p
+                  className={cn(
+                    "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                    pendingBadgeClassName,
+                  )}
+                >
                   {transaction.type === "income"
                     ? locale === "ru"
                       ? "Разовый доход"
@@ -985,7 +999,9 @@ export function PlanningPanel({
           className={cn(
             "rounded-lg border p-3",
             item.enabled
-              ? "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25"
+              ? status === "paid"
+                ? paidCardClassName
+                : pendingCardClassName
               : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
           )}
         >
@@ -995,9 +1011,9 @@ export function PlanningPanel({
                 className={cn(
                   "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
                   status === "paid"
-                    ? "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-100"
+                    ? paidBadgeClassName
                     : item.enabled
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100"
+                      ? pendingBadgeClassName
                       : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
                 )}
               >
@@ -1036,7 +1052,7 @@ export function PlanningPanel({
                 </p>
               ) : null}
               {lastPaidDate ? (
-                <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
+                <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                   {replaceTokens(t(locale, "planningRecurringPaidOn"), {
                     date: formatTransactionDate(lastPaidDate, locale),
                   })}
@@ -1100,7 +1116,9 @@ export function PlanningPanel({
               className={cn(
                 "min-h-10",
                 item.enabled
-                  ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                  ? status === "paid"
+                    ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                    : "border-amber-300/80 bg-white/85 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
                   : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
               )}
               onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
