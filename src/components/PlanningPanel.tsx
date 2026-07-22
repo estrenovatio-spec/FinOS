@@ -2059,11 +2059,11 @@ export function PlanningPanel({
                 futureOperationDisplaySections.map((section) => (
                   <div key={section.key} className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      <p className="inline-flex min-h-8 items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-sm font-semibold tracking-[0.08em] text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100">
                         {section.label}
                       </p>
                       {section.compactLabel ? (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        <span className="rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] text-foreground/80 shadow-sm">
                           {section.compactLabel}
                         </span>
                       ) : null}
