@@ -295,6 +295,7 @@ export function PlanningPanel({
 
   const [hydrated, setHydrated] = useState(false);
   const [expandedFutureMonths, setExpandedFutureMonths] = useState<Record<string, boolean>>({});
+  const [expandedRecurringCards, setExpandedRecurringCards] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const finish = () => setHydrated(true);
@@ -988,6 +989,7 @@ export function PlanningPanel({
       }
 
       const { item, status, lastPaidDate, skippedInPeriod } = entry.card;
+      const recurringCardExpanded = expandedRecurringCards[item.id] ?? false;
       const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
       const title = recurringDisplayName(item, categoryLabel);
       const skipped = effectiveSkippedDates(item, transactions);
@@ -1005,140 +1007,181 @@ export function PlanningPanel({
               : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
           )}
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="min-w-0">
-              <p
-                className={cn(
-                  "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
-                  status === "paid"
-                    ? paidBadgeClassName
-                    : item.enabled
-                      ? pendingBadgeClassName
-                      : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
-                )}
-              >
-                {status === "paid"
-                  ? t(locale, "planningRecurringStatusPaid")
-                  : status === "pending"
-                    ? t(locale, "planningRecurringStatusPending")
-                    : item.enabled
-                      ? t(locale, "planningRecurringStatusActive")
-                      : t(locale, "planningRecurringStatusPaused")}
-              </p>
-              <p className="font-medium leading-tight">{title}</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums">
-                {formatMoney(item.amount, locale)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {item.frequency === "weekly"
-                  ? t(locale, "planningRecurringWeekly")
-                  : item.frequency === "monthly"
-                    ? (item.intervalMonths ?? 1) > 1
-                      ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                          count: String(item.intervalMonths ?? 1),
-                        })
-                      : t(locale, "planningRecurringMonthly")
-                    : t(locale, "planningRecurringYearly")}
-                {" · "}
-                {replaceTokens(t(locale, "planningRecurringNext"), {
-                  date: formatTransactionDate(item.nextRunDate, locale),
-                })}
-              </p>
-              {item.endDate ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {locale === "ru"
-                    ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
-                    : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "mb-2 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                    status === "paid"
+                      ? paidBadgeClassName
+                      : item.enabled
+                        ? pendingBadgeClassName
+                        : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
+                  )}
+                >
+                  {status === "paid"
+                    ? t(locale, "planningRecurringStatusPaid")
+                    : status === "pending"
+                      ? t(locale, "planningRecurringStatusPending")
+                      : item.enabled
+                        ? t(locale, "planningRecurringStatusActive")
+                        : t(locale, "planningRecurringStatusPaused")}
                 </p>
-              ) : null}
-              {lastPaidDate ? (
-                <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                  {replaceTokens(t(locale, "planningRecurringPaidOn"), {
-                    date: formatTransactionDate(lastPaidDate, locale),
-                  })}
-                </p>
-              ) : null}
-              {skippedInPeriod.length > 0 && !lastPaidDate ? (
-                <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                  {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
-                    count: String(skippedInPeriod.length),
-                  })}
-                </p>
-              ) : null}
-              <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-                <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
-                <Input
-                  type="date"
-                  className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
-                  value={item.nextRunDate}
-                  onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
-                />
-              </label>
-              <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-                <span className="shrink-0">
-                  {locale === "ru" ? "До даты" : "Until"}
-                </span>
-                <Input
-                  type="date"
-                  className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
-                  value={item.endDate ?? ""}
-                  onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
-                />
-              </label>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                  <p className="min-w-0 font-medium leading-tight">{title}</p>
+                  <p className="shrink-0 text-base font-semibold tabular-nums sm:text-[1.75rem] sm:leading-none">
+                    {formatMoney(item.amount, locale)}
+                  </p>
+                </div>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "min-h-10 rounded-2xl px-4",
+                    item.enabled
+                      ? status === "paid"
+                        ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                        : "border-amber-300/80 bg-white/85 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+                      : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
+                  )}
+                  onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
+                >
+                  {item.enabled
+                    ? locale === "ru"
+                      ? "Приостановить"
+                      : "Pause"
+                    : locale === "ru"
+                      ? "Возобновить"
+                      : "Resume"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 text-destructive"
+                  onClick={() => removeRecurring(item.id)}
+                  aria-label={locale === "ru" ? "Удалить серию" : "Delete series"}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-full border border-border/70 bg-background/75"
+                  onClick={() =>
+                    setExpandedRecurringCards((current) => ({
+                      ...current,
+                      [item.id]: !recurringCardExpanded,
+                    }))
+                  }
+                  aria-expanded={recurringCardExpanded}
+                  aria-label={
+                    recurringCardExpanded
+                      ? locale === "ru"
+                        ? "Свернуть карточку"
+                        : "Collapse card"
+                      : locale === "ru"
+                        ? "Развернуть карточку"
+                        : "Expand card"
+                  }
+                >
+                  {recurringCardExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
-            {skipped.length > 0 ? (
-              <div className="min-w-[8.5rem] rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
-                <p className="font-semibold text-amber-900 dark:text-amber-100">
-                  {t(locale, "planningRecurringSkippedTitle")}
-                </p>
-                <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                  {skipped.map((d) => (
-                    <li key={d} className="tabular-nums">
-                      {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
-                        date: formatTransactionDate(d, locale),
+
+            {recurringCardExpanded ? (
+              <div className="space-y-3 border-t border-border/50 pt-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">
+                    {item.frequency === "weekly"
+                      ? t(locale, "planningRecurringWeekly")
+                      : item.frequency === "monthly"
+                        ? (item.intervalMonths ?? 1) > 1
+                          ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
+                              count: String(item.intervalMonths ?? 1),
+                            })
+                          : t(locale, "planningRecurringMonthly")
+                        : t(locale, "planningRecurringYearly")}
+                    {" · "}
+                    {replaceTokens(t(locale, "planningRecurringNext"), {
+                      date: formatTransactionDate(item.nextRunDate, locale),
+                    })}
+                  </p>
+                  {item.endDate ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {locale === "ru"
+                        ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
+                        : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
+                    </p>
+                  ) : null}
+                  {lastPaidDate ? (
+                    <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      {replaceTokens(t(locale, "planningRecurringPaidOn"), {
+                        date: formatTransactionDate(lastPaidDate, locale),
                       })}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-1.5 font-semibold tabular-nums text-foreground">
-                  {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
-                    amount: formatMoney(skipTotal, locale),
-                    count: String(skipped.length),
-                  })}
-                </p>
+                    </p>
+                  ) : null}
+                  {skippedInPeriod.length > 0 && !lastPaidDate ? (
+                    <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                      {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
+                        count: String(skippedInPeriod.length),
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="flex flex-col items-start gap-1.5 text-xs text-muted-foreground">
+                    <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
+                    <Input
+                      type="date"
+                      className="h-9 w-full text-xs"
+                      value={item.nextRunDate}
+                      onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col items-start gap-1.5 text-xs text-muted-foreground">
+                    <span className="shrink-0">
+                      {locale === "ru" ? "До даты" : "Until"}
+                    </span>
+                    <Input
+                      type="date"
+                      className="h-9 w-full text-xs"
+                      value={item.endDate ?? ""}
+                      onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
+                    />
+                  </label>
+                </div>
+                {skipped.length > 0 ? (
+                  <div className="rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100">
+                      {t(locale, "planningRecurringSkippedTitle")}
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                      {skipped.map((d) => (
+                        <li key={d} className="tabular-nums">
+                          {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
+                            date: formatTransactionDate(d, locale),
+                          })}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1.5 font-semibold tabular-nums text-foreground">
+                      {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
+                        amount: formatMoney(skipTotal, locale),
+                        count: String(skipped.length),
+                      })}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ) : null}
-          </div>
-          <div className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                "min-h-10",
-                item.enabled
-                  ? status === "paid"
-                    ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
-                    : "border-amber-300/80 bg-white/85 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
-                  : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
-              )}
-              onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
-            >
-              {item.enabled
-                ? locale === "ru"
-                  ? "Приостановить"
-                  : "Pause"
-                : locale === "ru"
-                  ? "Возобновить"
-                  : "Resume"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-destructive"
-              onClick={() => removeRecurring(item.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       );
