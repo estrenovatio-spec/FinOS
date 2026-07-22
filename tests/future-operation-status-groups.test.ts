@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   resolveFutureOneTimeTransactionGroup,
   resolveFutureRecurringOperationGroup,
+  splitPlannedFutureOperationsByMonth,
 } from "@/lib/planning/future-operation-groups";
 
 const planningPanelSource = readFileSync("src/components/PlanningPanel.tsx", "utf8");
@@ -117,12 +118,62 @@ test("confirmed recurring payment with actual date different from scheduled date
   );
 });
 
+test("planned items for the current month stay in the main planned section", () => {
+  const result = splitPlannedFutureOperationsByMonth(
+    [
+      { sortDate: "2026-07-25", id: "july-rent" },
+      { sortDate: "2026-07-28", id: "july-gym" },
+      { sortDate: "2026-08-01", id: "august-internet" },
+    ],
+    "2026-07-22",
+  );
+
+  assert.deepEqual(
+    result.currentMonth.map((item) => item.id),
+    ["july-rent", "july-gym"],
+  );
+  assert.deepEqual(result.laterMonths, [
+    {
+      monthKey: "2026-08",
+      items: [{ sortDate: "2026-08-01", id: "august-internet" }],
+    },
+  ]);
+});
+
+test("planned items after the current month are grouped into later month buckets", () => {
+  const result = splitPlannedFutureOperationsByMonth(
+    [
+      { sortDate: "2026-08-01", id: "august-internet" },
+      { sortDate: "2026-08-07", id: "august-music" },
+      { sortDate: "2026-09-03", id: "september-insurance" },
+    ],
+    "2026-07-22",
+  );
+
+  assert.deepEqual(result.currentMonth, []);
+  assert.deepEqual(result.laterMonths, [
+    {
+      monthKey: "2026-08",
+      items: [
+        { sortDate: "2026-08-01", id: "august-internet" },
+        { sortDate: "2026-08-07", id: "august-music" },
+      ],
+    },
+    {
+      monthKey: "2026-09",
+      items: [{ sortDate: "2026-09-03", id: "september-insurance" }],
+    },
+  ]);
+});
+
 test("planning panel uses planned due and paid sections instead of the old unpaid grouping", () => {
   assert.match(planningPanelSource, /planningRecurringSectionPlanned/);
+  assert.match(planningPanelSource, /planningRecurringSectionLater/);
   assert.match(planningPanelSource, /planningRecurringSectionDue/);
   assert.match(planningPanelSource, /planningRecurringSectionPaid/);
   assert.match(planningPanelSource, /resolveFutureOneTimeTransactionGroup/);
   assert.match(planningPanelSource, /resolveFutureRecurringOperationGroup/);
+  assert.match(planningPanelSource, /splitPlannedFutureOperationsByMonth/);
   assert.doesNotMatch(planningPanelSource, /setRecurringFilter/);
 });
 

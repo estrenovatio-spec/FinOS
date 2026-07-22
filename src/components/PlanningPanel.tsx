@@ -31,7 +31,12 @@ import {
 } from "@/lib/categories";
 import { formatBudgetPeriodLabel, getCurrentBudgetPeriod, isDateInBudgetPeriod } from "@/lib/budget-period";
 import { formatMoney } from "@/lib/format-money";
-import { formatPlanningDeadline, formatTransactionDate, normalizeIsoDate } from "@/lib/format-date";
+import {
+  formatMonthYearLong,
+  formatPlanningDeadline,
+  formatTransactionDate,
+  normalizeIsoDate,
+} from "@/lib/format-date";
 import {
   advanceRecurringDate,
   avgMonthlyExpenses,
@@ -51,6 +56,7 @@ import {
 import {
   resolveFutureOneTimeTransactionGroup,
   resolveFutureRecurringOperationGroup,
+  splitPlannedFutureOperationsByMonth,
   type FutureOperationGroup,
 } from "@/lib/planning/future-operation-groups";
 import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
@@ -857,6 +863,259 @@ export function PlanningPanel({
 
     return sections;
   }, [futureOperationToday, futureOperationTransactions, recurringCardsBase]);
+
+  const plannedFutureOperations = useMemo(
+    () => splitPlannedFutureOperationsByMonth(futureOperationSections.planned, futureOperationToday),
+    [futureOperationSections.planned, futureOperationToday],
+  );
+
+  const futureOperationDisplaySections = useMemo(() => {
+    const sections: Array<{
+      key: string;
+      label: string;
+      items: Array<(typeof futureOperationSections.planned)[number]>;
+      compactLabel?: string;
+    }> = [];
+
+    if (plannedFutureOperations.currentMonth.length > 0) {
+      sections.push({
+        key: "planned",
+        label: t(locale, "planningRecurringSectionPlanned"),
+        items: plannedFutureOperations.currentMonth,
+      });
+    }
+
+    for (const bucket of plannedFutureOperations.laterMonths) {
+      sections.push({
+        key: `later-${bucket.monthKey}`,
+        label: formatMonthYearLong(`${bucket.monthKey}-15`, locale),
+        items: bucket.items,
+        compactLabel: t(locale, "planningRecurringSectionLater"),
+      });
+    }
+
+    if (futureOperationSections.due.length > 0) {
+      sections.push({
+        key: "due",
+        label: t(locale, "planningRecurringSectionDue"),
+        items: futureOperationSections.due,
+      });
+    }
+
+    if (futureOperationSections.paid.length > 0) {
+      sections.push({
+        key: "paid",
+        label: t(locale, "planningRecurringSectionPaid"),
+        items: futureOperationSections.paid,
+      });
+    }
+
+    return sections;
+  }, [futureOperationSections, locale, plannedFutureOperations]);
+
+  const renderFutureOperationCard = (
+    entry:
+      | (typeof futureOperationSections.planned)[number]
+      | (typeof futureOperationSections.due)[number]
+      | (typeof futureOperationSections.paid)[number],
+  ) => {
+      if (entry.kind === "one-time") {
+        const transaction = entry.transaction;
+        const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
+        const title = transaction.note.trim() || categoryLabel;
+        return (
+          <div
+            key={entry.key}
+            className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="mb-1 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
+                  {transaction.type === "income"
+                    ? locale === "ru"
+                      ? "Разовый доход"
+                      : "One-time income"
+                    : locale === "ru"
+                      ? "Разовый платёж"
+                      : "One-time payment"}
+                </p>
+                <p className="font-medium leading-tight">{title}</p>
+                <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                  {transaction.type === "income" ? "+" : "−"}
+                  {formatMoney(transaction.amount, locale)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatTransactionDate(transaction.date, locale)}
+                  {" · "}
+                  {locale === "ru" ? "Ожидается" : "Expected"}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 shrink-0 text-destructive"
+                onClick={() => deleteTransaction(transaction.id)}
+                aria-label={locale === "ru" ? "Удалить операцию" : "Delete operation"}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        );
+      }
+
+      const { item, status, lastPaidDate, skippedInPeriod } = entry.card;
+      const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
+      const title = recurringDisplayName(item, categoryLabel);
+      const skipped = effectiveSkippedDates(item, transactions);
+      const skipTotal = skipped.length * item.amount;
+      return (
+        <div
+          key={entry.key}
+          data-plan-entity-id={item.id}
+          className={cn(
+            "rounded-lg border p-3",
+            item.enabled
+              ? "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25"
+              : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
+          )}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                  status === "paid"
+                    ? "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-100"
+                    : item.enabled
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100"
+                      : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
+                )}
+              >
+                {status === "paid"
+                  ? t(locale, "planningRecurringStatusPaid")
+                  : status === "pending"
+                    ? t(locale, "planningRecurringStatusPending")
+                    : item.enabled
+                      ? t(locale, "planningRecurringStatusActive")
+                      : t(locale, "planningRecurringStatusPaused")}
+              </p>
+              <p className="font-medium leading-tight">{title}</p>
+              <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                {formatMoney(item.amount, locale)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {item.frequency === "weekly"
+                  ? t(locale, "planningRecurringWeekly")
+                  : item.frequency === "monthly"
+                    ? (item.intervalMonths ?? 1) > 1
+                      ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
+                          count: String(item.intervalMonths ?? 1),
+                        })
+                      : t(locale, "planningRecurringMonthly")
+                    : t(locale, "planningRecurringYearly")}
+                {" · "}
+                {replaceTokens(t(locale, "planningRecurringNext"), {
+                  date: formatTransactionDate(item.nextRunDate, locale),
+                })}
+              </p>
+              {item.endDate ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {locale === "ru"
+                    ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
+                    : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
+                </p>
+              ) : null}
+              {lastPaidDate ? (
+                <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
+                  {replaceTokens(t(locale, "planningRecurringPaidOn"), {
+                    date: formatTransactionDate(lastPaidDate, locale),
+                  })}
+                </p>
+              ) : null}
+              {skippedInPeriod.length > 0 && !lastPaidDate ? (
+                <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                  {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
+                    count: String(skippedInPeriod.length),
+                  })}
+                </p>
+              ) : null}
+              <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
+                <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
+                <Input
+                  type="date"
+                  className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
+                  value={item.nextRunDate}
+                  onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
+                />
+              </label>
+              <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
+                <span className="shrink-0">
+                  {locale === "ru" ? "До даты" : "Until"}
+                </span>
+                <Input
+                  type="date"
+                  className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
+                  value={item.endDate ?? ""}
+                  onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
+                />
+              </label>
+            </div>
+            {skipped.length > 0 ? (
+              <div className="min-w-[8.5rem] rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
+                <p className="font-semibold text-amber-900 dark:text-amber-100">
+                  {t(locale, "planningRecurringSkippedTitle")}
+                </p>
+                <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                  {skipped.map((d) => (
+                    <li key={d} className="tabular-nums">
+                      {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
+                        date: formatTransactionDate(d, locale),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 font-semibold tabular-nums text-foreground">
+                  {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
+                    amount: formatMoney(skipTotal, locale),
+                    count: String(skipped.length),
+                  })}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "min-h-10",
+                item.enabled
+                  ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+                  : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
+              )}
+              onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
+            >
+              {item.enabled
+                ? locale === "ru"
+                  ? "Приостановить"
+                  : "Pause"
+                : locale === "ru"
+                  ? "Возобновить"
+                  : "Resume"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 text-destructive"
+              onClick={() => removeRecurring(item.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      );
+  };
 
   const showToggle = (
     <Button
@@ -1791,221 +2050,27 @@ export function PlanningPanel({
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {t(locale, "planningRecurringHint")}
               </p>
-              {futureOperationSections.planned.length === 0 &&
+              {plannedFutureOperations.currentMonth.length === 0 &&
+              plannedFutureOperations.laterMonths.length === 0 &&
               futureOperationSections.due.length === 0 &&
               futureOperationSections.paid.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t(locale, "planningRecurringEmpty")}</p>
               ) : (
-                ([
-                  ["planned", t(locale, "planningRecurringSectionPlanned")],
-                  ["due", t(locale, "planningRecurringSectionDue")],
-                  ["paid", t(locale, "planningRecurringSectionPaid")],
-                ] as const).map(([groupKey, groupLabel]) => {
-                  const items = futureOperationSections[groupKey];
-                  if (items.length === 0) return null;
-
-                  return (
-                    <div key={groupKey} className="space-y-2">
+                futureOperationDisplaySections.map((section) => (
+                  <div key={section.key} className="space-y-2">
+                    <div className="flex items-center gap-2">
                       <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                        {groupLabel}
+                        {section.label}
                       </p>
-                      {items.map((entry) => {
-                        if (entry.kind === "one-time") {
-                          const transaction = entry.transaction;
-                          const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
-                          const title = transaction.note.trim() || categoryLabel;
-                          return (
-                            <div
-                              key={entry.key}
-                              className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="mb-1 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
-                                    {transaction.type === "income"
-                                      ? locale === "ru"
-                                        ? "Разовый доход"
-                                        : "One-time income"
-                                      : locale === "ru"
-                                        ? "Разовый платёж"
-                                        : "One-time payment"}
-                                  </p>
-                                  <p className="font-medium leading-tight">{title}</p>
-                                  <p className="mt-0.5 text-sm font-semibold tabular-nums">
-                                    {transaction.type === "income" ? "+" : "−"}
-                                    {formatMoney(transaction.amount, locale)}
-                                  </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {formatTransactionDate(transaction.date, locale)}
-                                    {" · "}
-                                    {locale === "ru" ? "Ожидается" : "Expected"}
-                                  </p>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-10 w-10 shrink-0 text-destructive"
-                                  onClick={() => deleteTransaction(transaction.id)}
-                                  aria-label={locale === "ru" ? "Удалить операцию" : "Delete operation"}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        const { item, status, lastPaidDate, skippedInPeriod } = entry.card;
-                        const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
-                        const title = recurringDisplayName(item, categoryLabel);
-                        const skipped = effectiveSkippedDates(item, transactions);
-                        const skipTotal = skipped.length * item.amount;
-                        return (
-                          <div
-                            key={entry.key}
-                            data-plan-entity-id={item.id}
-                            className={cn(
-                              "rounded-lg border p-3",
-                              item.enabled
-                                ? "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25"
-                                : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
-                            )}
-                          >
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                              <div className="min-w-0">
-                                <p
-                                  className={cn(
-                                    "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
-                                    status === "paid"
-                                      ? "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-100"
-                                      : item.enabled
-                                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100"
-                                        : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
-                                  )}
-                                >
-                                  {status === "paid"
-                                    ? t(locale, "planningRecurringStatusPaid")
-                                    : status === "pending"
-                                      ? t(locale, "planningRecurringStatusPending")
-                                      : item.enabled
-                                        ? t(locale, "planningRecurringStatusActive")
-                                        : t(locale, "planningRecurringStatusPaused")}
-                                </p>
-                                <p className="font-medium leading-tight">{title}</p>
-                                <p className="mt-0.5 text-sm font-semibold tabular-nums">
-                                  {formatMoney(item.amount, locale)}
-                                </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {item.frequency === "weekly"
-                                    ? t(locale, "planningRecurringWeekly")
-                                    : item.frequency === "monthly"
-                                      ? (item.intervalMonths ?? 1) > 1
-                                        ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                                            count: String(item.intervalMonths ?? 1),
-                                          })
-                                        : t(locale, "planningRecurringMonthly")
-                                      : t(locale, "planningRecurringYearly")}
-                                  {" · "}
-                                  {replaceTokens(t(locale, "planningRecurringNext"), {
-                                    date: formatTransactionDate(item.nextRunDate, locale),
-                                  })}
-                                </p>
-                                {item.endDate ? (
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {locale === "ru"
-                                      ? `Заканчивается ${formatTransactionDate(item.endDate, locale)}`
-                                      : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
-                                  </p>
-                                ) : null}
-                                {lastPaidDate ? (
-                                  <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">
-                                    {replaceTokens(t(locale, "planningRecurringPaidOn"), {
-                                      date: formatTransactionDate(lastPaidDate, locale),
-                                    })}
-                                  </p>
-                                ) : null}
-                                {skippedInPeriod.length > 0 && !lastPaidDate ? (
-                                  <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                                    {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
-                                      count: String(skippedInPeriod.length),
-                                    })}
-                                  </p>
-                                ) : null}
-                                <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-                                  <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
-                                  <Input
-                                    type="date"
-                                    className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
-                                    value={item.nextRunDate}
-                                    onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
-                                  />
-                                </label>
-                                <label className="mt-2 flex flex-col items-start gap-1.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
-                                  <span className="shrink-0">
-                                    {locale === "ru" ? "До даты" : "Until"}
-                                  </span>
-                                  <Input
-                                    type="date"
-                                    className="h-8 w-full text-xs sm:w-auto sm:max-w-[10.5rem]"
-                                    value={item.endDate ?? ""}
-                                    onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
-                                  />
-                                </label>
-                              </div>
-                              {skipped.length > 0 ? (
-                                <div className="min-w-[8.5rem] rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
-                                  <p className="font-semibold text-amber-900 dark:text-amber-100">
-                                    {t(locale, "planningRecurringSkippedTitle")}
-                                  </p>
-                                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                                    {skipped.map((d) => (
-                                      <li key={d} className="tabular-nums">
-                                        {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
-                                          date: formatTransactionDate(d, locale),
-                                        })}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                  <p className="mt-1.5 font-semibold tabular-nums text-foreground">
-                                    {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
-                                      amount: formatMoney(skipTotal, locale),
-                                      count: String(skipped.length),
-                                    })}
-                                  </p>
-                                </div>
-                              ) : null}
-                            </div>
-                            <div className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className={cn(
-                                  "min-h-10",
-                                  item.enabled
-                                    ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
-                                    : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
-                                )}
-                                onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
-                              >
-                                {item.enabled
-                                  ? t(locale, "planningRecurringPause")
-                                  : t(locale, "planningRecurringResume")}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 text-destructive"
-                                onClick={() => removeRecurring(item.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {section.compactLabel ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                          {section.compactLabel}
+                        </span>
+                      ) : null}
                     </div>
-                  );
-                })
+                    {section.items.map(renderFutureOperationCard)}
+                  </div>
+                ))
               )}
               <div className="space-y-2 border-t pt-3">
                 <div className="space-y-1">
