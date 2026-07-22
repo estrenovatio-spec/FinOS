@@ -174,6 +174,9 @@ test("planning panel uses planned due and paid sections instead of the old unpai
   assert.match(planningPanelSource, /resolveFutureOneTimeTransactionGroup/);
   assert.match(planningPanelSource, /resolveFutureRecurringOperationGroup/);
   assert.match(planningPanelSource, /splitPlannedFutureOperationsByMonth/);
+  assert.match(planningPanelSource, /expandedFutureMonths/);
+  assert.match(planningPanelSource, /aria-expanded/);
+  assert.match(planningPanelSource, /section\.compactLabel/);
   assert.doesNotMatch(planningPanelSource, /setRecurringFilter/);
 });
 

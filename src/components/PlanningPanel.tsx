@@ -294,6 +294,7 @@ export function PlanningPanel({
   const setPlanningPanelCollapsed = useStore((s) => s.setPlanningPanelCollapsed);
 
   const [hydrated, setHydrated] = useState(false);
+  const [expandedFutureMonths, setExpandedFutureMonths] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const finish = () => setHydrated(true);
@@ -2058,17 +2059,54 @@ export function PlanningPanel({
               ) : (
                 futureOperationDisplaySections.map((section) => (
                   <div key={section.key} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <p className="inline-flex min-h-8 items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-sm font-semibold tracking-[0.08em] text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100">
-                        {section.label}
-                      </p>
-                      {section.compactLabel ? (
-                        <span className="rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] text-foreground/80 shadow-sm">
-                          {section.compactLabel}
-                        </span>
-                      ) : null}
-                    </div>
-                    {section.items.map(renderFutureOperationCard)}
+                    {(() => {
+                      const isFutureMonthSection = Boolean(section.compactLabel);
+                      const isExpanded = expandedFutureMonths[section.key] ?? false;
+                      const ToggleIcon = isExpanded ? ChevronUp : ChevronDown;
+                      return (
+                        <>
+                          {isFutureMonthSection ? (
+                            <button
+                              type="button"
+                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/90 px-3.5 py-2 text-left transition-colors hover:bg-accent/40"
+                              onClick={() =>
+                                setExpandedFutureMonths((current) => ({
+                                  ...current,
+                                  [section.key]: !isExpanded,
+                                }))
+                              }
+                              aria-expanded={isExpanded}
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <p className="inline-flex min-h-8 items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-sm font-semibold tracking-[0.08em] text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100">
+                                  {section.label}
+                                </p>
+                                <span className="rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] text-foreground/80 shadow-sm">
+                                  {section.compactLabel}
+                                </span>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
+                                <span className="text-xs font-medium">
+                                  {locale === "ru"
+                                    ? `${section.items.length} ${section.items.length === 1 ? "операция" : "операции"}`
+                                    : `${section.items.length} items`}
+                                </span>
+                                <ToggleIcon className="h-4 w-4" />
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <p className="inline-flex min-h-8 items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-sm font-semibold tracking-[0.08em] text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100">
+                                {section.label}
+                              </p>
+                            </div>
+                          )}
+                          {!isFutureMonthSection || isExpanded
+                            ? section.items.map(renderFutureOperationCard)
+                            : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 ))
               )}
