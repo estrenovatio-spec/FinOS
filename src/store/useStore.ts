@@ -1697,19 +1697,43 @@ export const useStore = create<StoreState>()(
         if (updated) void cloudPushRecurring(updated);
       },
       removeRecurring: (id) => {
-        set((state) => ({
-          recurringTransactions: state.recurringTransactions.filter(
+        const pendingLinkedTransactionIds = get().transactions
+          .filter((transaction) => transaction.recurringId === id && transaction.confirmed === false)
+          .map((transaction) => transaction.id);
+
+        set((state) => {
+          const remainingRecurringTransactions = state.recurringTransactions.filter(
             (r) => r.id !== id,
-          ),
-          moneySetup: {
-            ...pruneMoneySetupIds(
-              state.moneySetup,
-              state.recurringTransactions.filter((r) => r.id !== id),
-              state.categories,
+          );
+          const remainingTransactions =
+            pendingLinkedTransactionIds.length > 0
+              ? state.transactions.filter(
+                  (transaction) => !pendingLinkedTransactionIds.includes(transaction.id),
+                )
+              : state.transactions;
+
+          return {
+            recurringTransactions: remainingRecurringTransactions,
+            transactions: repairRecurringLinkedTransactions(
+              remainingTransactions,
+              remainingRecurringTransactions,
             ),
-            updatedAt: new Date().toISOString(),
-          },
-        }));
+            moneySetup: {
+              ...pruneMoneySetupIds(
+                state.moneySetup,
+                remainingRecurringTransactions,
+                state.categories,
+              ),
+              updatedAt: new Date().toISOString(),
+            },
+          };
+        });
+        for (const transactionId of pendingLinkedTransactionIds) {
+          useCloudStore.getState().clearTransactionUpdatePending(transactionId);
+          useCloudStore.getState().markTransactionDeleted(transactionId);
+          useCloudStore.getState().removeFromLastSyncedRemoteTxIds(transactionId);
+          void cloudPushTransactionDelete(transactionId);
+        }
         useCloudStore.getState().markRecurringDeleted(id);
         void cloudPushRecurringDelete(id);
         void cloudPushMoneySetup(get().moneySetup);

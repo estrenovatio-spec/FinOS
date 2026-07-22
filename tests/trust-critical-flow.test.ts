@@ -423,6 +423,158 @@ test("future one-time planned payment survives sync hydration and can be deleted
   useCloudStore.setState(previousCloud);
 });
 
+test("removing a recurring series clears only its pending materialized occurrences", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    forecastHorizonMonths: 3,
+    categories: getDefaultCategories(),
+    transactions: [
+      tx({
+        id: "r1-pending",
+        amount: 10000,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-15",
+        note: "Smoke аренда (регулярно)",
+        confirmed: false,
+        recurringId: "r1",
+        recurringOccurrenceDate: "2026-07-15",
+      }),
+      tx({
+        id: "r1-history",
+        amount: 10000,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-06-15",
+        note: "Smoke аренда (регулярно)",
+        confirmed: true,
+        recurringId: "r1",
+        recurringOccurrenceDate: "2026-06-15",
+      }),
+      tx({
+        id: "r2-pending",
+        amount: 1200,
+        type: "expense",
+        categoryId: "subscriptions",
+        date: "2026-07-18",
+        note: "Музыка",
+        confirmed: false,
+        recurringId: "r2",
+        recurringOccurrenceDate: "2026-07-18",
+      }),
+      tx({
+        id: "future-once",
+        amount: 400,
+        type: "expense",
+        categoryId: "services",
+        date: "2026-08-01",
+        note: "Интернет",
+        confirmed: false,
+      }),
+    ],
+    savingsGoals: [],
+    categoryBudgets: [],
+    recurringTransactions: [
+      recurring({
+        id: "r1",
+        amount: 10000,
+        type: "expense",
+        categoryId: "housing",
+        note: "Smoke аренда",
+        nextRunDate: "2026-07-15",
+        frequency: "monthly",
+      }),
+      recurring({
+        id: "r2",
+        amount: 1200,
+        type: "expense",
+        categoryId: "subscriptions",
+        note: "Музыка",
+        nextRunDate: "2026-07-18",
+        frequency: "monthly",
+      }),
+    ],
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    budgetMonthStartDay: 1,
+    cashOffsetMe: 50000,
+    cashOffsetPartner: 0,
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-remove-recurring",
+    household,
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    lastSyncedRemoteTxIds: ["r1-pending", "r1-history", "r2-pending", "future-once"],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: ["r1", "r2"],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  useStore.getState().removeRecurring("r1");
+
+  const nextStore = useStore.getState();
+  const nextCloud = useCloudStore.getState();
+
+  assert.equal(nextStore.recurringTransactions.some((item) => item.id === "r1"), false);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "r1-pending"), false);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "r1-history"), true);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "r2-pending"), true);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "future-once"), true);
+  assert.deepEqual(nextCloud.deletedRecurringIds, ["r1"]);
+  assert.deepEqual(nextCloud.deletedTransactionIds, ["r1-pending"]);
+  assert.equal(nextCloud.lastSyncedRemoteTxIds.includes("r1-pending"), false);
+
+  const snapshot = decisionCoreSnapshot(
+    makeState({
+      today: "2026-07-18",
+      balances: { all: 50000, me: 50000, partner: 0 },
+      transactions: nextStore.transactions,
+      recurringTransactions: nextStore.recurringTransactions,
+    }),
+  );
+
+  assert.equal(snapshot.todayPayments.some((payment) => payment.id === "r1-pending"), false);
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) =>
+        event.source === "pending_transaction" && event.id === "r1-pending",
+    ),
+    false,
+  );
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: nextStore.transactions,
+      recurringTransactions: nextStore.recurringTransactions,
+    }),
+    "token-remove-recurring",
+  );
+
+  assert.equal(
+    useStore.getState().transactions.some((transaction) => transaction.id === "r1-pending"),
+    false,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
 test("future one-time planned payment is confirmed through the expected-event flow without duplicate reappearance", () => {
   const previousStore = useStore.getState();
   const previousCloud = useCloudStore.getState();
