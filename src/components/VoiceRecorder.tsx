@@ -319,6 +319,7 @@ export function VoiceRecorder({
           transcript: activeMatch.input,
           actions: {
             addTransaction,
+            confirmPendingFutureTransaction: useStore.getState().confirmPendingFutureTransaction,
             updateTransaction,
             deleteTransaction,
             payDebt,

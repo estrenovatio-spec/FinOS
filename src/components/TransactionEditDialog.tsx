@@ -104,6 +104,7 @@ export function TransactionEditDialog({
   const vehiclePrefs = useStore((s) => s.vehiclePrefs);
   const lastFuelVehicleId = useStore((s) => s.lastFuelVehicleId);
   const addTransaction = useStore((s) => s.addTransaction);
+  const confirmPendingFutureTransaction = useStore((s) => s.confirmPendingFutureTransaction);
   const updateTransaction = useStore((s) => s.updateTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
   const syncVehicleFromTransaction = useStore((s) => s.syncVehicleFromTransaction);
@@ -338,24 +339,34 @@ export function TransactionEditDialog({
         });
       }
     } else if (transaction) {
-      updateTransaction(transaction.id, {
+      const confirmOneTimePending =
+        forceConfirmOnSave && transaction.confirmed === false && transaction.recurringId == null;
+      const nextPatch = {
         amount: roundedAmount,
         type: txType,
         categoryId,
         date,
-        confirmed: forceConfirmOnSave ? true : undefined,
         owner: spender?.owner,
         createdBy: spender?.createdBy,
         note: comment,
         ...goalPatch,
         ...(showVehicleFields ? { odometerKm: odometer, vehicleId: vid } : {}),
         ...(showFuelLiters ? { fuelLiters: liters } : {}),
-      });
+      };
+      const savedTransactionId = confirmOneTimePending
+        ? confirmPendingFutureTransaction(transaction.id, nextPatch) ?? transaction.id
+        : transaction.id;
+      if (!confirmOneTimePending) {
+        updateTransaction(transaction.id, {
+          ...nextPatch,
+          confirmed: forceConfirmOnSave ? true : undefined,
+        });
+      }
       if (odometer != null) {
-        syncVehicleFromTransaction(transaction.id);
+        syncVehicleFromTransaction(savedTransactionId);
       }
       onDidSave?.({
-        transactionId: transaction.id,
+        transactionId: savedTransactionId,
         amount: roundedAmount,
         date,
         comment,

@@ -291,6 +291,23 @@ interface StoreState {
   syncVehicleFromTransaction: (transactionId: string) => void;
   /** Регулярный расход — списать с баланса */
   confirmPendingTransaction: (id: string) => boolean;
+  confirmPendingFutureTransaction: (
+    id: string,
+    patch?: {
+      amount?: number;
+      categoryId?: string;
+      date?: string;
+      owner?: BudgetOwner;
+      createdBy?: string | null;
+      type?: TxType;
+      goalId?: string | null;
+      goalAmount?: number | null;
+      odometerKm?: number | null;
+      fuelLiters?: number | null;
+      vehicleId?: string | null;
+      note?: string;
+    },
+  ) => string | null;
   /** Регулярный расход — не было оплаты */
   dismissPendingTransaction: (id: string) => boolean;
   /** Регулярный расход уже внесён вручную — убрать напоминание без долга */
@@ -1887,6 +1904,10 @@ export const useStore = create<StoreState>()(
         }
       },
       confirmPendingTransaction: (id) => {
+        const pending = get().transactions.find((transaction) => transaction.id === id) ?? null;
+        if (pending && pending.confirmed === false && pending.recurringId == null) {
+          return get().confirmPendingFutureTransaction(id) != null;
+        }
         const result = confirmPendingPaymentById(get().transactions, id);
         if (!result.changed || !result.updatedTransaction) {
           return false;
@@ -1905,6 +1926,56 @@ export const useStore = create<StoreState>()(
         }
         void cloudPushTransaction(result.updatedTransaction);
         return true;
+      },
+      confirmPendingFutureTransaction: (id, patch) => {
+        const pending = get().transactions.find((transaction) => transaction.id === id) ?? null;
+        if (!pending || pending.confirmed !== false || pending.recurringId != null) {
+          return null;
+        }
+
+        set((state) => ({
+          transactions: state.transactions.filter((transaction) => transaction.id !== id),
+        }));
+        useCloudStore.getState().clearTransactionUpdatePending(id);
+        useCloudStore.getState().markTransactionDeleted(id);
+        useCloudStore.getState().removeFromLastSyncedRemoteTxIds(id);
+        void cloudPushTransactionDelete(id);
+
+        return get().addTransaction(
+          {
+            amount: patch?.amount ?? pending.amount,
+            type: patch?.type ?? pending.type,
+            categoryId: patch?.categoryId ?? pending.categoryId,
+            currency: pending.currency,
+            note: patch?.note ?? pending.note,
+            date: patch?.date ?? pending.date,
+            owner: patch?.owner ?? pending.owner,
+            createdBy:
+              patch?.createdBy !== undefined
+                ? patch.createdBy ?? undefined
+                : pending.createdBy ?? undefined,
+            goalId:
+              patch?.goalId !== undefined ? patch.goalId ?? undefined : pending.goalId ?? undefined,
+            goalAmount:
+              patch?.goalAmount !== undefined
+                ? patch.goalAmount ?? undefined
+                : pending.goalAmount ?? undefined,
+            odometerKm:
+              patch?.odometerKm !== undefined
+                ? patch.odometerKm ?? undefined
+                : pending.odometerKm ?? undefined,
+            fuelLiters:
+              patch?.fuelLiters !== undefined
+                ? patch.fuelLiters ?? undefined
+                : pending.fuelLiters ?? undefined,
+            vehicleId:
+              patch?.vehicleId !== undefined
+                ? patch.vehicleId ?? undefined
+                : pending.vehicleId ?? undefined,
+            confirmed: true,
+          },
+          undefined,
+        );
       },
       dismissPendingTransaction: (id) => {
         const tx = get().transactions.find((t) => t.id === id);

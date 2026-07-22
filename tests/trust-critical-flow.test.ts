@@ -651,6 +651,7 @@ test("future one-time planned payment is confirmed through the expected-event fl
     transcript: "ОСАГО 12000",
     actions: {
       addTransaction: useStore.getState().addTransaction,
+      confirmPendingFutureTransaction: useStore.getState().confirmPendingFutureTransaction,
       updateTransaction: useStore.getState().updateTransaction,
       deleteTransaction: useStore.getState().deleteTransaction,
       payDebt: useStore.getState().payDebt,
@@ -664,6 +665,20 @@ test("future one-time planned payment is confirmed through the expected-event fl
   });
 
   assert.equal(confirmed, true);
+  assert.equal(
+    useStore.getState().transactions.some((tx) => tx.id === "osago-planned"),
+    false,
+  );
+  const confirmedOneTime = useStore
+    .getState()
+    .transactions.find(
+      (tx) =>
+        tx.note.toLowerCase().includes("осаго") &&
+        tx.date === "2026-07-20" &&
+        tx.confirmed === true,
+    );
+  assert.ok(confirmedOneTime);
+  assert.equal(confirmedOneTime?.recurringId ?? null, null);
   const snapshot = decisionCoreSnapshot(
     makeState({
       today: "2026-07-20",
@@ -679,6 +694,97 @@ test("future one-time planned payment is confirmed through the expected-event fl
   assert.equal(
     useStore.getState().transactions.filter((tx) => tx.id === "osago-planned" && tx.confirmed === false).length,
     0,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("confirmPendingFutureTransaction replaces pending one-time transaction with a confirmed operation", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    locale: "ru",
+    entryOwner: "me",
+    householdFilter: "me",
+    categories: getDefaultCategories(),
+    transactions: [
+      tx({
+        id: "internet-planned",
+        amount: 400,
+        type: "expense",
+        categoryId: "services",
+        date: "2026-07-22",
+        note: "Интернет",
+        confirmed: false,
+      }),
+    ],
+    recurringTransactions: [],
+    debts: [],
+    savingsGoals: [],
+    categoryBudgets: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    cashOffsetMe: 20000,
+    cashOffsetPartner: 0,
+  });
+  useCloudStore.setState({
+    ...previousCloud,
+    pendingTransactionUpdateIds: {},
+  });
+
+  const before = useStore.getState().transactions.map((transaction) => ({
+    id: transaction.id,
+    confirmed: transaction.confirmed,
+    date: transaction.date,
+  }));
+  assert.deepEqual(before, [
+    {
+      id: "internet-planned",
+      confirmed: false,
+      date: "2026-07-22",
+    },
+  ]);
+
+  const createdId = useStore.getState().confirmPendingFutureTransaction("internet-planned", {
+    amount: 400,
+    type: "expense",
+    categoryId: "services",
+    date: "2026-07-22",
+    note: "Интернет",
+    owner: "me",
+  });
+
+  assert.ok(createdId);
+  assert.equal(
+    useStore.getState().transactions.some((transaction) => transaction.id === "internet-planned"),
+    false,
+  );
+  const after = useStore.getState().transactions;
+  assert.equal(after.length, 1);
+  assert.equal(after[0]?.id, createdId);
+  assert.equal(after[0]?.confirmed, true);
+  assert.equal(after[0]?.note, "Интернет");
+  assert.equal(after[0]?.date, "2026-07-22");
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: after,
+    }),
+    "token-confirm-future-operation",
+  );
+
+  assert.equal(
+    useStore.getState().transactions.some((transaction) => transaction.id === "internet-planned"),
+    false,
+  );
+  assert.equal(
+    useStore.getState().transactions.some((transaction) => transaction.id === createdId),
+    true,
   );
 
   useStore.setState(previousStore);
@@ -1133,6 +1239,7 @@ test("matched debt payment from quick input reduces balance and does not repeat 
     transcript: "17850 банкрот ксю",
     actions: {
       addTransaction: useStore.getState().addTransaction,
+      confirmPendingFutureTransaction: useStore.getState().confirmPendingFutureTransaction,
       updateTransaction: useStore.getState().updateTransaction,
       deleteTransaction: useStore.getState().deleteTransaction,
       payDebt: useStore.getState().payDebt,
@@ -1276,6 +1383,7 @@ test("partial matched payment keeps only the remaining pending amount in forecas
     transcript: "5000 ипотека",
     actions: {
       addTransaction: useStore.getState().addTransaction,
+      confirmPendingFutureTransaction: useStore.getState().confirmPendingFutureTransaction,
       updateTransaction: useStore.getState().updateTransaction,
       deleteTransaction: useStore.getState().deleteTransaction,
       payDebt: useStore.getState().payDebt,

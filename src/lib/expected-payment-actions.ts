@@ -6,6 +6,23 @@ import type { RecurringTransaction } from "@/types/planning";
 
 type StoreActions = {
   addTransaction: (data: ParsedTransaction, transcript?: string) => string;
+  confirmPendingFutureTransaction: (
+    id: string,
+    patch?: {
+      amount?: number;
+      categoryId?: string;
+      date?: string;
+      note?: string;
+      owner?: ParsedTransaction["owner"];
+      createdBy?: string | null;
+      type?: ParsedTransaction["type"];
+      goalId?: string | null;
+      goalAmount?: number | null;
+      odometerKm?: number | null;
+      fuelLiters?: number | null;
+      vehicleId?: string | null;
+    },
+  ) => string | null;
   updateTransaction: (
     id: string,
     patch: {
@@ -86,14 +103,25 @@ export function confirmExpectedPaymentFromInput(args: {
   if (args.candidate.transactionId) {
     const remaining = Math.max(0, args.candidate.amount - amount);
     if (remaining <= 0) {
-      args.actions.updateTransaction(args.candidate.transactionId, {
-        amount,
-        date: paymentDate,
-        confirmed: true,
-        recurringOccurrenceDate: args.candidate.originalDate,
-        note: args.actual.note,
-        categoryId: args.actual.categoryId,
-      });
+      if (args.candidate.recurringId) {
+        args.actions.updateTransaction(args.candidate.transactionId, {
+          amount,
+          date: paymentDate,
+          confirmed: true,
+          recurringOccurrenceDate: args.candidate.originalDate,
+          note: args.actual.note,
+          categoryId: args.actual.categoryId,
+        });
+      } else {
+        args.actions.confirmPendingFutureTransaction(args.candidate.transactionId, {
+          amount,
+          type: args.actual.type,
+          categoryId: args.actual.categoryId,
+          date: paymentDate,
+          note: args.actual.note,
+          owner: args.actual.owner,
+        });
+      }
       return true;
     }
 
