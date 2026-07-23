@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Mic, PiggyBank, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, PiggyBank } from "lucide-react";
 import { ExpectedEventActionDialog } from "@/components/ExpectedEventActionDialog";
 import { QuickAddOperationDialog } from "@/components/today/QuickAddOperationDialog";
 import { TodayHero } from "@/components/today/TodayHero";
@@ -216,15 +216,6 @@ export function TodayScreen({
       ),
     [categories, locale],
   );
-  const todayInsight = useMemo(() => {
-    const heroReason = view.hero.reason?.trim() ?? null;
-    const candidates = [
-      decision.peaceIndex.note,
-      decision.allowed.reason,
-      decision.safeUntil.note,
-    ].filter((value): value is string => Boolean(value && value.trim()));
-    return candidates.find((candidate) => candidate.trim() !== heroReason)?.trim() ?? null;
-  }, [decision.allowed.reason, decision.peaceIndex.note, decision.safeUntil.note, view.hero.reason]);
   const primaryMoneyItem = useMemo(
     () =>
       !zeroState
@@ -453,15 +444,6 @@ export function TodayScreen({
             >
               {locale === "ru" ? "＋ Добавить операцию" : "+ Add entry"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 flex-1 justify-center rounded-2xl"
-              onClick={() => setQuickAddOpen(true)}
-            >
-              <Mic className="mr-2 h-4 w-4" />
-              {locale === "ru" ? "Голосовой ввод" : "Voice input"}
-            </Button>
           </div>
         </section>
       ) : null}
@@ -603,24 +585,6 @@ export function TodayScreen({
           items={deferredOverviewItems}
           onItemAction={handleOverviewAction}
         />
-      ) : null}
-
-      {!zeroState && todayInsight ? (
-        <section className="rounded-[28px] border border-border/45 bg-card/90 px-5 py-5 shadow-none">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/8 text-primary">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div className="space-y-1">
-              <p className="text-sm font-medium tracking-[0.08em] text-foreground">
-                {locale === "ru" ? "AI-инсайт" : "AI insight"}
-              </p>
-              <p className="max-w-[38rem] text-sm leading-6 text-muted-foreground">
-                {todayInsight}
-              </p>
-            </div>
-          </div>
-        </section>
       ) : null}
 
       {liveRatesEnabled ? <TodayRatesCard locale={locale} /> : null}
