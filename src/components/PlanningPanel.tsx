@@ -2210,11 +2210,6 @@ export function PlanningPanel({
                   <p className="text-base font-semibold text-foreground">
                     {locale === "ru" ? "Добавить регулярный платеж" : "Create recurring rule"}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {locale === "ru"
-                      ? "Только этот экран: спокойная форма для будущего правила без лишнего шума."
-                      : "A calm, focused form for one future rule."}
-                  </p>
                 </div>
 
                 <div className="space-y-4">
