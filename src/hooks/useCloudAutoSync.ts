@@ -36,7 +36,6 @@ export function useCloudAutoSync() {
       const household = useCloudStore.getState().household;
       const bootstrapStatus = useCloudStore.getState().syncBootstrapStatus;
       if (bootstrapStatus === "checking" || bootstrapStatus === "hydrating") return;
-      if (bootstrapStatus === "idle" && token) return;
       if (!token) {
         if (hasCloudAuth()) {
           void runHouseholdBootstrap();
