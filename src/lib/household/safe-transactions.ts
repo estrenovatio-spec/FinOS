@@ -167,6 +167,7 @@ export async function updateTransactionForHousehold(
       Transaction,
       | "amount"
       | "categoryId"
+      | "date"
       | "owner"
       | "type"
       | "goalId"
@@ -184,6 +185,7 @@ export async function updateTransactionForHousehold(
   existing: {
     amount: number;
     categoryId: string;
+    date: string;
     owner: string;
     type: string;
     createdBy: string | null;
@@ -196,6 +198,7 @@ export async function updateTransactionForHousehold(
     {
       amount: patch.amount ?? existing.amount,
       categoryId: patch.categoryId ?? existing.categoryId,
+      date: patch.date ?? existing.date,
       owner: patch.owner ?? existing.owner,
       type: patch.type ?? existing.type,
       createdBy,
@@ -226,6 +229,7 @@ export async function updateTransactionForHousehold(
   const sets: Prisma.Sql[] = [
     Prisma.sql`amount = ${Number(data.amount)}`,
     Prisma.sql`"categoryId" = ${String(data.categoryId)}`,
+    Prisma.sql`date = ${String(data.date)}`,
     Prisma.sql`owner = ${String(data.owner)}`,
     Prisma.sql`type = ${String(data.type)}::"TxType"`,
     Prisma.sql`"createdBy" = ${createdBy}`,

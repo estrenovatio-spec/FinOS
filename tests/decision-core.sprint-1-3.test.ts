@@ -1509,6 +1509,30 @@ test("Pending payment confirmation is idempotent", () => {
   assert.deepEqual(first.transactions, second.transactions);
 });
 
+test("confirming a legacy recurring payment repairs canonical occurrence identity", () => {
+  const originalTransactions = [
+    tx({
+      id: "water-payment",
+      amount: 5000,
+      type: "expense",
+      categoryId: "utilities",
+      date: "2026-07-20",
+      note: "ЖКХ вода трудовая",
+      confirmed: false,
+      recurringId: "water",
+      recurringOccurrenceDate: null,
+    }),
+  ];
+
+  const result = confirmPendingPaymentById(originalTransactions, "water-payment");
+
+  assert.equal(result.changed, true);
+  assert.equal(result.updatedTransaction?.confirmed, true);
+  assert.equal(result.updatedTransaction?.recurringId, "water");
+  assert.equal(result.updatedTransaction?.recurringOccurrenceDate, "2026-07-20");
+  assert.match(result.updatedTransaction?.updatedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+});
+
 test("After payment, todayPayments disappear and mainAction recalculates", () => {
   const base = buildState({
     balances: { all: 9000, me: 9000, partner: 0 },
@@ -1540,6 +1564,73 @@ test("After payment, todayPayments disappear and mainAction recalculates", () =>
   assert.equal(before.mainAction.type, "pay_today");
   assert.equal(after.todayPayments.length, 0);
   assert.notEqual(after.mainAction.type, "pay_today");
+});
+
+test("paid recurring occurrence with actual payment date does not return as overdue", () => {
+  const base = buildState({
+    today: "2026-07-24",
+    balances: { all: 40000, me: 40000, partner: 0 },
+    transactions: [
+      tx({
+        id: "water-payment",
+        amount: 5000,
+        type: "expense",
+        categoryId: "utilities",
+        date: "2026-07-20",
+        note: "ЖКХ вода трудовая",
+        confirmed: false,
+        recurringId: "water",
+        recurringOccurrenceDate: null,
+      }),
+    ],
+    recurringTransactions: [
+      recurring({
+        id: "water",
+        amount: 5000,
+        type: "expense",
+        categoryId: "utilities",
+        note: "ЖКХ вода трудовая",
+        nextRunDate: "2026-08-20",
+        frequency: "monthly",
+        dayOfMonth: 20,
+      }),
+    ],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+  });
+
+  const confirmed = confirmPendingPaymentById(base.transactions, "water-payment");
+  const paidTransactions = confirmed.transactions.map((transaction) =>
+    transaction.id === "water-payment"
+      ? { ...transaction, date: "2026-07-23", recurringOccurrenceDate: "2026-07-20" }
+      : transaction,
+  );
+  const after = evaluate({
+    ...base,
+    transactions: paidTransactions,
+  });
+
+  assert.equal(after.result.todayPayments.some((payment) => payment.id === "water-payment"), false);
+  assert.equal(
+    after.ctx.forecast.events.some(
+      (event) =>
+        event.linkedEntityId === "water" &&
+        event.recurringOccurrenceDate === "2026-07-20" &&
+        (event.source === "pending_transaction" || event.source === "recurring"),
+    ),
+    false,
+  );
+  assert.equal(
+    after.ctx.forecast.events.some(
+      (event) =>
+        event.linkedEntityId === "water" &&
+        event.recurringOccurrenceDate === "2026-08-20" &&
+        event.source === "recurring",
+    ),
+    true,
+  );
 });
 
 test("Negative balance with future income is explicit, and without income stays cautious", () => {

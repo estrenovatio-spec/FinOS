@@ -18,6 +18,70 @@ function itemTime(item: { updatedAt?: string | null }): number {
   return Number.isNaN(updated) ? 0 : updated;
 }
 
+function pendingUpdateTime(
+  pendingUpdateTimes: Readonly<Record<string, string>> | undefined,
+  id: string,
+): number {
+  const updatedAt = pendingUpdateTimes?.[id];
+  if (!updatedAt) return NaN;
+  const parsed = Date.parse(updatedAt);
+  return Number.isNaN(parsed) ? NaN : parsed;
+}
+
+function sameNullableNumber(left: number | null | undefined, right: number | null | undefined) {
+  return (left ?? null) === (right ?? null);
+}
+
+function sameNullableString(left: string | null | undefined, right: string | null | undefined) {
+  return (left ?? null) === (right ?? null);
+}
+
+function sameStringArray(left: readonly string[] | undefined, right: readonly string[] | undefined) {
+  const a = left ?? [];
+  const b = right ?? [];
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+export function matchesPendingTransactionAck(local: Transaction, remote: Transaction): boolean {
+  return (
+    local.amount === remote.amount &&
+    local.categoryId === remote.categoryId &&
+    local.date === remote.date &&
+    local.owner === remote.owner &&
+    (local.confirmed !== false) === (remote.confirmed !== false) &&
+    local.type === remote.type &&
+    sameNullableString(local.goalId, remote.goalId) &&
+    sameNullableNumber(local.goalAmount, remote.goalAmount) &&
+    sameNullableString(local.recurringId, remote.recurringId) &&
+    sameNullableString(local.recurringOccurrenceDate, remote.recurringOccurrenceDate) &&
+    sameNullableString(local.createdBy, remote.createdBy) &&
+    sameNullableNumber(local.odometerKm, remote.odometerKm) &&
+    sameNullableNumber(local.fuelLiters, remote.fuelLiters) &&
+    sameNullableString(local.vehicleId, remote.vehicleId) &&
+    local.note === remote.note
+  );
+}
+
+export function matchesPendingRecurringAck(
+  local: RecurringTransaction,
+  remote: RecurringTransaction,
+): boolean {
+  return (
+    local.amount === remote.amount &&
+    local.type === remote.type &&
+    local.categoryId === remote.categoryId &&
+    local.note === remote.note &&
+    sameStringArray(local.skippedDates, remote.skippedDates) &&
+    local.owner === remote.owner &&
+    local.frequency === remote.frequency &&
+    (local.intervalMonths ?? 1) === (remote.intervalMonths ?? 1) &&
+    (local.dayOfMonth ?? null) === (remote.dayOfMonth ?? null) &&
+    local.nextRunDate === remote.nextRunDate &&
+    sameNullableString(local.endDate, remote.endDate) &&
+    local.enabled === remote.enabled
+  );
+}
+
 function normalizeTx(tx: Transaction): Transaction {
   return {
     ...tx,
@@ -34,7 +98,7 @@ export function mergeTransactions(
   remote: Transaction[],
   lastSyncedAt?: string | null,
   deletedTransactionIds?: ReadonlySet<string>,
-  pendingTransactionUpdateIds?: ReadonlySet<string>,
+  pendingTransactionUpdateIds?: Readonly<Record<string, string>>,
 ): Transaction[] {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   if (remote.length === 0) {
@@ -61,12 +125,21 @@ export function mergeTransactions(
     const tx = normalizeTx(raw);
     if (deletedTransactionIds?.has(tx.id)) continue;
     const existing = map.get(tx.id);
+    const pendingUpdatedAt = pendingUpdateTime(pendingTransactionUpdateIds, tx.id);
     if (!existing) {
-      if (pendingTransactionUpdateIds?.has(tx.id)) {
+      if (!Number.isNaN(pendingUpdatedAt)) {
         map.set(tx.id, tx);
         continue;
       }
       if (!Number.isNaN(lastSyncedMs) && txTime(tx) <= lastSyncedMs) continue;
+      map.set(tx.id, tx);
+      continue;
+    }
+    if (!Number.isNaN(pendingUpdatedAt) && !matchesPendingTransactionAck(tx, existing)) {
+      map.set(tx.id, tx);
+      continue;
+    }
+    if (!Number.isNaN(pendingUpdatedAt) && pendingUpdatedAt > txTime(existing)) {
       map.set(tx.id, tx);
       continue;
     }
@@ -273,14 +346,28 @@ export function mergeRecurringTransactions(
   remote: RecurringTransaction[],
   lastSyncedAt?: string | null,
   deletedIds?: ReadonlySet<string>,
+  pendingUpdateIds?: Readonly<Record<string, string>>,
   transactions: Transaction[] = [],
 ): RecurringTransaction[] {
-  const merged = mergeByKey(
-    local.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) })),
-    remote.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) })),
-    (r) => r.id,
-    lastSyncedAt,
-  );
+  const localNormalized = local.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) }));
+  const remoteNormalized = remote.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) }));
+  const merged = mergeByKey(localNormalized, remoteNormalized, (r) => r.id, lastSyncedAt);
+  if (pendingUpdateIds && Object.keys(pendingUpdateIds).length > 0) {
+    const localById = new Map(localNormalized.map((item) => [item.id, item]));
+    for (const remoteItem of remoteNormalized) {
+      const pendingUpdatedAt = pendingUpdateTime(pendingUpdateIds, remoteItem.id);
+      const localItem = localById.get(remoteItem.id);
+      if (!localItem || Number.isNaN(pendingUpdatedAt)) continue;
+      if (!matchesPendingRecurringAck(localItem, remoteItem)) {
+        const index = merged.findIndex((item) => item.id === remoteItem.id);
+        if (index >= 0) merged[index] = localItem;
+        continue;
+      }
+      if (pendingUpdatedAt <= itemTime(remoteItem)) continue;
+      const index = merged.findIndex((item) => item.id === remoteItem.id);
+      if (index >= 0) merged[index] = localItem;
+    }
+  }
   const withoutDeleted = deletedIds?.size
     ? merged.filter((r) => !deletedIds.has(r.id))
     : merged;
@@ -340,7 +427,8 @@ export function mergeSyncPayload(
   deletedRecurringIds?: ReadonlySet<string>,
   deletedTransactionIds?: ReadonlySet<string>,
   deletedDebtIds?: ReadonlySet<string>,
-  pendingTransactionUpdateIds?: ReadonlySet<string>,
+  pendingTransactionUpdateIds?: Readonly<Record<string, string>>,
+  pendingRecurringUpdateIds?: Readonly<Record<string, string>>,
   previouslySyncedRemoteGoalIds?: ReadonlySet<string>,
   pendingGoalIds?: ReadonlySet<string>,
 ): MergedSyncResult {
@@ -386,6 +474,7 @@ export function mergeSyncPayload(
     remote.recurringTransactions ?? [],
     lastSyncedAt,
     deletedRecurringIds,
+    pendingRecurringUpdateIds,
     transactions,
   );
   const debts = mergeDebts(localPlanning.debts, remote.debts ?? [], lastSyncedAt, deletedDebtIds);
@@ -396,7 +485,7 @@ export function mergeSyncPayload(
     .filter((id) => {
       if (remoteTxIds.has(id)) return false;
       if (deletedTransactionIds?.has(id)) return false;
-      if (pendingTransactionUpdateIds?.has(id)) return true;
+      if (pendingTransactionUpdateIds?.[id]) return true;
       const tx = localTransactions.find((item) => item.id === id);
       if (tx && !Number.isNaN(lastSyncedMs) && txTime(tx) <= lastSyncedMs) return false;
       return true;
@@ -422,6 +511,7 @@ export function mergeSyncPayload(
     .filter((item) => {
       if (remoteRecurringIds.has(item.id)) return false;
       if (deletedRecurringIds?.has(item.id)) return false;
+      if (pendingRecurringUpdateIds?.[item.id]) return true;
       if (!Number.isNaN(lastSyncedMs) && itemTime(item) <= lastSyncedMs) return false;
       return true;
     })

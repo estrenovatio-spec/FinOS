@@ -17,6 +17,7 @@ import {
 import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import type { HouseholdPublic, SyncPayload } from "@/lib/household/types";
 import { emptyMoneySetup } from "@/lib/money-setup";
+import { repairRecurringLinkedTransactions } from "@/lib/recurring-occurrence";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useStore } from "@/store/useStore";
 import type { Transaction } from "@/types";
@@ -74,6 +75,7 @@ function tx(
     vehicleId: null,
     transferPairId: null,
     businessTxId: null,
+    updatedAt: partial.updatedAt,
   };
 }
 
@@ -830,7 +832,7 @@ test("Today planned free money card keeps the add-operation CTA wired as the pri
   assert.equal(card?.actionKey, "add_transaction");
   assert.equal(card?.actionLabel, "＋ Добавить операцию");
   assert.equal(card?.actionVariant, "primary");
-  assert.match(todayOverviewSource, /w-full rounded-xl bg-primary/);
+  assert.match(todayOverviewSource, /h-12 w-full rounded-2xl bg-primary/);
 });
 
 test("rescheduled recurring mortgage keeps identity, moves to the new date and is not duplicated", () => {
@@ -1091,6 +1093,441 @@ test("deleting a confirmed recurring payment reopens the same occurrence as pend
   assert.equal(snapshot.todayPayments[0]?.recurringOccurrenceDate, "2026-07-16");
 
   useStore.setState(previousStore);
+});
+
+test("confirmPendingTransaction keeps a recurring occurrence closed after sync reload", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    recurringTransactions: [
+      recurring({
+        id: "water",
+        amount: 5000,
+        type: "expense",
+        categoryId: "utilities",
+        note: "ЖКХ вода трудовая",
+        nextRunDate: "2026-08-20",
+        frequency: "monthly",
+        dayOfMonth: 20,
+      }),
+    ],
+    transactions: [
+      tx({
+        id: "water-payment",
+        amount: 5000,
+        type: "expense",
+        categoryId: "utilities",
+        date: "2026-07-20",
+        note: "ЖКХ вода трудовая",
+        confirmed: false,
+        recurringId: "water",
+        recurringOccurrenceDate: null,
+      }),
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-24T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  const changed = useStore.getState().confirmPendingTransaction("water-payment");
+  assert.equal(changed, true);
+
+  const paid = useStore.getState().transactions.find((item) => item.id === "water-payment");
+  assert.equal(paid?.confirmed, true);
+  assert.equal(paid?.recurringOccurrenceDate, "2026-07-20");
+  assert.ok(useCloudStore.getState().pendingTransactionUpdateIds["water-payment"]);
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [
+        tx({
+          id: "water-payment",
+          amount: 5000,
+          type: "expense",
+          categoryId: "utilities",
+          date: "2026-07-20",
+          note: "ЖКХ вода трудовая",
+          confirmed: false,
+          recurringId: "water",
+          recurringOccurrenceDate: null,
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "water",
+          amount: 5000,
+          type: "expense",
+          categoryId: "utilities",
+          note: "ЖКХ вода трудовая",
+          nextRunDate: "2026-08-20",
+          frequency: "monthly",
+          dayOfMonth: 20,
+        }),
+      ],
+    }),
+    "token-1",
+  );
+
+  const afterSync = useStore.getState().transactions.find((item) => item.id === "water-payment");
+  assert.equal(afterSync?.confirmed, true);
+  assert.equal(afterSync?.recurringOccurrenceDate, "2026-07-20");
+
+  const snapshot = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-24",
+    forecastHorizonMonths: 3,
+    categories: useStore.getState().categories,
+    transactions: useStore.getState().transactions,
+    householdFilter: "me",
+    recurringTransactions: useStore.getState().recurringTransactions,
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    balances: { all: 50000, me: 50000, partner: 0 },
+  });
+
+  assert.equal(
+    snapshot.todayPayments.some((payment) => payment.id === "water-payment"),
+    false,
+  );
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) =>
+        event.linkedEntityId === "water" &&
+        event.recurringOccurrenceDate === "2026-07-20" &&
+        (event.source === "pending_transaction" || event.source === "recurring"),
+    ),
+    false,
+  );
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) =>
+        event.linkedEntityId === "water" &&
+        event.recurringOccurrenceDate === "2026-08-20" &&
+        event.source === "recurring",
+    ),
+    true,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("mismatched remote recurring reschedule ack cannot restore the old overdue occurrence", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    recurringTransactions: [
+      recurring({
+        id: "ksyu-tsop",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        note: "ксю цоп",
+        nextRunDate: "2026-08-03",
+        frequency: "monthly",
+        dayOfMonth: 25,
+        updatedAt: "2026-07-26T12:30:00.000Z",
+      }),
+    ],
+    transactions: [
+      tx({
+        id: "ksyu-tsop-july",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-08-03",
+        note: "ксю цоп",
+        confirmed: false,
+        recurringId: "ksyu-tsop",
+        recurringOccurrenceDate: "2026-07-25",
+        updatedAt: "2026-07-26T12:30:00.000Z",
+      }),
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-25T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {
+      "ksyu-tsop-july": "2026-07-26T12:30:00.000Z",
+    },
+    pendingRecurringUpdateIds: {
+      "ksyu-tsop": "2026-07-26T12:30:00.000Z",
+    },
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [
+        tx({
+          id: "ksyu-tsop-july",
+          amount: 9300,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-07-25",
+          note: "ксю цоп",
+          confirmed: false,
+          recurringId: "ksyu-tsop",
+          recurringOccurrenceDate: "2026-07-25",
+          updatedAt: "2026-07-26T12:31:00.000Z",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "ksyu-tsop",
+          amount: 9300,
+          type: "expense",
+          categoryId: "housing",
+          note: "ксю цоп",
+          nextRunDate: "2026-07-25",
+          frequency: "monthly",
+          dayOfMonth: 25,
+          updatedAt: "2026-07-26T12:31:00.000Z",
+        }),
+      ],
+    }),
+    "token-1",
+  );
+
+  const transaction = useStore.getState().transactions.find((item) => item.id === "ksyu-tsop-july");
+  assert.equal(transaction?.date, "2026-08-03");
+  assert.equal(transaction?.recurringOccurrenceDate, "2026-07-25");
+  assert.equal(useStore.getState().recurringTransactions[0]?.nextRunDate, "2026-08-03");
+  assert.ok(useCloudStore.getState().pendingTransactionUpdateIds["ksyu-tsop-july"]);
+  assert.ok(useCloudStore.getState().pendingRecurringUpdateIds["ksyu-tsop"]);
+
+  const snapshot = decisionCoreSnapshot({
+    locale: "ru",
+    today: "2026-07-26",
+    forecastHorizonMonths: 3,
+    categories: useStore.getState().categories,
+    transactions: useStore.getState().transactions,
+    householdFilter: "me",
+    recurringTransactions: useStore.getState().recurringTransactions,
+    debts: [],
+    moneySetup: {
+      ...emptyMoneySetup(),
+      hasNoRequiredFixedExpenses: true,
+    },
+    categoryBudgets: [],
+    budgetMonthStartDay: 1,
+    balances: { all: 50000, me: 50000, partner: 0 },
+  });
+
+  assert.equal(
+    snapshot.todayPayments.some(
+      (payment) =>
+        payment.recurringOccurrenceDate === "2026-07-25" && payment.date === "2026-07-25",
+    ),
+    false,
+  );
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) =>
+        event.linkedEntityId === "ksyu-tsop" &&
+        event.recurringOccurrenceDate === "2026-07-25" &&
+        event.date === "2026-07-25",
+    ),
+    false,
+  );
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) =>
+        event.linkedEntityId === "ksyu-tsop" &&
+        event.recurringOccurrenceDate === "2026-07-25" &&
+        event.date === "2026-08-03",
+    ),
+    true,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("matching remote recurring reschedule ack clears pending protection", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    recurringTransactions: [
+      recurring({
+        id: "ksyu-tsop",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        note: "ксю цоп",
+        nextRunDate: "2026-08-03",
+        frequency: "monthly",
+        dayOfMonth: 25,
+        updatedAt: "2026-07-26T12:30:00.000Z",
+      }),
+    ],
+    transactions: [
+      tx({
+        id: "ksyu-tsop-july",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-08-03",
+        note: "ксю цоп",
+        confirmed: false,
+        recurringId: "ksyu-tsop",
+        recurringOccurrenceDate: "2026-07-25",
+        updatedAt: "2026-07-26T12:30:00.000Z",
+      }),
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-1",
+    household,
+    lastSyncedAt: "2026-07-25T09:00:00.000Z",
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {
+      "ksyu-tsop-july": "2026-07-26T12:30:00.000Z",
+    },
+    pendingRecurringUpdateIds: {
+      "ksyu-tsop": "2026-07-26T12:30:00.000Z",
+    },
+    pendingGoalIds: [],
+    lastSyncedRemoteTxIds: [],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: [],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  applyHouseholdSync(
+    makeSyncPayload({
+      transactions: [
+        tx({
+          id: "ksyu-tsop-july",
+          amount: 9300,
+          type: "expense",
+          categoryId: "housing",
+          date: "2026-08-03",
+          note: "ксю цоп",
+          confirmed: false,
+          recurringId: "ksyu-tsop",
+          recurringOccurrenceDate: "2026-07-25",
+          updatedAt: "2026-07-26T12:31:00.000Z",
+        }),
+      ],
+      recurringTransactions: [
+        recurring({
+          id: "ksyu-tsop",
+          amount: 9300,
+          type: "expense",
+          categoryId: "housing",
+          note: "ксю цоп",
+          nextRunDate: "2026-08-03",
+          frequency: "monthly",
+          dayOfMonth: 25,
+          updatedAt: "2026-07-26T12:31:00.000Z",
+        }),
+      ],
+    }),
+    "token-1",
+  );
+
+  assert.equal(useCloudStore.getState().pendingTransactionUpdateIds["ksyu-tsop-july"], undefined);
+  assert.equal(useCloudStore.getState().pendingRecurringUpdateIds["ksyu-tsop"], undefined);
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
+test("duplicate pending recurring occurrence prefers the transaction aligned with the series nextRunDate", () => {
+  const repaired = repairRecurringLinkedTransactions(
+    [
+      tx({
+        id: "ksyu-tsop-stale",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-25",
+        note: "ксю цоп",
+        confirmed: false,
+        recurringId: "ksyu-tsop",
+        recurringOccurrenceDate: "2026-07-25",
+        updatedAt: "2026-07-26T12:31:00.000Z",
+      }),
+      tx({
+        id: "ksyu-tsop-rescheduled",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-08-03",
+        note: "ксю цоп",
+        confirmed: false,
+        recurringId: "ksyu-tsop",
+        recurringOccurrenceDate: "2026-07-25",
+        updatedAt: "2026-07-26T12:30:00.000Z",
+      }),
+    ],
+    [
+      recurring({
+        id: "ksyu-tsop",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        note: "ксю цоп",
+        nextRunDate: "2026-08-03",
+        frequency: "monthly",
+        dayOfMonth: 25,
+        updatedAt: "2026-07-26T12:31:00.000Z",
+      }),
+    ],
+  );
+
+  assert.equal(repaired.length, 1);
+  assert.equal(repaired[0]?.id, "ksyu-tsop-rescheduled");
+  assert.equal(repaired[0]?.date, "2026-08-03");
+  assert.equal(repaired[0]?.recurringOccurrenceDate, "2026-07-25");
 });
 
 test("advisor context keeps expected income visible instead of collapsing it into 'no income'", () => {

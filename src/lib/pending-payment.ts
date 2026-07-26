@@ -1,4 +1,5 @@
 import type { Transaction } from "@/types";
+import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 
 export type ConfirmPendingPaymentResult = {
   changed: boolean;
@@ -24,6 +25,11 @@ export function confirmPendingPaymentById(
     updatedTransaction = {
       ...transaction,
       confirmed: true,
+      recurringOccurrenceDate:
+        transaction.recurringId != null
+          ? resolveRecurringOccurrenceDate(transaction)
+          : transaction.recurringOccurrenceDate ?? null,
+      updatedAt: new Date().toISOString(),
     };
     return updatedTransaction;
   });

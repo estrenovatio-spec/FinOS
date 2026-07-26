@@ -41,6 +41,8 @@ interface CloudState {
   deletedTransactionIds: string[];
   /** Локальные правки операций, которые ещё нельзя перетирать pull'ом из облака */
   pendingTransactionUpdateIds: Record<string, string>;
+  /** Локальные правки recurring series, которые ещё нельзя перетирать pull'ом из облака */
+  pendingRecurringUpdateIds: Record<string, string>;
   pendingGoalIds: string[];
   /** Последняя ошибка записи в облако (операция остаётся локально) */
   lastWriteError: string | null;
@@ -84,6 +86,9 @@ interface CloudState {
   markTransactionUpdatePending: (id: string, updatedAt?: string) => void;
   clearTransactionUpdatePending: (id: string) => void;
   setPendingTransactionUpdateIds: (ids: Record<string, string>) => void;
+  markRecurringUpdatePending: (id: string, updatedAt?: string) => void;
+  clearRecurringUpdatePending: (id: string) => void;
+  setPendingRecurringUpdateIds: (ids: Record<string, string>) => void;
   markGoalPending: (id: string) => void;
   clearGoalPending: (id: string) => void;
   setPendingGoalIds: (ids: string[]) => void;
@@ -120,6 +125,7 @@ export const useCloudStore = create<CloudState>()(
       deletedDebtIds: [],
       deletedTransactionIds: [],
       pendingTransactionUpdateIds: {},
+      pendingRecurringUpdateIds: {},
       pendingGoalIds: [],
       lastWriteError: null,
       syncBootstrapStatus: "idle",
@@ -153,6 +159,7 @@ export const useCloudStore = create<CloudState>()(
             deletedDebtIds: sameSession ? state.deletedDebtIds : [],
             deletedTransactionIds: sameSession ? state.deletedTransactionIds : [],
             pendingTransactionUpdateIds: sameSession ? state.pendingTransactionUpdateIds : {},
+            pendingRecurringUpdateIds: sameSession ? state.pendingRecurringUpdateIds : {},
             pendingGoalIds: sameSession ? state.pendingGoalIds : [],
             lastWriteError: null,
             syncBootstrapStatus: sameSession ? state.syncBootstrapStatus : "idle",
@@ -233,6 +240,22 @@ export const useCloudStore = create<CloudState>()(
         }),
       setPendingTransactionUpdateIds: (pendingTransactionUpdateIds) =>
         set({ pendingTransactionUpdateIds }),
+      markRecurringUpdatePending: (id, updatedAt) =>
+        set((s) => ({
+          pendingRecurringUpdateIds: {
+            ...s.pendingRecurringUpdateIds,
+            [id]: updatedAt ?? new Date().toISOString(),
+          },
+        })),
+      clearRecurringUpdatePending: (id) =>
+        set((s) => {
+          if (!s.pendingRecurringUpdateIds[id]) return s;
+          const next = { ...s.pendingRecurringUpdateIds };
+          delete next[id];
+          return { pendingRecurringUpdateIds: next };
+        }),
+      setPendingRecurringUpdateIds: (pendingRecurringUpdateIds) =>
+        set({ pendingRecurringUpdateIds }),
       markGoalPending: (id) =>
         set((s) => ({
           pendingGoalIds: s.pendingGoalIds.includes(id)
@@ -269,6 +292,7 @@ export const useCloudStore = create<CloudState>()(
           deletedDebtIds: [],
           deletedTransactionIds: [],
           pendingTransactionUpdateIds: {},
+          pendingRecurringUpdateIds: {},
           pendingGoalIds: [],
           lastWriteError: null,
           syncBootstrapStatus: "idle",
@@ -294,6 +318,7 @@ export const useCloudStore = create<CloudState>()(
           deletedDebtIds: [],
           deletedTransactionIds: [],
           pendingTransactionUpdateIds: {},
+          pendingRecurringUpdateIds: {},
           pendingGoalIds: [],
           lastWriteError: null,
           syncBootstrapStatus: "idle",
@@ -302,7 +327,7 @@ export const useCloudStore = create<CloudState>()(
     }),
     {
       name: "voicebudget-cloud",
-      version: 10,
+      version: 11,
       migrate: (persisted, version) => {
         const state = persisted as CloudState;
         let next = state;
@@ -374,12 +399,19 @@ export const useCloudStore = create<CloudState>()(
             userPlan: "free",
           };
         }
+        if (version < 11) {
+          next = {
+            ...next,
+            pendingRecurringUpdateIds: {},
+          };
+        }
         next = {
           ...next,
           authEmail: next.authEmail ?? null,
           authMethod: next.authMethod ?? null,
           userPlan: next.userPlan ?? "free",
           pendingTransactionUpdateIds: next.pendingTransactionUpdateIds ?? {},
+          pendingRecurringUpdateIds: next.pendingRecurringUpdateIds ?? {},
           syncBootstrapStatus: next.syncBootstrapStatus ?? "idle",
           lastInitialSyncDecision: next.lastInitialSyncDecision ?? null,
         };

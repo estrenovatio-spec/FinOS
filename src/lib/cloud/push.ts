@@ -325,8 +325,24 @@ export async function cloudPushRecurring(item: RecurringTransaction): Promise<vo
   if (!t) return;
   try {
     await apiUpsertRecurring(t, item);
-  } catch {
-    /* ignore */
+    await pullCloudAfterWrite();
+    const remote = useStore.getState().recurringTransactions.find((entry) => entry.id === item.id);
+    if (remote?.updatedAt && item.updatedAt && Date.parse(remote.updatedAt) >= Date.parse(item.updatedAt)) {
+      useCloudStore.getState().clearRecurringUpdatePending(item.id);
+    }
+  } catch (e) {
+    const refreshedToken = await retryAfterAuthError(e);
+    if (!refreshedToken) return;
+    try {
+      await apiUpsertRecurring(refreshedToken, item);
+      await pullCloudAfterWrite();
+      const remote = useStore.getState().recurringTransactions.find((entry) => entry.id === item.id);
+      if (remote?.updatedAt && item.updatedAt && Date.parse(remote.updatedAt) >= Date.parse(item.updatedAt)) {
+        useCloudStore.getState().clearRecurringUpdatePending(item.id);
+      }
+    } catch {
+      /* retry on next sync */
+    }
   }
 }
 
@@ -335,8 +351,16 @@ export async function cloudPushRecurringDelete(id: string): Promise<void> {
   if (!t) return;
   try {
     await apiDeleteRecurring(t, id);
-  } catch {
-    /* ignore */
+    useCloudStore.getState().clearRecurringUpdatePending(id);
+  } catch (e) {
+    const refreshedToken = await retryAfterAuthError(e);
+    if (!refreshedToken) return;
+    try {
+      await apiDeleteRecurring(refreshedToken, id);
+      useCloudStore.getState().clearRecurringUpdatePending(id);
+    } catch {
+      /* ignore */
+    }
   }
 }
 

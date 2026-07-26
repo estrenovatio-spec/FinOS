@@ -1,7 +1,11 @@
 import { defaultVehicleGaragePrefs, resolveRemoteGarage } from "@/lib/vehicle";
 import { applyGoalMonthlyToGoal } from "@/lib/planning/analytics";
 import { sanitizeRecurringTransactionsSkippedDates } from "@/lib/planning/recurring-skipped";
-import { mergeSyncPayload } from "@/lib/cloud/merge-sync";
+import {
+  matchesPendingRecurringAck,
+  matchesPendingTransactionAck,
+  mergeSyncPayload,
+} from "@/lib/cloud/merge-sync";
 import { emptyMoneySetup, normalizeMoneySetup, pruneMoneySetupIds } from "@/lib/money-setup";
 import { cashOffsetsForViewer } from "@/lib/balance-offsets";
 import { repairRecurringLinkedTransactions } from "@/lib/recurring-occurrence";
@@ -51,10 +55,13 @@ export function applyHouseholdSync(
   const deletedCategories = new Set(
     (local.deletedCategoryArchive ?? []).map((entry) => entry.category.id),
   );
-  const pendingTransactionUpdates = new Set(Object.keys(cloud.pendingTransactionUpdateIds ?? {}));
+  const pendingTransactionUpdates = cloud.pendingTransactionUpdateIds ?? {};
+  const pendingRecurringUpdates = cloud.pendingRecurringUpdateIds ?? {};
   const pendingGoalIds = new Set(cloud.pendingGoalIds ?? []);
   const remoteTxIds = new Set(remote.transactions.map((t) => t.id));
   const remoteGoalIds = new Set((remote.savingsGoals ?? []).map((g) => g.id));
+  const remoteTransactionsById = new Map(remote.transactions.map((t) => [t.id, t]));
+  const remoteRecurringById = new Map((remote.recurringTransactions ?? []).map((r) => [r.id, r]));
 
   useCloudStore.getState().setSession(token, remote.household);
   useCloudStore.getState().setLastWriteError(null);
@@ -108,6 +115,7 @@ export function applyHouseholdSync(
     useCloudStore.getState().setDeletedDebtIds([]);
     useCloudStore.getState().setDeletedTransactionIds([]);
     useCloudStore.getState().setPendingTransactionUpdateIds({});
+    useCloudStore.getState().setPendingRecurringUpdateIds({});
     useCloudStore.getState().setPendingGoalIds([]);
     useCloudStore.getState().touchSync();
     useStore.setState({
@@ -147,6 +155,7 @@ export function applyHouseholdSync(
     deletedTransactions,
     deletedDebts,
     pendingTransactionUpdates,
+    pendingRecurringUpdates,
     new Set(cloud.lastSyncedRemoteGoalIds),
     pendingGoalIds,
   );
@@ -160,9 +169,28 @@ export function applyHouseholdSync(
     merged.transactions,
     recurringTransactions,
   );
-  for (const id of pendingTransactionUpdates) {
-    if (remoteTxIds.has(id)) {
+  for (const [id, pendingUpdatedAt] of Object.entries(pendingTransactionUpdates)) {
+    const remoteTransaction = remoteTransactionsById.get(id);
+    const localTransaction = useStore.getState().transactions.find((item) => item.id === id);
+    if (
+      remoteTransaction?.updatedAt &&
+      localTransaction &&
+      matchesPendingTransactionAck(localTransaction, remoteTransaction) &&
+      Date.parse(remoteTransaction.updatedAt) >= Date.parse(pendingUpdatedAt)
+    ) {
       useCloudStore.getState().clearTransactionUpdatePending(id);
+    }
+  }
+  for (const [id, pendingUpdatedAt] of Object.entries(pendingRecurringUpdates)) {
+    const remoteRecurring = remoteRecurringById.get(id);
+    const localRecurring = useStore.getState().recurringTransactions.find((item) => item.id === id);
+    if (
+      remoteRecurring?.updatedAt &&
+      localRecurring &&
+      matchesPendingRecurringAck(localRecurring, remoteRecurring) &&
+      Date.parse(remoteRecurring.updatedAt) >= Date.parse(pendingUpdatedAt)
+    ) {
+      useCloudStore.getState().clearRecurringUpdatePending(id);
     }
   }
   for (const id of pendingGoalIds) {

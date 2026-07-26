@@ -55,6 +55,7 @@ export function repairRecurringLinkedTransactions(
   if (transactions.length === 0) return [...transactions];
 
   const recurringIds = new Set(recurringTransactions.map((item) => item.id));
+  const recurringById = new Map(recurringTransactions.map((item) => [item.id, item]));
   const byKey = new Map<string, Transaction>();
   const passthrough: Transaction[] = [];
 
@@ -91,6 +92,19 @@ export function repairRecurringLinkedTransactions(
     if (existingConfirmed !== nextConfirmed) {
       byKey.set(key, nextConfirmed ? normalized : existing);
       continue;
+    }
+
+    if (!existingConfirmed && recurringId) {
+      const recurringItem = recurringById.get(recurringId);
+      const currentSeriesDate = recurringItem?.nextRunDate ?? null;
+      if (currentSeriesDate) {
+        const existingMatchesSeries = existing.date.slice(0, 10) === currentSeriesDate;
+        const nextMatchesSeries = normalized.date.slice(0, 10) === currentSeriesDate;
+        if (existingMatchesSeries !== nextMatchesSeries) {
+          byKey.set(key, nextMatchesSeries ? normalized : existing);
+          continue;
+        }
+      }
     }
 
     if (recurringTransactionTime(normalized) >= recurringTransactionTime(existing)) {

@@ -1700,18 +1700,23 @@ export const useStore = create<StoreState>()(
         return id;
       },
       updateRecurring: (id, patch) => {
-        let updated: RecurringTransaction | null = null;
         set((state) => ({
           recurringTransactions: state.recurringTransactions.map((r) => {
             if (r.id !== id) return r;
-            updated = sanitizeRecurringSkippedDates(
+            return sanitizeRecurringSkippedDates(
               { ...r, ...patch, updatedAt: new Date().toISOString() },
               state.transactions,
             );
-            return updated;
           }),
         }));
-        if (updated) void cloudPushRecurring(updated);
+        const recurringAfterUpdate =
+          get().recurringTransactions.find((item) => item.id === id) ?? null;
+        if (recurringAfterUpdate) {
+          useCloudStore
+            .getState()
+            .markRecurringUpdatePending(id, recurringAfterUpdate.updatedAt);
+          void cloudPushRecurring(recurringAfterUpdate);
+        }
       },
       removeRecurring: (id) => {
         const pendingLinkedTransactionIds = get().transactions
@@ -1924,7 +1929,26 @@ export const useStore = create<StoreState>()(
             );
           }
         }
-        void cloudPushTransaction(result.updatedTransaction);
+        useCloudStore
+          .getState()
+          .markTransactionUpdatePending(id, result.updatedTransaction.updatedAt);
+        void cloudPushTransactionUpdate(id, {
+          confirmed: result.updatedTransaction.confirmed,
+          recurringId: result.updatedTransaction.recurringId,
+          recurringOccurrenceDate: result.updatedTransaction.recurringOccurrenceDate,
+          date: result.updatedTransaction.date,
+          note: result.updatedTransaction.note,
+          amount: result.updatedTransaction.amount,
+          categoryId: result.updatedTransaction.categoryId,
+          owner: result.updatedTransaction.owner,
+          createdBy: result.updatedTransaction.createdBy,
+          type: result.updatedTransaction.type,
+          goalId: result.updatedTransaction.goalId,
+          goalAmount: result.updatedTransaction.goalAmount,
+          odometerKm: result.updatedTransaction.odometerKm,
+          fuelLiters: result.updatedTransaction.fuelLiters,
+          vehicleId: result.updatedTransaction.vehicleId,
+        });
         return true;
       },
       confirmPendingFutureTransaction: (id, patch) => {
