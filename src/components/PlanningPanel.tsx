@@ -1,14 +1,21 @@
 "use client";
 
 import {
+  BadgeDollarSign,
+  CalendarDays,
   ChevronDown,
   ChevronUp,
+  Clock3,
   CircleAlert,
+  Infinity,
   Landmark,
   Pencil,
   PiggyBank,
+  Repeat2,
   Shield,
+  Tag,
   Trash2,
+  WalletCards,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -2198,192 +2205,294 @@ export function PlanningPanel({
                   </div>
                 ))
               )}
-              <div className="space-y-2 border-t pt-3">
+              <div className="space-y-4 border-t pt-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">
-                    {locale === "ru" ? "Добавить операцию" : "Add operation"}
+                  <p className="text-base font-semibold text-foreground">
+                    {locale === "ru" ? "Добавить регулярный платеж" : "Create recurring rule"}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {recRepeat === "once"
-                      ? locale === "ru"
-                        ? "Операция появится в прогнозе и потребует подтверждения в выбранную дату."
-                        : "The operation will appear in Forecast and will need confirmation on the selected date."
-                      : locale === "ru"
-                        ? "Будет создано регулярное правило."
-                        : "A recurring rule will be created."}
+                  <p className="text-sm text-muted-foreground">
+                    {locale === "ru"
+                      ? "Только этот экран: спокойная форма для будущего правила без лишнего шума."
+                      : "A calm, focused form for one future rule."}
                   </p>
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Тип" : "Type"}
-                    </span>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={recType}
-                      onChange={(e) => setRecType(e.target.value as TxType)}
-                      aria-label={locale === "ru" ? "Тип операции" : "Operation type"}
-                    >
-                      <option value="expense">{locale === "ru" ? "Расход" : "Expense"}</option>
-                      <option value="income">{locale === "ru" ? "Доход" : "Income"}</option>
-                    </select>
+
+                <div className="space-y-4">
+                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                    <p className="text-sm font-medium text-foreground">
+                      {locale === "ru" ? "Что создаём?" : "What are we creating?"}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          {locale === "ru" ? "Тип операции" : "Operation type"}
+                        </span>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                            {recType === "income" ? (
+                              <BadgeDollarSign className="h-5 w-5" />
+                            ) : (
+                              <WalletCards className="h-5 w-5" />
+                            )}
+                          </span>
+                          <select
+                            className="flex h-14 w-full rounded-[20px] border border-input bg-background pl-16 pr-4 text-base shadow-none"
+                            value={recType}
+                            onChange={(e) => setRecType(e.target.value as TxType)}
+                            aria-label={locale === "ru" ? "Тип операции" : "Operation type"}
+                          >
+                            <option value="expense">{locale === "ru" ? "Расход" : "Expense"}</option>
+                            <option value="income">{locale === "ru" ? "Доход" : "Income"}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          {t(locale, "planningRecurringAmount")}
+                        </span>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                            <BadgeDollarSign className="h-5 w-5" />
+                          </span>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="0"
+                            className="h-14 rounded-[20px] border-input pl-16 pr-10 text-base"
+                            value={recAmount}
+                            onChange={(e) => setRecAmount(e.target.value)}
+                          />
+                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-medium text-muted-foreground">
+                            ₽
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">
-                      {t(locale, "planningRecurringAmount")}
-                    </span>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={recAmount}
-                      onChange={(e) => setRecAmount(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Название" : "Name"}
-                    </span>
-                    <Input
-                      placeholder={locale === "ru" ? "Например, ОСАГО" : "For example, insurance"}
-                      value={recNote}
-                      onChange={(e) => setRecNote(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Категория" : "Category"}
-                    </span>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={recCategoryId}
-                      onChange={(e) => setRecCategoryId(e.target.value)}
-                      aria-label={locale === "ru" ? "Категория" : "Category"}
-                    >
-                      {recurringFormCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {getCategoryLabel(category.id, categories, locale)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Повторение" : "Repeat"}
-                    </span>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={recRepeat}
-                      onChange={(e) => {
-                        const next = e.target.value as "once" | RecurringFrequency;
-                        setRecRepeat(next);
-                        if (next !== "monthly" && recEndMode === "months") {
-                          setRecEndMode("never");
+
+                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                    <p className="text-sm font-medium text-foreground">
+                      {locale === "ru" ? "Название операции" : "Operation name"}
+                    </p>
+                    <div className="mt-3 relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                        <Tag className="h-5 w-5" />
+                      </span>
+                      <Input
+                        placeholder={
+                          locale === "ru"
+                            ? "Например: Аренда квартиры, Интернет, Зарплата, ОСАГО"
+                            : "For example: Rent, Internet, Salary, Insurance"
                         }
-                        if (next === "once") {
-                          setRecEndMode("never");
-                          setRecEndDate("");
-                        }
-                      }}
-                      aria-label={locale === "ru" ? "Повторение" : "Repeat"}
-                    >
-                      <option value="once">{locale === "ru" ? "Один раз" : "One time"}</option>
-                      <option value="weekly">{locale === "ru" ? "Каждую неделю" : "Every week"}</option>
-                      <option value="monthly">{locale === "ru" ? "Каждый месяц" : "Every month"}</option>
-                      <option value="yearly">{locale === "ru" ? "Каждый год" : "Every year"}</option>
-                    </select>
+                        className="h-14 rounded-[20px] border-input pl-16 text-base"
+                        value={recNote}
+                        onChange={(e) => setRecNote(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <Input
-                    type="date"
-                    className="w-full"
-                    ref={recStartDateInputRef}
-                    defaultValue={recStartDate}
-                    onChange={(e) => handleRecStartDateInput(e.currentTarget.value)}
-                    onInput={(e) => handleRecStartDateInput(e.currentTarget.value)}
-                    aria-label={locale === "ru" ? "Дата первой операции" : "First operation date"}
-                  />
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">
-                      {locale === "ru" ? "Комментарий" : "Comment"}
-                    </span>
-                    <Input
-                      placeholder={locale === "ru" ? "Необязательно" : "Optional"}
-                      value={recComment}
-                      onChange={(e) => setRecComment(e.target.value)}
-                    />
+
+                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                    <p className="text-sm font-medium text-foreground">
+                      {locale === "ru" ? "Детали операции" : "Operation details"}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          {locale === "ru" ? "Категория" : "Category"}
+                        </span>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                            <Tag className="h-5 w-5" />
+                          </span>
+                          <select
+                            className="flex h-14 w-full rounded-[20px] border border-input bg-background pl-16 pr-4 text-base shadow-none"
+                            value={recCategoryId}
+                            onChange={(e) => setRecCategoryId(e.target.value)}
+                            aria-label={locale === "ru" ? "Категория" : "Category"}
+                          >
+                            {recurringFormCategories.map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {getCategoryLabel(category.id, categories, locale)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          {locale === "ru" ? "Повторение" : "Repeat"}
+                        </span>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                            <Repeat2 className="h-5 w-5" />
+                          </span>
+                          <select
+                            className="flex h-14 w-full rounded-[20px] border border-input bg-background pl-16 pr-4 text-base shadow-none"
+                            value={recRepeat}
+                            onChange={(e) => {
+                              const next = e.target.value as "once" | RecurringFrequency;
+                              setRecRepeat(next);
+                              if (next !== "monthly" && recEndMode === "months") {
+                                setRecEndMode("never");
+                              }
+                              if (next === "once") {
+                                setRecEndMode("never");
+                                setRecEndDate("");
+                              }
+                            }}
+                            aria-label={locale === "ru" ? "Повторение" : "Repeat"}
+                          >
+                            <option value="once">{locale === "ru" ? "Один раз" : "One time"}</option>
+                            <option value="weekly">{locale === "ru" ? "Каждую неделю" : "Every week"}</option>
+                            <option value="monthly">{locale === "ru" ? "Каждый месяц" : "Every month"}</option>
+                            <option value="yearly">{locale === "ru" ? "Каждый год" : "Every year"}</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                    <p className="text-sm font-medium text-foreground">
+                      {locale === "ru" ? "Дата первого платежа" : "First payment date"}
+                    </p>
+                    <div className="mt-3 relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                        <CalendarDays className="h-5 w-5" />
+                      </span>
+                      <Input
+                        type="date"
+                        className="h-14 w-full rounded-[20px] border-input pl-16 text-base"
+                        ref={recStartDateInputRef}
+                        defaultValue={recStartDate}
+                        onChange={(e) => handleRecStartDateInput(e.currentTarget.value)}
+                        onInput={(e) => handleRecStartDateInput(e.currentTarget.value)}
+                        aria-label={locale === "ru" ? "Дата первой операции" : "First operation date"}
+                      />
+                    </div>
+                  </div>
+
                   {recRepeat !== "once" ? (
-                  <div className="w-full space-y-2 rounded-md border border-border/70 p-3">
-	                    <p className="text-xs font-medium text-foreground">
-	                      {locale === "ru" ? "Когда закончится?" : "When should it end?"}
-	                    </p>
-	                    <div className="grid grid-cols-1 gap-2">
-	                      <Button
-	                        type="button"
-	                        variant={recEndMode === "never" ? "default" : "outline"}
-	                        className="justify-start"
-	                        onClick={() => setRecEndMode("never")}
-	                      >
-	                        {locale === "ru" ? "Без срока" : "No end date"}
-	                      </Button>
-	                      <Button
-	                        type="button"
-	                        variant={recEndMode === "date" ? "default" : "outline"}
-	                        className="justify-start"
-	                        onClick={() => setRecEndMode("date")}
-	                      >
-	                        {locale === "ru" ? "До даты" : "Until date"}
-	                      </Button>
-	                      {recRepeat === "monthly" ? (
-	                        <Button
-	                          type="button"
-	                          variant={recEndMode === "months" ? "default" : "outline"}
-	                          className="justify-start"
-	                          onClick={() => setRecEndMode("months")}
-	                        >
-	                          {locale === "ru" ? "Через несколько месяцев" : "After several months"}
-	                        </Button>
-	                      ) : null}
-	                    </div>
-	                    {recEndMode === "date" ? (
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">
+                    <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                      <p className="text-sm font-medium text-foreground">
+                        {locale === "ru" ? "Срок действия" : "Duration"}
+                      </p>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-auto min-h-[132px] flex-col items-start rounded-[22px] px-3 py-4 text-left shadow-none",
+                            recEndMode === "never"
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-50"
+                              : "border-border/70 bg-background hover:bg-muted/40",
+                          )}
+                          onClick={() => setRecEndMode("never")}
+                        >
+                          <Infinity className="mb-4 h-7 w-7" />
+                          <span className="text-base font-semibold">
+                            {locale === "ru" ? "Без срока" : "No end"}
+                          </span>
+                          <span className="mt-1 text-xs font-normal text-muted-foreground">
+                            {locale === "ru" ? "Платить всегда" : "Pay continuously"}
+                          </span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-auto min-h-[132px] flex-col items-start rounded-[22px] px-3 py-4 text-left shadow-none",
+                            recEndMode === "date"
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-50"
+                              : "border-border/70 bg-background hover:bg-muted/40",
+                          )}
+                          onClick={() => setRecEndMode("date")}
+                        >
+                          <CalendarDays className="mb-4 h-7 w-7" />
+                          <span className="text-base font-semibold">
+                            {locale === "ru" ? "До даты" : "Until date"}
+                          </span>
+                          <span className="mt-1 text-xs font-normal text-muted-foreground">
+                            {locale === "ru" ? "Выберите дату" : "Choose a date"}
+                          </span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={recRepeat !== "monthly"}
+                          className={cn(
+                            "h-auto min-h-[132px] flex-col items-start rounded-[22px] px-3 py-4 text-left shadow-none",
+                            recRepeat !== "monthly"
+                              ? "cursor-not-allowed border-border/60 bg-muted/20 text-muted-foreground opacity-60"
+                              : recEndMode === "months"
+                                ? "border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-50"
+                                : "border-border/70 bg-background hover:bg-muted/40",
+                          )}
+                          onClick={() => setRecEndMode("months")}
+                        >
+                          <Clock3 className="mb-4 h-7 w-7" />
+                          <span className="text-base font-semibold">
+                            {locale === "ru" ? "Через N мес." : "After N months"}
+                          </span>
+                          <span className="mt-1 text-xs font-normal text-muted-foreground">
+                            {locale === "ru" ? "Укажите срок" : "Set the term"}
+                          </span>
+                        </Button>
+                      </div>
+
+                      {recEndMode === "date" ? (
+                        <div className="mt-3 space-y-2">
+                          <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                             {locale === "ru" ? "Дата окончания" : "End date"}
                           </span>
                           <Input
                             type="date"
+                            className="h-14 rounded-[20px] border-input text-base"
                             value={recEndDate}
                             onChange={(e) => setRecEndDate(e.target.value)}
                           />
                         </div>
                       ) : null}
-	                    {recEndMode === "months" && recRepeat === "monthly" ? (
-	                      <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">
+
+                      {recEndMode === "months" && recRepeat === "monthly" ? (
+                        <div className="mt-3 space-y-2">
+                          <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                             {locale === "ru" ? "Количество месяцев" : "Months count"}
                           </span>
-	                        <Input
-	                          type="number"
-	                          min="1"
-	                          max="120"
-	                          value={recDurationMonths}
-	                          onChange={(e) => setRecDurationMonths(e.target.value)}
-	                        />
-	                        {recurringEndPreview ? (
-	                          <p className="text-xs text-muted-foreground">
-	                            {locale === "ru"
-	                              ? `Последний платёж: ${formatTransactionDate(recurringEndPreview, locale)}`
-	                              : `Last payment: ${formatTransactionDate(recurringEndPreview, locale)}`}
-	                          </p>
-	                        ) : null}
-	                      </div>
-	                    ) : null}
-                  </div>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="120"
+                            className="h-14 rounded-[20px] border-input text-base"
+                            value={recDurationMonths}
+                            onChange={(e) => setRecDurationMonths(e.target.value)}
+                          />
+                          {recurringEndPreview ? (
+                            <p className="text-sm text-muted-foreground">
+                              {locale === "ru"
+                                ? `Последний платёж: ${formatTransactionDate(recurringEndPreview, locale)}`
+                                : `Last payment: ${formatTransactionDate(recurringEndPreview, locale)}`}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
-                  <Button className="w-full" onClick={handleAddRecurring}>
-                    {locale === "ru" ? "Добавить операцию" : "Add operation"}
-                  </Button>
+
+                  <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-10 -mx-1 px-1 pb-1 pt-2">
+                    <div className="rounded-[28px] bg-background/92 p-1.5 backdrop-blur-sm">
+                      <Button
+                        className="h-14 w-full rounded-[22px] text-base font-semibold shadow-sm shadow-emerald-900/15"
+                        onClick={handleAddRecurring}
+                      >
+                        {locale === "ru" ? "Создать регулярный платеж" : "Create recurring payment"}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </TabsContent>
