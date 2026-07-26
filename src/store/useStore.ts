@@ -1889,6 +1889,22 @@ export const useStore = create<StoreState>()(
               ) || hasManualRecurringPayment(transactions, item, runDate);
             if (!exists) {
               const parsed = recurringToParsedTransaction(item, runDate);
+              if (process.env.NEXT_PUBLIC_FINOS_DEBUG_RECURRING_DUPES === "1") {
+                console.info("[recurring-sync-debug]", {
+                  stage: "processRecurringDue.materializePending",
+                  recurringId: item.id,
+                  recurringOccurrenceDate: runDate,
+                  nextRunDate: item.nextRunDate,
+                  transaction: {
+                    amount: parsed.amount,
+                    type: parsed.type,
+                    categoryId: parsed.categoryId,
+                    date: parsed.date,
+                    note: parsed.note,
+                    confirmed: parsed.type === "income",
+                  },
+                });
+              }
               get().addTransaction({
                 ...parsed,
                 confirmed: parsed.type === "income",

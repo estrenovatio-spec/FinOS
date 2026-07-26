@@ -63,6 +63,26 @@ export function applyHouseholdSync(
   const remoteTransactionsById = new Map(remote.transactions.map((t) => [t.id, t]));
   const remoteRecurringById = new Map((remote.recurringTransactions ?? []).map((r) => [r.id, r]));
 
+  if (process.env.NEXT_PUBLIC_FINOS_DEBUG_RECURRING_DUPES === "1") {
+    const recurringLinkedRemote = remote.transactions.filter((item) => item.recurringId != null);
+    console.info("[recurring-sync-debug]", {
+      stage: "applyHouseholdSync.remote_snapshot",
+      replace: opts?.replace ?? false,
+      remoteRecurringLinkedCount: recurringLinkedRemote.length,
+      remoteRecurringLinked: recurringLinkedRemote.map((item) => ({
+        id: item.id,
+        recurringId: item.recurringId ?? null,
+        recurringOccurrenceDate: item.recurringOccurrenceDate ?? null,
+        date: item.date,
+        confirmed: item.confirmed ?? true,
+        type: item.type,
+        amount: item.amount,
+        note: item.note,
+        updatedAt: item.updatedAt ?? null,
+      })),
+    });
+  }
+
   useCloudStore.getState().setSession(token, remote.household);
   useCloudStore.getState().setLastWriteError(null);
   const viewerUserId = ensureCloudViewerUserId(remote.viewerUserId ?? undefined);
@@ -169,6 +189,25 @@ export function applyHouseholdSync(
     merged.transactions,
     recurringTransactions,
   );
+
+  if (process.env.NEXT_PUBLIC_FINOS_DEBUG_RECURRING_DUPES === "1") {
+    const recurringLinkedTransactions = transactions.filter((item) => item.recurringId != null);
+    console.info("[recurring-sync-debug]", {
+      stage: "applyHouseholdSync.after_repair",
+      transactionCount: recurringLinkedTransactions.length,
+      recurringLinkedTransactions: recurringLinkedTransactions.map((item) => ({
+        id: item.id,
+        recurringId: item.recurringId ?? null,
+        recurringOccurrenceDate: item.recurringOccurrenceDate ?? null,
+        date: item.date,
+        confirmed: item.confirmed ?? true,
+        type: item.type,
+        amount: item.amount,
+        note: item.note,
+        updatedAt: item.updatedAt ?? null,
+      })),
+    });
+  }
   for (const [id, pendingUpdatedAt] of Object.entries(pendingTransactionUpdates)) {
     const remoteTransaction = remoteTransactionsById.get(id);
     const localTransaction = useStore.getState().transactions.find((item) => item.id === id);

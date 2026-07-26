@@ -221,6 +221,7 @@ export function ForecastCalendarView({
     () => new Map<string, ForecastDay>(getForecastDays(forecast).map((day) => [day.date, day])),
     [forecast],
   );
+  const transactions = useStore((s) => s.transactions);
   const goalMap = useMemo(() => {
     const map = new Map<string, SavingsGoal[]>();
     for (const goal of goals) {
@@ -300,6 +301,66 @@ export function ForecastCalendarView({
     locale,
     currentMonthKey,
   });
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_FINOS_DEBUG_RECURRING_DUPES !== "1") return;
+    const visibleDays = month.days.filter((day) => day.isCurrentMonth && day.hasEvents);
+    const recurringExpenseEvents = visibleDays.flatMap((day) => {
+      const forecastDay = daysByDate.get(day.date);
+      if (!forecastDay) return [];
+      return forecastDay.events
+        .filter((event) => event.amount < 0 && (event.recurringId != null || /цоп/i.test(event.title)))
+        .map((event) => {
+          const transaction =
+            event.source === "pending_transaction"
+              ? transactions.find((item) => item.id === event.id) ?? null
+              : null;
+          return {
+            renderedDate: day.date,
+            eventId: event.id,
+            recurringId: event.recurringId ?? null,
+            recurringOccurrenceDate: event.recurringOccurrenceDate ?? null,
+            eventDate: event.date,
+            source: event.source,
+            sourceKind:
+              event.source === "pending_transaction"
+                ? transaction?.recurringId
+                  ? "materialized recurring / sync transaction"
+                  : "local manual pending transaction"
+                : event.source === "recurring"
+                  ? "recurring generator"
+                  : event.source,
+            transactionId: transaction?.id ?? null,
+            transactionRecurringId: transaction?.recurringId ?? null,
+            transactionRecurringOccurrenceDate: transaction?.recurringOccurrenceDate ?? null,
+            transactionDate: transaction?.date ?? null,
+            transactionConfirmed: transaction?.confirmed ?? null,
+            transactionType: transaction?.type ?? null,
+            transactionCategory: transaction?.categoryId ?? null,
+            transactionAmount: transaction?.amount ?? null,
+            eventAmount: Math.abs(event.amount),
+            title: event.title,
+          };
+        });
+    });
+    const byCanonicalKey = new Map<string, typeof recurringExpenseEvents>();
+    for (const entry of recurringExpenseEvents) {
+      const key =
+        entry.recurringId && entry.recurringOccurrenceDate
+          ? `${entry.recurringId}:${entry.recurringOccurrenceDate}:expense`
+          : `event:${entry.eventId}`;
+      const existing = byCanonicalKey.get(key);
+      if (existing) existing.push(entry);
+      else byCanonicalKey.set(key, [entry]);
+    }
+    console.info("[forecast-recurring-render-debug]", {
+      month: month.key,
+      recurringExpenseEvents,
+      duplicateCanonicalKeys: [...byCanonicalKey.entries()]
+        .filter(([, entries]) => entries.length > 1)
+        .map(([key, entries]) => ({ key, entries })),
+    });
+  }, [daysByDate, month.days, month.key, transactions]);
 
   return (
     <>
