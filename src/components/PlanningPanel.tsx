@@ -2212,8 +2212,8 @@ export function PlanningPanel({
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                <div className="rounded-[28px] border border-border/70 bg-background/95 p-5 shadow-sm shadow-black/5">
+                  <div>
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Что создаём?" : "What are we creating?"}
                     </p>
@@ -2266,7 +2266,7 @@ export function PlanningPanel({
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                  <div className="mt-5 border-t border-border/60 pt-5">
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Название операции" : "Operation name"}
                     </p>
@@ -2287,7 +2287,7 @@ export function PlanningPanel({
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                  <div className="mt-5 border-t border-border/60 pt-5">
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Детали операции" : "Operation details"}
                     </p>
@@ -2349,7 +2349,7 @@ export function PlanningPanel({
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                  <div className="mt-5 border-t border-border/60 pt-5">
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Дата первого платежа" : "First payment date"}
                     </p>
@@ -2370,7 +2370,7 @@ export function PlanningPanel({
                   </div>
 
                   {recRepeat !== "once" ? (
-                    <div className="rounded-[24px] border border-border/70 bg-background/90 p-4 shadow-sm shadow-black/5">
+                    <div className="mt-5 border-t border-border/60 pt-5">
                       <p className="text-sm font-medium text-foreground">
                         {locale === "ru" ? "Срок действия" : "Duration"}
                       </p>
@@ -2478,7 +2478,7 @@ export function PlanningPanel({
                     </div>
                   ) : null}
 
-                  <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-10 -mx-1 px-1 pb-1 pt-2">
+                  <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-10 mt-5 border-t border-border/60 bg-background/95 px-0 pb-0 pt-5">
                     <div className="rounded-[28px] bg-background/92 p-1.5 backdrop-blur-sm">
                       <Button
                         className="h-14 w-full rounded-[22px] text-base font-semibold shadow-sm shadow-emerald-900/15"
