@@ -1277,6 +1277,7 @@ test("confirmPendingTransaction keeps a recurring occurrence closed after sync r
 
   const paid = useStore.getState().transactions.find((item) => item.id === "water-payment");
   assert.equal(paid?.confirmed, true);
+  assert.equal(paid?.date, "2026-07-26");
   assert.equal(paid?.recurringOccurrenceDate, "2026-07-20");
   assert.ok(useCloudStore.getState().pendingTransactionUpdateIds["water-payment"]);
 
@@ -1313,6 +1314,7 @@ test("confirmPendingTransaction keeps a recurring occurrence closed after sync r
 
   const afterSync = useStore.getState().transactions.find((item) => item.id === "water-payment");
   assert.equal(afterSync?.confirmed, true);
+  assert.equal(afterSync?.date, "2026-07-26");
   assert.equal(afterSync?.recurringOccurrenceDate, "2026-07-20");
 
   const snapshot = decisionCoreSnapshot({
@@ -1355,6 +1357,7 @@ test("confirmPendingTransaction keeps a recurring occurrence closed after sync r
     ),
     true,
   );
+  assert.notEqual(snapshot.mainAction.command.type, "confirm_payment");
 
   useStore.setState(previousStore);
   useCloudStore.setState(previousCloud);

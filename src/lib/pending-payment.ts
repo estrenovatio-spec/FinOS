@@ -10,6 +10,7 @@ export type ConfirmPendingPaymentResult = {
 export function confirmPendingPaymentById(
   transactions: Transaction[],
   paymentId: string,
+  opts?: { paidAt?: string },
 ): ConfirmPendingPaymentResult {
   let updatedTransaction: Transaction | null = null;
 
@@ -24,6 +25,7 @@ export function confirmPendingPaymentById(
 
     updatedTransaction = {
       ...transaction,
+      date: opts?.paidAt ?? transaction.date,
       confirmed: true,
       recurringOccurrenceDate:
         transaction.recurringId != null

@@ -1959,7 +1959,9 @@ export const useStore = create<StoreState>()(
         if (pending && pending.confirmed === false && pending.recurringId == null) {
           return get().confirmPendingFutureTransaction(id) != null;
         }
-        const result = confirmPendingPaymentById(get().transactions, id);
+        const result = confirmPendingPaymentById(get().transactions, id, {
+          paidAt: todayIso(),
+        });
         if (!result.changed || !result.updatedTransaction) {
           return false;
         }

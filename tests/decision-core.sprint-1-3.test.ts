@@ -1524,11 +1524,14 @@ test("confirming a legacy recurring payment repairs canonical occurrence identit
     }),
   ];
 
-  const result = confirmPendingPaymentById(originalTransactions, "water-payment");
+  const result = confirmPendingPaymentById(originalTransactions, "water-payment", {
+    paidAt: "2026-07-23",
+  });
 
   assert.equal(result.changed, true);
   assert.equal(result.updatedTransaction?.confirmed, true);
   assert.equal(result.updatedTransaction?.recurringId, "water");
+  assert.equal(result.updatedTransaction?.date, "2026-07-23");
   assert.equal(result.updatedTransaction?.recurringOccurrenceDate, "2026-07-20");
   assert.match(result.updatedTransaction?.updatedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
 });
@@ -1601,12 +1604,9 @@ test("paid recurring occurrence with actual payment date does not return as over
     },
   });
 
-  const confirmed = confirmPendingPaymentById(base.transactions, "water-payment");
-  const paidTransactions = confirmed.transactions.map((transaction) =>
-    transaction.id === "water-payment"
-      ? { ...transaction, date: "2026-07-23", recurringOccurrenceDate: "2026-07-20" }
-      : transaction,
-  );
+  const paidTransactions = confirmPendingPaymentById(base.transactions, "water-payment", {
+    paidAt: "2026-07-23",
+  }).transactions;
   const after = evaluate({
     ...base,
     transactions: paidTransactions,
@@ -2747,6 +2747,36 @@ test("one-time planned expense appears in forecast and becomes today's expected 
   assert.equal(todayScenario.result.todayPayments[0]?.title, "ОСАГО");
   assert.equal(todayScenario.result.todayPayments[0]?.source, "pending_transaction");
   assert.equal(todayScenario.result.todayPayments[0]?.amount, 12000);
+});
+
+test("one-time planned income appears in forecast and calendar pipeline as a pending transaction", () => {
+  const scenario = evaluate(
+    buildState({
+      today: "2026-07-13",
+      forecastHorizonMonths: 3,
+      balances: { all: 60000, me: 60000, partner: 0 },
+      transactions: [
+        tx({
+          id: "bonus-planned",
+          amount: 17000,
+          type: "income",
+          categoryId: "salary",
+          date: "2026-07-18",
+          note: "Разовый бонус",
+          confirmed: false,
+        }),
+      ],
+    }),
+  );
+
+  const plannedIncome = scenario.ctx.forecast.events.find(
+    (event) => event.id === "bonus-planned",
+  );
+
+  assert.equal(plannedIncome?.source, "pending_transaction");
+  assert.equal(plannedIncome?.date, "2026-07-18");
+  assert.equal(plannedIncome?.title, "Разовый бонус");
+  assert.equal(plannedIncome?.amount, 17000);
 });
 
 test("monthly planned income expands across the whole forecast horizon", () => {

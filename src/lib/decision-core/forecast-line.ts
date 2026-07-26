@@ -690,7 +690,9 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
   const incomeEvents = buildIncomeEvents(ctx);
   const configuredNextIncomeDate = incomeEvents[0]?.date ?? null;
   const horizonEndDate = addMonths(ctx.today, ctx.forecastHorizonMonths);
+  const pendingTransactionEvents = buildPendingTransactionEvents(ctx);
   const expectedExpenseEvents = buildGeneratedExpectedPaymentEvents(ctx, horizonEndDate);
+  const pendingIncomeEvents = pendingTransactionEvents.filter((event) => event.amount > 0);
   const recurringIncomeEvents = buildRecurringForecastEvents(
     ctx,
     horizonEndDate,
@@ -700,6 +702,7 @@ export function buildForecastLine(ctx: DecisionCoreContext): BalanceForecast {
   const events = [
     ...incomeEvents,
     ...buildConfirmedFutureTransactionEvents(ctx),
+    ...pendingIncomeEvents,
     ...expectedExpenseEvents,
     ...recurringIncomeEvents,
     ...buildFutureEssentialBudgetEvents(ctx, horizonEndDate),
