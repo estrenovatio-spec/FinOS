@@ -1700,6 +1700,15 @@ export const useStore = create<StoreState>()(
         return id;
       },
       updateRecurring: (id, patch) => {
+        const shouldPauseSeries = patch.enabled === false;
+        const pendingLinkedTransactionIds = shouldPauseSeries
+          ? get().transactions
+              .filter(
+                (transaction) =>
+                  transaction.recurringId === id && transaction.confirmed === false,
+              )
+              .map((transaction) => transaction.id)
+          : [];
         set((state) => ({
           recurringTransactions: state.recurringTransactions.map((r) => {
             if (r.id !== id) return r;
@@ -1708,6 +1717,21 @@ export const useStore = create<StoreState>()(
               state.transactions,
             );
           }),
+          transactions: shouldPauseSeries
+            ? repairRecurringLinkedTransactions(
+                state.transactions.filter(
+                  (transaction) => !pendingLinkedTransactionIds.includes(transaction.id),
+                ),
+                state.recurringTransactions.map((r) =>
+                  r.id === id
+                    ? sanitizeRecurringSkippedDates(
+                        { ...r, ...patch, updatedAt: new Date().toISOString() },
+                        state.transactions,
+                      )
+                    : r,
+                ),
+              )
+            : state.transactions,
         }));
         const recurringAfterUpdate =
           get().recurringTransactions.find((item) => item.id === id) ?? null;
@@ -1716,6 +1740,12 @@ export const useStore = create<StoreState>()(
             .getState()
             .markRecurringUpdatePending(id, recurringAfterUpdate.updatedAt);
           void cloudPushRecurring(recurringAfterUpdate);
+        }
+        for (const transactionId of pendingLinkedTransactionIds) {
+          useCloudStore.getState().clearTransactionUpdatePending(transactionId);
+          useCloudStore.getState().markTransactionDeleted(transactionId);
+          useCloudStore.getState().removeFromLastSyncedRemoteTxIds(transactionId);
+          void cloudPushTransactionDelete(transactionId);
         }
       },
       removeRecurring: (id) => {

@@ -577,6 +577,131 @@ test("removing a recurring series clears only its pending materialized occurrenc
   useCloudStore.setState(previousCloud);
 });
 
+test("pausing a recurring series clears only its pending materialized occurrences", () => {
+  const previousStore = useStore.getState();
+  const previousCloud = useCloudStore.getState();
+
+  useStore.setState({
+    ...previousStore,
+    categories: getDefaultCategories(),
+    transactions: [
+      tx({
+        id: "r1-pending",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-08-03",
+        note: "КСЮ ЦОП",
+        confirmed: false,
+        recurringId: "r1",
+        recurringOccurrenceDate: "2026-07-25",
+      }),
+      tx({
+        id: "r1-history",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        date: "2026-07-03",
+        note: "КСЮ ЦОП",
+        confirmed: true,
+        recurringId: "r1",
+        recurringOccurrenceDate: "2026-07-03",
+      }),
+      tx({
+        id: "r2-pending",
+        amount: 5000,
+        type: "expense",
+        categoryId: "utilities",
+        date: "2026-08-05",
+        note: "ЖКХ вода",
+        confirmed: false,
+        recurringId: "r2",
+        recurringOccurrenceDate: "2026-08-05",
+      }),
+      tx({
+        id: "future-once",
+        amount: 12000,
+        type: "expense",
+        categoryId: "transport",
+        date: "2026-08-10",
+        note: "ОСАГО",
+        confirmed: false,
+      }),
+    ],
+    recurringTransactions: [
+      recurring({
+        id: "r1",
+        amount: 9300,
+        type: "expense",
+        categoryId: "housing",
+        note: "КСЮ ЦОП",
+        nextRunDate: "2026-08-03",
+        frequency: "monthly",
+        enabled: true,
+      }),
+      recurring({
+        id: "r2",
+        amount: 5000,
+        type: "expense",
+        categoryId: "utilities",
+        note: "ЖКХ вода",
+        nextRunDate: "2026-08-05",
+        frequency: "monthly",
+        enabled: true,
+      }),
+    ],
+  });
+
+  useCloudStore.setState({
+    ...previousCloud,
+    token: "token-pause-recurring",
+    household,
+    deletedRecurringIds: [],
+    deletedDebtIds: [],
+    deletedTransactionIds: [],
+    pendingTransactionUpdateIds: {},
+    pendingRecurringUpdateIds: {},
+    lastSyncedRemoteTxIds: ["r1-pending", "r1-history", "r2-pending", "future-once"],
+    lastSyncedRemoteCategoryIds: [],
+    lastSyncedRemoteGoalIds: [],
+    lastSyncedRemoteBudgetCategoryIds: [],
+    lastSyncedRemoteRecurringIds: ["r1", "r2"],
+    lastSyncedRemoteDebtIds: [],
+  });
+
+  useStore.getState().updateRecurring("r1", { enabled: false });
+
+  const nextStore = useStore.getState();
+  const nextCloud = useCloudStore.getState();
+
+  assert.equal(nextStore.recurringTransactions.find((item) => item.id === "r1")?.enabled, false);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "r1-pending"), false);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "r1-history"), true);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "r2-pending"), true);
+  assert.equal(nextStore.transactions.some((transaction) => transaction.id === "future-once"), true);
+  assert.deepEqual(nextCloud.deletedTransactionIds, ["r1-pending"]);
+
+  const snapshot = decisionCoreSnapshot(
+    makeState({
+      today: "2026-07-26",
+      balances: { all: 50000, me: 50000, partner: 0 },
+      transactions: nextStore.transactions,
+      recurringTransactions: nextStore.recurringTransactions,
+    }),
+  );
+
+  assert.equal(snapshot.todayPayments.some((payment) => payment.id === "r1-pending"), false);
+  assert.equal(
+    snapshot.forecast.events.some(
+      (event) => event.source === "pending_transaction" && event.id === "r1-pending",
+    ),
+    false,
+  );
+
+  useStore.setState(previousStore);
+  useCloudStore.setState(previousCloud);
+});
+
 test("future one-time planned payment is confirmed through the expected-event flow without duplicate reappearance", () => {
   const previousStore = useStore.getState();
   const previousCloud = useCloudStore.getState();
