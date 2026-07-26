@@ -61,7 +61,7 @@ import {
 } from "@/lib/planning/future-operation-groups";
 import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
 import { resolveRecurringOccurrenceStatus } from "@/lib/recurring-occurrence-status";
-import { t } from "@/lib/i18n";
+import { ruPlural, t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useCategories, useStore, useTransactions } from "@/store/useStore";
 import type { Locale, Transaction, TxType } from "@/types";
@@ -97,6 +97,13 @@ function replaceTokens(template: string, tokens: Record<string, string>): string
     s = s.split(`{${key}}`).join(value);
   }
   return s;
+}
+
+function formatPlanningOperationsCount(count: number, locale: Locale): string {
+  if (locale === "ru") {
+    return `${count} ${ruPlural(count, "операция", "операции", "операций")}`;
+  }
+  return `${count} ${count === 1 ? "item" : "items"}`;
 }
 
 function GoalMonthlyPlansBlock({
@@ -2130,14 +2137,21 @@ export function PlanningPanel({
                   <div key={section.key} className="space-y-2">
                     {(() => {
                       const isFutureMonthSection = section.key.startsWith("later-");
+                      const isPaidSection = section.key === "paid";
+                      const isCollapsibleSection = isFutureMonthSection || isPaidSection;
                       const isExpanded = expandedFutureMonths[section.key] ?? false;
                       const ToggleIcon = isExpanded ? ChevronUp : ChevronDown;
                       return (
                         <>
-                          {isFutureMonthSection ? (
+                          {isCollapsibleSection ? (
                             <button
                               type="button"
-                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/55 px-3.5 py-2 text-left transition-colors hover:bg-amber-100/55 dark:border-amber-800/60 dark:bg-amber-950/20 dark:hover:bg-amber-950/35"
+                              className={cn(
+                                "flex w-full items-center justify-between gap-3 rounded-2xl border px-3.5 py-2 text-left transition-colors",
+                                isPaidSection
+                                  ? "border-emerald-200/70 bg-emerald-50/55 hover:bg-emerald-100/55 dark:border-emerald-800/60 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/35"
+                                  : "border-amber-200/70 bg-amber-50/55 hover:bg-amber-100/55 dark:border-amber-800/60 dark:bg-amber-950/20 dark:hover:bg-amber-950/35",
+                              )}
                               onClick={() =>
                                 setExpandedFutureMonths((current) => ({
                                   ...current,
@@ -2156,11 +2170,9 @@ export function PlanningPanel({
                                   {section.label}
                                 </p>
                               </div>
-                              <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
+                      <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
                                 <span className="text-xs font-medium">
-                                  {locale === "ru"
-                                    ? `${section.items.length} ${section.items.length === 1 ? "операция" : "операции"}`
-                                    : `${section.items.length} items`}
+                                  {formatPlanningOperationsCount(section.items.length, locale)}
                                 </span>
                                 <ToggleIcon className="h-4 w-4" />
                               </div>
@@ -2177,7 +2189,7 @@ export function PlanningPanel({
                               </p>
                             </div>
                           )}
-                          {!isFutureMonthSection || isExpanded
+                          {!isCollapsibleSection || isExpanded
                             ? section.items.map(renderFutureOperationCard)
                             : null}
                         </>
