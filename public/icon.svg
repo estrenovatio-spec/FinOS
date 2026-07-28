@@ -1,6 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#047857"/>
-  <path d="M104 356c58-126 127-189 208-189 53 0 89 26 96 68 8 49-25 92-88 102-33 5-64-1-94-18-18 11-35 23-51 37h-71Z" fill="#ecfdf5" opacity=".96"/>
-  <path d="M184 300c35-29 70-44 105-44 30 0 49-10 47-26-2-14-18-23-43-23-45 0-84 31-118 93h9Z" fill="#059669"/>
-  <text x="256" y="382" text-anchor="middle" font-family="Arial, sans-serif" font-size="124" font-weight="800" fill="#ffffff">F</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="224" fill="#053F35" />
+  <path
+    d="M 779 702 A 300 300 0 1 1 779 322"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="58"
+    stroke-linecap="square"
+  />
+  <path
+    d="M 407 300 H 692 L 648 358 H 465 V 483 H 624 L 581 541 H 465 V 756 H 407 Z"
+    fill="#FFFFFF"
+  />
 </svg>

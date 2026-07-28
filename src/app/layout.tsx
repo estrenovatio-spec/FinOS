@@ -6,11 +6,13 @@ import { TelegramInit } from "@/components/TelegramInit";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
+const iconVersion = "20260728";
+
 export const metadata: Metadata = {
   title: "FinOS",
   description:
     "FinOS помогает вести семейные и личные финансы, быстрые записи и безопасный дневной лимит.",
-  manifest: "/manifest.webmanifest",
+  manifest: `/manifest.webmanifest?v=${iconVersion}`,
   appleWebApp: {
     capable: true,
     title: "FinOS",
@@ -18,18 +20,21 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: `/favicon.ico?v=${iconVersion}`, sizes: "any" },
+      { url: `/favicon-16x16.png?v=${iconVersion}`, sizes: "16x16", type: "image/png" },
+      { url: `/favicon-32x32.png?v=${iconVersion}`, sizes: "32x32", type: "image/png" },
+      { url: `/icons/icon-192.png?v=${iconVersion}`, sizes: "192x192", type: "image/png" },
+      { url: `/icons/icon-512.png?v=${iconVersion}`, sizes: "512x512", type: "image/png" },
     ],
+    shortcut: [{ url: `/favicon.ico?v=${iconVersion}` }],
     apple: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: `/apple-touch-icon.png?v=${iconVersion}`, sizes: "180x180", type: "image/png" },
     ],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#047857",
+  themeColor: "#053F35",
 };
 
 export default function RootLayout({
