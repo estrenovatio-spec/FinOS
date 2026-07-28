@@ -2217,21 +2217,33 @@ export function PlanningPanel({
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Что создаём?" : "What are we creating?"}
                     </p>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="min-w-0 space-y-2">
                         <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                           {locale === "ru" ? "Тип операции" : "Operation type"}
                         </span>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
-                            {recType === "income" ? (
-                              <BadgeDollarSign className="h-5 w-5 shrink-0" />
-                            ) : (
-                              <WalletCards className="h-5 w-5 shrink-0" />
-                            )}
-                          </span>
+                        <div className="relative min-w-0">
+                          <div className="grid h-14 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] border border-input bg-background px-3 pr-4">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                              {recType === "income" ? (
+                                <BadgeDollarSign className="h-6 w-6 shrink-0" />
+                              ) : (
+                                <WalletCards className="h-6 w-6 shrink-0" />
+                              )}
+                            </span>
+                            <span className="min-w-0 truncate text-base font-medium text-foreground">
+                              {recType === "income"
+                                ? locale === "ru"
+                                  ? "Доход"
+                                  : "Income"
+                                : locale === "ru"
+                                  ? "Расход"
+                                  : "Expense"}
+                            </span>
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          </div>
                           <select
-                            className="flex h-14 w-full appearance-none rounded-[20px] border border-input bg-background pl-16 pr-12 text-base shadow-none"
+                            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
                             value={recType}
                             onChange={(e) => setRecType(e.target.value as TxType)}
                             aria-label={locale === "ru" ? "Тип операции" : "Operation type"}
@@ -2242,13 +2254,13 @@ export function PlanningPanel({
                         </div>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                           {t(locale, "planningRecurringAmount")}
                         </span>
                         <div className="relative">
                           <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
-                            <BadgeDollarSign className="h-5 w-5 shrink-0" />
+                            <BadgeDollarSign className="h-6 w-6 shrink-0" />
                           </span>
                           <Input
                             type="number"
@@ -2272,7 +2284,7 @@ export function PlanningPanel({
                     </p>
                     <div className="mt-3 relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
-                        <Tag className="h-5 w-5 shrink-0" />
+                        <Tag className="h-6 w-6 shrink-0" />
                       </span>
                       <Input
                         placeholder={
@@ -2291,17 +2303,23 @@ export function PlanningPanel({
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Детали операции" : "Operation details"}
                     </p>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="min-w-0 space-y-2">
                         <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                           {locale === "ru" ? "Категория" : "Category"}
                         </span>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
-                            <Tag className="h-5 w-5 shrink-0" />
-                          </span>
+                        <div className="relative min-w-0">
+                          <div className="grid h-14 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] border border-input bg-background px-3 pr-4">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                              <Tag className="h-6 w-6 shrink-0" />
+                            </span>
+                            <span className="min-w-0 truncate text-base font-medium text-foreground">
+                              {getCategoryLabel(recCategoryId, categories, locale)}
+                            </span>
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          </div>
                           <select
-                            className="flex h-14 w-full appearance-none rounded-[20px] border border-input bg-background pl-16 pr-12 text-base shadow-none"
+                            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
                             value={recCategoryId}
                             onChange={(e) => setRecCategoryId(e.target.value)}
                             aria-label={locale === "ru" ? "Категория" : "Category"}
@@ -2315,16 +2333,36 @@ export function PlanningPanel({
                         </div>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                           {locale === "ru" ? "Повторение" : "Repeat"}
                         </span>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
-                            <Repeat2 className="h-5 w-5 shrink-0" />
-                          </span>
+                        <div className="relative min-w-0">
+                          <div className="grid h-14 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[20px] border border-input bg-background px-3 pr-4">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                              <Repeat2 className="h-6 w-6 shrink-0" />
+                            </span>
+                            <span className="min-w-0 truncate text-base font-medium text-foreground">
+                              {recRepeat === "once"
+                                ? locale === "ru"
+                                  ? "Один раз"
+                                  : "One time"
+                                : recRepeat === "weekly"
+                                  ? locale === "ru"
+                                    ? "Еженедельно"
+                                    : "Weekly"
+                                  : recRepeat === "monthly"
+                                    ? locale === "ru"
+                                      ? "Ежемесячно"
+                                      : "Monthly"
+                                    : locale === "ru"
+                                      ? "Ежегодно"
+                                      : "Yearly"}
+                            </span>
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          </div>
                           <select
-                            className="flex h-14 w-full appearance-none rounded-[20px] border border-input bg-background pl-16 pr-12 text-base shadow-none"
+                            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
                             value={recRepeat}
                             onChange={(e) => {
                               const next = e.target.value as "once" | RecurringFrequency;
@@ -2355,11 +2393,11 @@ export function PlanningPanel({
                     </p>
                     <div className="mt-3 relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
-                        <CalendarDays className="h-5 w-5 shrink-0" />
+                        <CalendarDays className="h-6 w-6 shrink-0" />
                       </span>
                       <Input
                         type="date"
-                        className="h-14 w-full rounded-[20px] border-input pl-16 pr-4 text-base"
+                        className="h-14 w-full rounded-[20px] border-input pl-16 pr-10 text-base"
                         ref={recStartDateInputRef}
                         defaultValue={recStartDate}
                         onChange={(e) => handleRecStartDateInput(e.currentTarget.value)}
@@ -2374,7 +2412,7 @@ export function PlanningPanel({
                       <p className="text-sm font-medium text-foreground">
                         {locale === "ru" ? "Срок действия" : "Duration"}
                       </p>
-                      <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                         <Button
                           type="button"
                           variant="outline"
@@ -2478,10 +2516,10 @@ export function PlanningPanel({
                     </div>
                   ) : null}
 
-                  <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] left-1/2 z-20 w-[min(calc(100vw-2rem),40rem)] -translate-x-1/2 px-1">
-                    <div className="rounded-[30px] border border-border/70 bg-background/98 p-2 shadow-lg shadow-black/10 backdrop-blur-md supports-[backdrop-filter]:bg-background/90">
+                  <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-1/2 z-20 w-[min(calc(100vw-1rem),40rem)] -translate-x-1/2 px-1">
+                    <div className="rounded-[22px] border border-border/50 bg-background/96 p-1 shadow-sm shadow-black/5 backdrop-blur-sm supports-[backdrop-filter]:bg-background/92">
                       <Button
-                        className="h-14 w-full rounded-[22px] text-base font-semibold shadow-sm shadow-emerald-900/15"
+                        className="h-[52px] w-full rounded-[18px] px-4 text-base font-semibold shadow-sm shadow-emerald-900/10"
                         onClick={handleAddRecurring}
                       >
                         {locale === "ru" ? "Создать регулярный платеж" : "Create recurring payment"}

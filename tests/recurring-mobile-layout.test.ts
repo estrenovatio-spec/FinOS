@@ -8,29 +8,37 @@ const planningPanelSource = fs.readFileSync(
   "utf8",
 );
 
-test("recurring add form uses a single-column mobile layout before widening", () => {
-  assert.match(planningPanelSource, /grid grid-cols-1 gap-2 sm:grid-cols-2/);
-  assert.match(planningPanelSource, /<div className="grid grid-cols-1 gap-2">/);
-});
-
-test("recurring add form exposes one repeat control instead of duplicate monthly selectors", () => {
-  assert.match(planningPanelSource, /Повторять/);
-  assert.doesNotMatch(planningPanelSource, /planningRecurringMonthly"\)\}<\/option>[\s\S]*planningRecurringEveryMonth/);
-  assert.match(planningPanelSource, /<option value="monthly_1">/);
-  assert.match(planningPanelSource, /<option value="monthly_3">/);
-});
-
-test("recurring end selector stays vertical on mobile with full-width add button", () => {
-  assert.match(planningPanelSource, /Когда закончится\?/);
-  assert.match(planningPanelSource, /<div className="grid grid-cols-1 gap-2">/);
-  assert.match(planningPanelSource, /<Button className="w-full" onClick={handleAddRecurring}>/);
-});
-
-test("recurring cards avoid narrow inline date controls on mobile", () => {
+test("recurring form keeps one outer card while stacking select rows on mobile", () => {
   assert.match(
     planningPanelSource,
-    /flex flex-col items-start gap-1\.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-2/,
+    /grid grid-cols-1 gap-3 sm:grid-cols-\[minmax\(0,1fr\)_minmax\(0,1fr\)\]/,
   );
-  assert.match(planningPanelSource, /className="h-8 w-full text-xs sm:w-auto sm:max-w-\[10\.5rem\]"/);
-  assert.match(planningPanelSource, /className="mt-2 flex flex-wrap justify-end gap-2 border-t border-border\/50 pt-2"/);
+  assert.match(
+    planningPanelSource,
+    /rounded-\[28px\] border border-border\/70 bg-background\/95 p-5 pb-\[calc\(10rem\+env\(safe-area-inset-bottom\)\)\]/,
+  );
+});
+
+test("select-like fields reserve room for icon, label, and chevron", () => {
+  assert.match(
+    planningPanelSource,
+    /grid h-14 w-full min-w-0 grid-cols-\[auto_minmax\(0,1fr\)_auto\] items-center gap-3 rounded-\[20px\]/,
+  );
+  assert.match(planningPanelSource, /<ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" \/>/);
+  assert.match(planningPanelSource, /className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"/);
+});
+
+test("recurring labels use compact mobile-friendly wording", () => {
+  assert.match(planningPanelSource, /"Ежемесячно"/);
+  assert.match(planningPanelSource, /"Еженедельно"/);
+  assert.match(planningPanelSource, /"Ежегодно"/);
+});
+
+test("duration cards and action button stay usable on mobile", () => {
+  assert.match(planningPanelSource, /mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3/);
+  assert.match(
+    planningPanelSource,
+    /rounded-\[22px\] border border-border\/50 bg-background\/96 p-1 shadow-sm shadow-black\/5/,
+  );
+  assert.match(planningPanelSource, /className="h-\[52px\] w-full rounded-\[18px\] px-4 text-base font-semibold/);
 });
