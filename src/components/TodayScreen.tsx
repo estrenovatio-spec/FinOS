@@ -549,7 +549,7 @@ export function TodayScreen({
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-start"
+              className="w-full justify-center text-center"
               onClick={() => openFinancialPlanTarget("balance_and_income")}
             >
               {locale === "ru" ? "Баланс и доходы" : "Balance and income"}
@@ -557,7 +557,7 @@ export function TodayScreen({
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-start"
+              className="w-full justify-center text-center"
               onClick={() => openFinancialPlanTarget("recurring")}
             >
               {locale === "ru" ? "Регулярные платежи" : "Recurring payments"}
@@ -565,7 +565,7 @@ export function TodayScreen({
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-start"
+              className="w-full justify-center text-center"
               onClick={() => openFinancialPlanTarget("debts")}
             >
               {locale === "ru" ? "Долги" : "Debts"}
@@ -573,7 +573,7 @@ export function TodayScreen({
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-start"
+              className="w-full justify-center text-center"
               onClick={() => openFinancialPlanTarget("limits")}
             >
               {locale === "ru" ? "Лимиты" : "Limits"}
