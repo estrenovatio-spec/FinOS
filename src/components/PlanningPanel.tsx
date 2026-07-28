@@ -2212,7 +2212,7 @@ export function PlanningPanel({
                   </p>
                 </div>
 
-                <div className="rounded-[28px] border border-border/70 bg-background/95 p-5 shadow-sm shadow-black/5">
+                <div className="rounded-[28px] border border-border/70 bg-background/95 p-5 pb-[calc(10rem+env(safe-area-inset-bottom))] shadow-sm shadow-black/5">
                   <div>
                     <p className="text-sm font-medium text-foreground">
                       {locale === "ru" ? "Что создаём?" : "What are we creating?"}
@@ -2223,15 +2223,15 @@ export function PlanningPanel({
                           {locale === "ru" ? "Тип операции" : "Operation type"}
                         </span>
                         <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
                             {recType === "income" ? (
-                              <BadgeDollarSign className="h-5 w-5" />
+                              <BadgeDollarSign className="h-5 w-5 shrink-0" />
                             ) : (
-                              <WalletCards className="h-5 w-5" />
+                              <WalletCards className="h-5 w-5 shrink-0" />
                             )}
                           </span>
                           <select
-                            className="flex h-14 w-full rounded-[20px] border border-input bg-background pl-16 pr-4 text-base shadow-none"
+                            className="flex h-14 w-full appearance-none rounded-[20px] border border-input bg-background pl-16 pr-12 text-base shadow-none"
                             value={recType}
                             onChange={(e) => setRecType(e.target.value as TxType)}
                             aria-label={locale === "ru" ? "Тип операции" : "Operation type"}
@@ -2247,14 +2247,14 @@ export function PlanningPanel({
                           {t(locale, "planningRecurringAmount")}
                         </span>
                         <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                            <BadgeDollarSign className="h-5 w-5" />
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                            <BadgeDollarSign className="h-5 w-5 shrink-0" />
                           </span>
                           <Input
                             type="number"
                             inputMode="decimal"
                             placeholder="0"
-                            className="h-14 rounded-[20px] border-input pl-16 pr-10 text-base"
+                            className="h-14 rounded-[20px] border-input pl-16 pr-12 text-base"
                             value={recAmount}
                             onChange={(e) => setRecAmount(e.target.value)}
                           />
@@ -2271,8 +2271,8 @@ export function PlanningPanel({
                       {locale === "ru" ? "Название операции" : "Operation name"}
                     </p>
                     <div className="mt-3 relative">
-                      <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                        <Tag className="h-5 w-5" />
+                      <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                        <Tag className="h-5 w-5 shrink-0" />
                       </span>
                       <Input
                         placeholder={
@@ -2297,11 +2297,11 @@ export function PlanningPanel({
                           {locale === "ru" ? "Категория" : "Category"}
                         </span>
                         <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                            <Tag className="h-5 w-5" />
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                            <Tag className="h-5 w-5 shrink-0" />
                           </span>
                           <select
-                            className="flex h-14 w-full rounded-[20px] border border-input bg-background pl-16 pr-4 text-base shadow-none"
+                            className="flex h-14 w-full appearance-none rounded-[20px] border border-input bg-background pl-16 pr-12 text-base shadow-none"
                             value={recCategoryId}
                             onChange={(e) => setRecCategoryId(e.target.value)}
                             aria-label={locale === "ru" ? "Категория" : "Category"}
@@ -2320,11 +2320,11 @@ export function PlanningPanel({
                           {locale === "ru" ? "Повторение" : "Repeat"}
                         </span>
                         <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                            <Repeat2 className="h-5 w-5" />
+                          <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                            <Repeat2 className="h-5 w-5 shrink-0" />
                           </span>
                           <select
-                            className="flex h-14 w-full rounded-[20px] border border-input bg-background pl-16 pr-4 text-base shadow-none"
+                            className="flex h-14 w-full appearance-none rounded-[20px] border border-input bg-background pl-16 pr-12 text-base shadow-none"
                             value={recRepeat}
                             onChange={(e) => {
                               const next = e.target.value as "once" | RecurringFrequency;
@@ -2354,12 +2354,12 @@ export function PlanningPanel({
                       {locale === "ru" ? "Дата первого платежа" : "First payment date"}
                     </p>
                     <div className="mt-3 relative">
-                      <span className="pointer-events-none absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                        <CalendarDays className="h-5 w-5" />
+                      <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
+                        <CalendarDays className="h-5 w-5 shrink-0" />
                       </span>
                       <Input
                         type="date"
-                        className="h-14 w-full rounded-[20px] border-input pl-16 text-base"
+                        className="h-14 w-full rounded-[20px] border-input pl-16 pr-4 text-base"
                         ref={recStartDateInputRef}
                         defaultValue={recStartDate}
                         onChange={(e) => handleRecStartDateInput(e.currentTarget.value)}
@@ -2386,7 +2386,7 @@ export function PlanningPanel({
                           )}
                           onClick={() => setRecEndMode("never")}
                         >
-                          <Infinity className="mb-4 h-7 w-7" />
+                          <Infinity className="mb-4 h-7 w-7 shrink-0 text-current" />
                           <span className="text-base font-semibold">
                             {locale === "ru" ? "Без срока" : "No end"}
                           </span>
@@ -2406,7 +2406,7 @@ export function PlanningPanel({
                           )}
                           onClick={() => setRecEndMode("date")}
                         >
-                          <CalendarDays className="mb-4 h-7 w-7" />
+                          <CalendarDays className="mb-4 h-7 w-7 shrink-0 text-current" />
                           <span className="text-base font-semibold">
                             {locale === "ru" ? "До даты" : "Until date"}
                           </span>
@@ -2429,7 +2429,7 @@ export function PlanningPanel({
                           )}
                           onClick={() => setRecEndMode("months")}
                         >
-                          <Clock3 className="mb-4 h-7 w-7" />
+                          <Clock3 className="mb-4 h-7 w-7 shrink-0 text-current" />
                           <span className="text-base font-semibold">
                             {locale === "ru" ? "Через N мес." : "After N months"}
                           </span>
@@ -2478,8 +2478,8 @@ export function PlanningPanel({
                     </div>
                   ) : null}
 
-                  <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-10 mt-5 border-t border-border/60 bg-background/95 px-0 pb-0 pt-5">
-                    <div className="rounded-[28px] bg-background/92 p-1.5 backdrop-blur-sm">
+                  <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] left-1/2 z-20 w-[min(calc(100vw-2rem),40rem)] -translate-x-1/2 px-1">
+                    <div className="rounded-[30px] border border-border/70 bg-background/98 p-2 shadow-lg shadow-black/10 backdrop-blur-md supports-[backdrop-filter]:bg-background/90">
                       <Button
                         className="h-14 w-full rounded-[22px] text-base font-semibold shadow-sm shadow-emerald-900/15"
                         onClick={handleAddRecurring}
