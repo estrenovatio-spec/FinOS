@@ -1,28 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArchiveRestore, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import {
   apiSync,
-  apiCreateBusinessBackup,
   apiCreateHouseholdBackup,
-  apiListBusinessBackups,
   apiListHouseholdBackups,
-  apiRestoreBusinessBackup,
   apiRestoreHouseholdBackup,
-  type BusinessBackupSummary,
   type HouseholdBackupSummary,
 } from "@/lib/cloud/client";
 import { applyHouseholdSync } from "@/lib/cloud/apply-sync";
 import { isCloudPaused, setCloudPaused } from "@/lib/cloud/cloud-pause";
 import { beginCloudRestore, endCloudRestore } from "@/lib/cloud/restore-lock";
-import { formatMoney } from "@/lib/format-money";
 import type { SyncPayload } from "@/lib/household/types";
 import { useCloudStore } from "@/store/useCloudStore";
-import { useBusinessStore } from "@/store/useBusinessStore";
 import { useStore } from "@/store/useStore";
+import { downloadTextFile } from "@/lib/export/transactions-export";
 
 function formatArchiveDate(value: string, locale: "ru" | "en"): string {
   const date = new Date(value);
@@ -118,55 +113,67 @@ function SectionTitle({
   );
 }
 
+type PersonalFileBackup = {
+  format: "finos-personal-backup";
+  version: 1;
+  createdAt: string;
+  data: Pick<
+    SyncPayload,
+    | "transactions"
+    | "categories"
+    | "savingsGoals"
+    | "categoryBudgets"
+    | "recurringTransactions"
+    | "debts"
+    | "moneySetup"
+    | "vehicles"
+    | "vehiclePrefs"
+  >;
+};
+
+function isPersonalFileBackup(value: unknown): value is PersonalFileBackup {
+  if (!value || typeof value !== "object") return false;
+  const backup = value as Partial<PersonalFileBackup>;
+  const data = backup.data;
+  return (
+    backup.format === "finos-personal-backup" &&
+    backup.version === 1 &&
+    Boolean(data) &&
+    Array.isArray(data?.transactions) &&
+    Array.isArray(data?.categories) &&
+    Array.isArray(data?.savingsGoals) &&
+    Array.isArray(data?.categoryBudgets) &&
+    Array.isArray(data?.recurringTransactions)
+  );
+}
+
 export function ArchiveRestorePanel() {
   const locale = useStore((s) => s.locale);
   const categoryArchive = useStore((s) => s.deletedCategoryArchive);
   const restoreArchivedCategory = useStore((s) => s.restoreArchivedCategory);
-  const businessArchive = useBusinessStore((s) => s.deletedUnitsArchive);
-  const restoreDeletedUnitArchive = useBusinessStore((s) => s.restoreDeletedUnitArchive);
-  const importBusinessPayload = useBusinessStore((s) => s.importPayload);
-  const markBusinessCloudSynced = useBusinessStore((s) => s.markCloudSynced);
   const token = useCloudStore((s) => s.token);
-  const [serverBackups, setServerBackups] = useState<BusinessBackupSummary[]>([]);
   const [householdBackups, setHouseholdBackups] = useState<HouseholdBackupSummary[]>([]);
-  const [serverLoading, setServerLoading] = useState(false);
   const [householdLoading, setHouseholdLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
-  const [creatingBusinessBackup, setCreatingBusinessBackup] = useState(false);
   const [creatingHouseholdBackup, setCreatingHouseholdBackup] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const hasArchive =
-    categoryArchive.length > 0 ||
-    businessArchive.length > 0 ||
-    serverBackups.length > 0 ||
-    householdBackups.length > 0;
-  const totalBackups =
-    categoryArchive.length +
-    businessArchive.length +
-    serverBackups.length +
-    householdBackups.length;
+  const hasArchive = categoryArchive.length > 0 || householdBackups.length > 0;
+  const totalBackups = categoryArchive.length + householdBackups.length;
 
   const loadServerBackups = useCallback(async () => {
     if (!token) {
-      setServerBackups([]);
       setHouseholdBackups([]);
       return;
     }
-    setServerLoading(true);
     setHouseholdLoading(true);
     try {
-      const [businessRes, householdRes] = await Promise.all([
-        apiListBusinessBackups(token),
-        apiListHouseholdBackups(token),
-      ]);
-      setServerBackups(businessRes.backups ?? []);
+      const householdRes = await apiListHouseholdBackups(token);
       setHouseholdBackups(householdRes.backups ?? []);
     } catch {
-      setServerBackups([]);
       setHouseholdBackups([]);
     } finally {
-      setServerLoading(false);
       setHouseholdLoading(false);
     }
   }, [token]);
@@ -189,50 +196,7 @@ export function ArchiveRestorePanel() {
     );
   };
 
-  const restoreBusiness = (id: string) => {
-    const ok = restoreDeletedUnitArchive(id);
-    toast(
-      ok
-        ? locale === "ru"
-          ? "Бизнес восстановлен"
-          : "Business restored"
-        : locale === "ru"
-          ? "Не удалось восстановить бизнес"
-          : "Could not restore business",
-      ok ? "success" : "error",
-    );
-  };
 
-  const restoreServerBackup = async (id: string) => {
-    if (!token) return;
-    if (
-      !window.confirm(
-        locale === "ru"
-          ? "Восстановить бизнес из этой резервной копии? Текущее состояние перед восстановлением тоже сохранится в архив."
-          : "Restore business from this backup? Current state will also be saved as a backup.",
-      )
-    ) {
-      return;
-    }
-    setRestoringId(id);
-    try {
-      const res = await apiRestoreBusinessBackup(token, id);
-      importBusinessPayload(res.business);
-      markBusinessCloudSynced();
-      toast(
-        locale === "ru" ? "Бизнес восстановлен из резервной копии" : "Business restored from backup",
-        "success",
-      );
-      await loadServerBackups();
-    } catch {
-      toast(
-        locale === "ru" ? "Не удалось восстановить резервную копию" : "Could not restore backup",
-        "error",
-      );
-    } finally {
-      setRestoringId(null);
-    }
-  };
 
   const buildLocalHouseholdSnapshot = (): SyncPayload | null => {
     const cloud = useCloudStore.getState();
@@ -270,6 +234,66 @@ export function ArchiveRestorePanel() {
     }
   };
 
+  const downloadPersonalBackupFile = () => {
+    const local = useStore.getState();
+    const backup: PersonalFileBackup = {
+      format: "finos-personal-backup",
+      version: 1,
+      createdAt: new Date().toISOString(),
+      data: {
+        transactions: local.transactions,
+        categories: local.categories,
+        savingsGoals: local.savingsGoals,
+        categoryBudgets: local.categoryBudgets,
+        recurringTransactions: local.recurringTransactions,
+        debts: local.debts,
+        moneySetup: local.moneySetup,
+        vehicles: local.vehicles,
+        vehiclePrefs: local.vehiclePrefs,
+      },
+    };
+    const stamp = backup.createdAt.slice(0, 10);
+    downloadTextFile(`finos-personal-backup-${stamp}.json`, JSON.stringify(backup, null, 2), "application/json");
+    toast(locale === "ru" ? "Личная резервная копия сохранена в файл." : "Personal backup saved as a file.", "success");
+  };
+
+  const restorePersonalBackupFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!isPersonalFileBackup(parsed)) throw new Error("invalid_backup");
+      if (!window.confirm(locale === "ru" ? "Восстановить личные данные из файла? Текущие данные на этом устройстве будут заменены." : "Restore personal data from this file? Current data on this device will be replaced.")) return;
+      const data = parsed.data;
+      beginCloudRestore();
+      setCloudPaused(true);
+      useStore.setState({
+        transactions: data.transactions,
+        categories: data.categories,
+        savingsGoals: data.savingsGoals,
+        categoryBudgets: data.categoryBudgets,
+        recurringTransactions: data.recurringTransactions,
+        debts: data.debts ?? [],
+        moneySetup: data.moneySetup,
+        vehicles: data.vehicles ?? [],
+        vehiclePrefs: data.vehiclePrefs,
+      });
+      useCloudStore.getState().setDeletedTransactionIds([]);
+      useCloudStore.getState().setDeletedRecurringIds([]);
+      useCloudStore.getState().setDeletedDebtIds([]);
+      toast(
+        locale === "ru"
+          ? "Личные данные восстановлены из файла. Синхронизация приостановлена, чтобы облако не перезаписало их."
+          : "Personal data restored from file. Sync is paused so cloud data cannot overwrite it.",
+        "success",
+      );
+      endCloudRestore();
+    } catch {
+      toast(locale === "ru" ? "Не удалось прочитать резервную копию. Выберите файл FinOS .json." : "Could not read this backup. Choose a FinOS .json file.", "error");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const createHouseholdBackup = async () => {
     if (!token) return;
     setCreatingHouseholdBackup(true);
@@ -290,31 +314,6 @@ export function ArchiveRestorePanel() {
     }
   };
 
-  const createBusinessBackup = async () => {
-    if (!token) return;
-    setCreatingBusinessBackup(true);
-    try {
-      const res = await apiCreateBusinessBackup(token);
-      setServerBackups(res.backups ?? []);
-      toast(
-        res.ok
-          ? locale === "ru"
-            ? "Копия бизнеса создана"
-            : "Business backup created"
-          : locale === "ru"
-            ? "В бизнесе пока нечего сохранять"
-            : "Nothing to back up yet",
-        res.ok ? "success" : "default",
-      );
-    } catch {
-      toast(
-        locale === "ru" ? "Не удалось создать копию бизнеса" : "Could not create business backup",
-        "error",
-      );
-    } finally {
-      setCreatingBusinessBackup(false);
-    }
-  };
 
   const restoreHouseholdServerBackup = async (id: string) => {
     if (!token) return;
@@ -373,15 +372,15 @@ export function ArchiveRestorePanel() {
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {locale === "ru"
-              ? "Здесь можно вернуть семью, бизнес, проекты или категории, если что-то удалилось или пошло не так."
-              : "Restore household data, business, projects, or categories if something was deleted or went wrong."}
+              ? "Здесь можно вернуть личные операции, цели или категории, если что-то удалилось или пошло не так."
+              : "Restore personal entries, goals, or categories if something was deleted or went wrong."}
           </p>
         </div>
       </div>
 
       {!hasArchive ? (
         <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-          {serverLoading
+          {householdLoading
             ? locale === "ru"
               ? "Проверяю резервные копии..."
               : "Checking backups..."
@@ -390,6 +389,30 @@ export function ArchiveRestorePanel() {
               : "Archive is empty."}
         </p>
       ) : null}
+
+      <div className="space-y-1.5">
+        <SectionTitle title={locale === "ru" ? "Файл на телефон" : "File on this device"} />
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {locale === "ru"
+            ? "Скачайте JSON-файл и храните его в надёжном месте. Восстановление работает без облачной синхронизации."
+            : "Download a JSON file and keep it somewhere safe. Restore works without cloud sync."}
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          onChange={(event) => void restorePersonalBackupFile(event.target.files?.[0])}
+        />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Button type="button" variant="secondary" onClick={downloadPersonalBackupFile}>
+            {locale === "ru" ? "Сохранить JSON-файл" : "Save JSON file"}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+            {locale === "ru" ? "Восстановить из файла" : "Restore from file"}
+          </Button>
+        </div>
+      </div>
 
       {token ? (
         <div className="space-y-1.5">
@@ -467,95 +490,6 @@ export function ArchiveRestorePanel() {
         </div>
       ) : null}
 
-      {token ? (
-        <div className="space-y-1.5">
-          <SectionTitle
-            title={locale === "ru" ? "Бизнес: источники, проекты, долги" : "Business: sources, projects, debts"}
-            action={
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-7 px-2 text-xs"
-                disabled={creatingBusinessBackup}
-                onClick={() => void createBusinessBackup()}
-              >
-                {creatingBusinessBackup ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : locale === "ru" ? (
-                  "Создать копию"
-                ) : (
-                  "Create copy"
-                )}
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => void loadServerBackups()}>
-                {locale === "ru" ? "Обновить" : "Refresh"}
-              </Button>
-            </div>
-            }
-          />
-          {serverBackups.length > 0 ? (
-            <div className="max-h-60 max-w-full space-y-1.5 overflow-y-auto overflow-x-hidden pr-1">
-              {groupArchiveItems(serverBackups, (item) => item.createdAt).map((group) => (
-              <div key={group.key} className="space-y-1.5">
-                <p className="px-1 text-[11px] font-medium text-muted-foreground">
-                  {formatArchiveDate(group.date, locale)}
-                </p>
-                {group.items.map((item) => (
-                  <div key={item.id} className="min-w-0 rounded-md border px-2.5 py-2 text-sm">
-                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="break-words font-medium leading-tight">
-                          {formatArchiveTime(item.createdAt, locale)} · {backupReasonLabel(item.reason, locale)}
-                        </p>
-                        <ContentLine
-                          items={[
-                            `${locale === "ru" ? "Бизнесы" : "Businesses"}: ${item.units}`,
-                            `${locale === "ru" ? "Источники/проекты" : "Sources/projects"}: ${item.assets}`,
-                            `${locale === "ru" ? "Операции" : "Entries"}: ${item.transactions}`,
-                            `${locale === "ru" ? "Долги" : "Debts"}: ${item.debts}`,
-                          ]}
-                        />
-                        {[...item.unitNames, ...item.assetNames].length > 0 ? (
-                          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                            {[...item.unitNames, ...item.assetNames].slice(0, 8).join(", ")}
-                          </p>
-                        ) : null}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full sm:w-auto"
-                        disabled={Boolean(restoringId)}
-                        onClick={() => void restoreServerBackup(item.id)}
-                      >
-                        {restoringId === item.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : locale === "ru" ? (
-                          "Вернуть"
-                        ) : (
-                          "Restore"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              ))}
-            </div>
-          ) : serverLoading ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-              {locale === "ru" ? "Проверяю копии бизнеса..." : "Checking business backups..."}
-            </p>
-          ) : (
-            <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-              {locale === "ru"
-                ? "Копий бизнеса пока нет. Можно создать вручную перед важными изменениями."
-                : "No business backups yet. You can create one before important changes."}
-            </p>
-          )}
-        </div>
-      ) : null}
 
       {categoryArchive.length > 0 ? (
         <div className="space-y-1.5">
@@ -594,50 +528,6 @@ export function ArchiveRestorePanel() {
         </div>
       ) : null}
 
-      {businessArchive.length > 0 ? (
-        <div className="space-y-1.5">
-          <SectionTitle title={locale === "ru" ? "Удалённые бизнесы" : "Deleted businesses"} />
-          <div className="max-h-60 max-w-full space-y-1.5 overflow-y-auto overflow-x-hidden pr-1">
-            {groupArchiveItems(businessArchive, (item) => item.deletedAt).map((group) => (
-              <div key={group.key} className="space-y-1.5">
-                <p className="px-1 text-[11px] font-medium text-muted-foreground">
-                  {formatArchiveDate(group.date, locale)}
-                </p>
-                {group.items.map((item) => {
-                  const txTotal = item.transactions.reduce((sum, tx) => sum + tx.amount, 0);
-                  return (
-                    <div key={item.id} className="min-w-0 rounded-md border px-2.5 py-2 text-sm">
-                      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="break-words font-medium leading-tight">{item.unit.name}</p>
-                          <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                            {formatArchiveTime(item.deletedAt, locale)} ·{" "}
-                            {locale === "ru" ? "операций: " : "entries: "}
-                            {item.transactions.length} ·{" "}
-                            {locale === "ru" ? "проектов: " : "projects: "}
-                            {item.assets.length} ·{" "}
-                            {locale === "ru" ? "долгов: " : "debts: "}
-                            {item.debts.length}
-                          </p>
-                          {txTotal > 0 ? (
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              {locale === "ru" ? "Сумма операций: " : "Entries total: "}
-                              {formatMoney(txTotal, locale)}
-                            </p>
-                          ) : null}
-                        </div>
-                        <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => restoreBusiness(item.id)}>
-                          {locale === "ru" ? "Вернуть" : "Restore"}
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
