@@ -483,8 +483,8 @@ export function buildBudgetExcelWorkbook(params: {
       [
         isRu ? "Что входит в файл" : "What is included",
         isRu
-          ? "Только личные операции за выбранный период. Бизнес-операции, активы и проекты в этот отчёт не входят."
-          : "Only personal entries for the selected period. Business entries, assets, and projects are not included.",
+          ? "Личные операции за выбранный период."
+          : "Personal entries for the selected period.",
       ],
     ];
     return buildXlsxWorkbook([
