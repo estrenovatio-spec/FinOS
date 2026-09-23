@@ -1,10 +1,9 @@
 "use client";
 
-import { MessageCircleQuestion, Sparkles, TrendingUp, Wallet } from "lucide-react";
+import { MessageCircleQuestion, Sparkles, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AiWeeklyMissionTab } from "@/components/AiWeeklyMissionTab";
 import { MonthlyAnalysisTab } from "@/components/MonthlyAnalysisTab";
-import { WeeklyAnalysisTab } from "@/components/WeeklyAnalysisTab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { buildAdvisorContext } from "@/lib/advisor-context";
@@ -17,7 +16,7 @@ import { t } from "@/lib/i18n";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useHouseholdBalances, useStore, useViewerMappedTransactions } from "@/store/useStore";
 
-type AiSubTab = "questions" | "mission" | "weekly" | "monthly";
+type AiSubTab = "questions" | "mission" | "monthly";
 type AdvisorMessage = { role: "user" | "assistant"; content: string };
 
 type AiAnalysisTabProps = {
@@ -39,7 +38,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
   const userPlan = useCloudStore((s) => s.userPlan);
   const balances = useHouseholdBalances();
   const transactions = useViewerMappedTransactions(false);
-  const [subTab, setSubTab] = useState<AiSubTab>(reportsOnly ? "weekly" : "questions");
+  const [subTab, setSubTab] = useState<AiSubTab>(reportsOnly ? "monthly" : "questions");
   const [draftQuestion, setDraftQuestion] = useState("");
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const [sendingQuestion, setSendingQuestion] = useState(false);
@@ -239,7 +238,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
   return (
     <div className="space-y-3">
       <Tabs value={subTab} onValueChange={(v) => setSubTab(v as AiSubTab)}>
-      <TabsList className={`mb-3 grid w-full ${reportsOnly ? "grid-cols-2" : "grid-cols-4"}`}>
+      <TabsList className={`mb-3 grid w-full ${reportsOnly ? "grid-cols-1" : "grid-cols-3"}`}>
         {!reportsOnly ? (
           <TabsTrigger value="questions" className="h-auto min-h-10 px-1 text-xs leading-tight">
             {locale === "ru" ? (
@@ -274,11 +273,8 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
             )}
           </TabsTrigger>
         ) : null}
-        <TabsTrigger value="weekly" className="h-auto min-h-10 px-1 text-xs leading-tight">
-          {locale === "ru" ? "7 дней" : t(locale, "aiTabWeekly")}
-        </TabsTrigger>
         <TabsTrigger value="monthly" className="h-auto min-h-10 px-1 text-xs leading-tight">
-          {locale === "ru" ? "30 дней" : t(locale, "aiTabMonthly")}
+          {locale === "ru" ? "Финансовый месяц" : t(locale, "aiTabMonthly")}
         </TabsTrigger>
       </TabsList>
       {!reportsOnly ? (
@@ -393,16 +389,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
             {questionError ? (
               <p className="mt-2 text-sm text-destructive">{questionError}</p>
             ) : null}
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="justify-start gap-2"
-                onClick={() => setSubTab("weekly")}
-              >
-                <Wallet className="h-4 w-4" />
-                {locale === "ru" ? "Открыть разбор на 7 дней" : "Open 7-day review"}
-              </Button>
+            <div className="mt-3">
               <Button
                 type="button"
                 variant="outline"
@@ -410,7 +397,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
                 onClick={() => setSubTab("monthly")}
               >
                 <TrendingUp className="h-4 w-4" />
-                {locale === "ru" ? "Открыть разбор на 30 дней" : "Open 30-day review"}
+                {locale === "ru" ? "Открыть разбор финансового месяца" : "Open financial-month review"}
               </Button>
             </div>
           </div>
@@ -421,9 +408,6 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
           <AiWeeklyMissionTab />
         </TabsContent>
       ) : null}
-      <TabsContent value="weekly">
-        <WeeklyAnalysisTab active={active && subTab === "weekly"} />
-      </TabsContent>
       <TabsContent value="monthly">
         <MonthlyAnalysisTab active={active && subTab === "monthly"} />
       </TabsContent>

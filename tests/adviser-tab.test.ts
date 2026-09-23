@@ -40,8 +40,8 @@ test("Adviser screen now starts from a dedicated questions hub with contextual p
   assert.match(aiAnalysisTab, /Отправить →/);
   assert.match(aiAnalysisTab, /Анализирую ваши финансы\.\.\./);
   assert.match(aiAnalysisTab, /Не удалось получить ответ/);
-  assert.match(aiAnalysisTab, /Открыть разбор на 7 дней/);
-  assert.match(aiAnalysisTab, /Открыть разбор на 30 дней/);
+  assert.doesNotMatch(aiAnalysisTab, /Открыть разбор на 7 дней/);
+  assert.match(aiAnalysisTab, /Открыть разбор финансового месяца/);
 });
 
 test("Advisor context builder prepares cards for balance, free money, forecast, goals, recurring and limits", () => {

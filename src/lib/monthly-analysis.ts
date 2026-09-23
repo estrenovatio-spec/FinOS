@@ -9,6 +9,7 @@ import { advisorPlanningWithRu } from "@/lib/advisor-config";
 import { formatIsoDate, formatIsoPeriod } from "@/lib/format-date";
 import type { AiCoachingContext } from "@/lib/ai-coaching-context";
 import { coachingPromptBlock } from "@/lib/ai-coaching-context";
+import { getCurrentBudgetPeriod } from "@/lib/budget-period";
 import type { Locale, Transaction } from "@/types";
 
 /** Макс. длина периода отчёта; если ведёте дольше — берём последние 30 дней */
@@ -172,13 +173,29 @@ export function buildMonthlySummary(
   transactions: Transaction[],
   trackingStartedAt: string | null,
   resolveCategoryLabel: (categoryId: string) => string,
+  budgetMonthStartDay = 1,
+  today = new Date(),
 ): MonthlySummary {
-  return buildPeriodSummary(
-    transactions,
-    trackingStartedAt,
-    resolveCategoryLabel,
-    MONTHLY_ANALYSIS_DAYS,
+  const period = getCurrentBudgetPeriod(budgetMonthStartDay, today);
+  const periodEnd = today.toISOString().slice(0, 10) < period.to
+    ? today.toISOString().slice(0, 10)
+    : period.to;
+  const periodTxs = transactions.filter(
+    (transaction) => transaction.date >= period.from && transaction.date <= periodEnd,
   );
+  const base = buildBudgetSummary(periodTxs, trackingStartedAt, resolveCategoryLabel);
+  const periodNet = base.totalIncome - base.totalExpense;
+
+  return {
+    ...base,
+    daysTracked: getDaysTracked(trackingStartedAt, transactions),
+    transactionCount: periodTxs.length,
+    monthTransactionCount: periodTxs.length,
+    periodNet,
+    balance: periodNet,
+    periodStart: period.from,
+    periodEnd,
+  };
 }
 
 export function getMonthlyGate(
@@ -186,15 +203,6 @@ export function getMonthlyGate(
   _trackingStartedAt: string | null,
   _transactions: Transaction[],
 ): MonthlyGate {
-  const periodDays = reportPeriodDays(summary);
-  if (periodDays < MONTHLY_ANALYSIS_DAYS) {
-    return {
-      ready: false,
-      reason: "need_more_days",
-      daysNeeded: MONTHLY_ANALYSIS_DAYS - periodDays,
-    };
-  }
-
   if (summary.monthTransactionCount < MONTHLY_MIN_TRANSACTIONS) {
     return {
       ready: false,
@@ -222,8 +230,8 @@ export function getMonthlyWaitingMessages(
     const n = gate.daysNeeded ?? 1;
     return [
       isRu
-        ? `Месячный разбор откроется через ${n} ${n === 1 ? "день" : n < 5 ? "дня" : "дней"} — ведите учёт с первого входа (нужно ${MONTHLY_ANALYSIS_DAYS} дней).`
-        : `Monthly review unlocks in ${n} day(s) — keep logging (${MONTHLY_ANALYSIS_DAYS} days from your first entry).`,
+        ? `Для разбора пока не хватает данных за текущий финансовый месяц. Добавьте операции.`
+        : "There is not enough data for the current financial month yet. Add entries.",
     ];
   }
 
