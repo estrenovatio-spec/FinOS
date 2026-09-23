@@ -332,12 +332,15 @@ export function mergeCategoryBudgets(
   local: CategoryBudget[],
   remote: CategoryBudget[],
   lastSyncedAt?: string | null,
+  previouslySyncedRemoteIds?: ReadonlySet<string>,
 ): CategoryBudget[] {
   return mergePlanningByKey(
     local.map((b) => ({ ...b, categoryId: migrateCategoryId(b.categoryId) })),
     remote.map((b) => ({ ...b, categoryId: migrateCategoryId(b.categoryId) })),
     (b) => b.categoryId,
     lastSyncedAt,
+    undefined,
+    previouslySyncedRemoteIds,
   );
 }
 
@@ -388,8 +391,16 @@ export function mergeDebts(
   remote: DebtItem[],
   lastSyncedAt?: string | null,
   deletedIds?: ReadonlySet<string>,
+  previouslySyncedRemoteIds?: ReadonlySet<string>,
 ): DebtItem[] {
-  const merged = mergeByKey(local, remote, (d) => d.id, lastSyncedAt);
+  const merged = mergePlanningByKey(
+    local,
+    remote,
+    (d) => d.id,
+    lastSyncedAt,
+    undefined,
+    previouslySyncedRemoteIds,
+  );
   if (!deletedIds?.size) return merged;
   return merged.filter((d) => !deletedIds.has(d.id));
 }
@@ -441,6 +452,8 @@ export function mergeSyncPayload(
   previouslySyncedRemoteGoalIds?: ReadonlySet<string>,
   pendingGoalIds?: ReadonlySet<string>,
   previouslySyncedRemoteRecurringIds?: ReadonlySet<string>,
+  previouslySyncedRemoteBudgetCategoryIds?: ReadonlySet<string>,
+  previouslySyncedRemoteDebtIds?: ReadonlySet<string>,
 ): MergedSyncResult {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   const remoteTxIds = new Set(remote.transactions.map((t) => t.id));
@@ -478,6 +491,7 @@ export function mergeSyncPayload(
     localPlanning.categoryBudgets,
     remote.categoryBudgets ?? [],
     lastSyncedAt,
+    previouslySyncedRemoteBudgetCategoryIds,
   );
   const recurringTransactions = mergeRecurringTransactions(
     localPlanning.recurringTransactions,
@@ -488,7 +502,13 @@ export function mergeSyncPayload(
     transactions,
     previouslySyncedRemoteRecurringIds,
   );
-  const debts = mergeDebts(localPlanning.debts, remote.debts ?? [], lastSyncedAt, deletedDebtIds);
+  const debts = mergeDebts(
+    localPlanning.debts,
+    remote.debts ?? [],
+    lastSyncedAt,
+    deletedDebtIds,
+    previouslySyncedRemoteDebtIds,
+  );
   const moneySetup = mergeMoneySetup(localPlanning.moneySetup, remote.moneySetup);
 
   const localOnlyTransactionIds = localTransactions
@@ -510,12 +530,16 @@ export function mergeSyncPayload(
   const localOnlyGoalIds = localPlanning.savingsGoals
     .filter((g) => {
       if (pendingGoalIds?.has(g.id)) return true;
+      if (!previouslySyncedRemoteGoalIds?.has(g.id)) return true;
       return Number.isNaN(lastSyncedMs) || itemTime(g) > lastSyncedMs;
     })
     .map((g) => g.id)
     .filter((id) => !remoteGoalIds.has(id));
   const localOnlyBudgetCategoryIds = localPlanning.categoryBudgets
-    .filter((b) => Number.isNaN(lastSyncedMs) || itemTime(b) > lastSyncedMs)
+    .filter((b) => {
+      if (!previouslySyncedRemoteBudgetCategoryIds?.has(b.categoryId)) return true;
+      return Number.isNaN(lastSyncedMs) || itemTime(b) > lastSyncedMs;
+    })
     .map((b) => b.categoryId)
     .filter((id) => !remoteBudgetIds.has(id));
   const localOnlyRecurringIds = localPlanning.recurringTransactions
@@ -532,6 +556,7 @@ export function mergeSyncPayload(
     .filter((item) => {
       if (remoteDebtIds.has(item.id)) return false;
       if (deletedDebtIds?.has(item.id)) return false;
+      if (!previouslySyncedRemoteDebtIds?.has(item.id)) return true;
       if (!Number.isNaN(lastSyncedMs) && itemTime(item) <= lastSyncedMs) return false;
       return true;
     })

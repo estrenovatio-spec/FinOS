@@ -6,7 +6,7 @@ import { mergeSyncPayload } from "@/lib/cloud/merge-sync";
 import { getDefaultCategories } from "@/lib/categories";
 import { emptyMoneySetup } from "@/lib/money-setup";
 import type { SyncPayload } from "@/lib/household/types";
-import type { RecurringTransaction } from "@/types/planning";
+import type { CategoryBudget, DebtItem, RecurringTransaction, SavingsGoal } from "@/types/planning";
 import { useStore } from "@/store/useStore";
 import { useCloudStore } from "@/store/useCloudStore";
 
@@ -45,6 +45,43 @@ function sync(items: RecurringTransaction[]): SyncPayload {
     recurringTransactions: items,
     debts: [],
     moneySetup: emptyMoneySetup(),
+  };
+}
+
+function goal(id: string): SavingsGoal {
+  return {
+    id,
+    name: id,
+    targetAmount: 10_000,
+    savedAmount: 0,
+    deadline: null,
+    monthlyContribution: null,
+    kind: "custom",
+    emergencyMonths: null,
+    updatedAt: "2026-09-22T10:00:00.000Z",
+  };
+}
+
+function budget(categoryId: string): CategoryBudget {
+  return {
+    categoryId,
+    monthlyLimit: 1_000,
+    updatedAt: "2026-09-22T10:00:00.000Z",
+  };
+}
+
+function debt(id: string): DebtItem {
+  return {
+    id,
+    name: id,
+    balance: 10_000,
+    minPayment: 1_000,
+    ratePct: null,
+    nextPaymentDate: null,
+    owner: "me",
+    strategy: "avalanche",
+    priority: "normal",
+    updatedAt: "2026-09-22T10:00:00.000Z",
   };
 }
 
@@ -150,6 +187,58 @@ test("older unsynced recurring payments remain queued for upload", () => {
     merged.localOnlyRecurringIds,
     items.map((r) => r.id),
   );
+});
+
+test("goals, limits, and debts survive a partial snapshot and remain queued for upload", () => {
+  const localGoal = goal("goal-local");
+  const localBudget = budget("groceries");
+  const localDebt = debt("debt-local");
+  const remote = {
+    ...sync([]),
+    savingsGoals: [goal("goal-remote")],
+    categoryBudgets: [budget("transport")],
+    debts: [debt("debt-remote")],
+  };
+  const merged = mergeSyncPayload(
+    [],
+    getDefaultCategories(),
+    {
+      savingsGoals: [localGoal],
+      categoryBudgets: [localBudget],
+      recurringTransactions: [],
+      debts: [localDebt],
+      moneySetup: emptyMoneySetup(),
+    },
+    remote,
+    "2026-09-22T11:00:00.000Z",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    new Set(),
+    undefined,
+    new Set(),
+    new Set(),
+    new Set(),
+  );
+  assert.deepEqual(
+    new Set(merged.savingsGoals.map((item) => item.id)),
+    new Set(["goal-local", "goal-remote"]),
+  );
+  assert.deepEqual(
+    new Set(merged.categoryBudgets.map((item) => item.categoryId)),
+    new Set(["groceries", "transport"]),
+  );
+  assert.deepEqual(
+    new Set(merged.debts.map((item) => item.id)),
+    new Set(["debt-local", "debt-remote"]),
+  );
+  assert.deepEqual(merged.localOnlyGoalIds, [localGoal.id]);
+  assert.deepEqual(merged.localOnlyBudgetCategoryIds, [localBudget.categoryId]);
+  assert.deepEqual(merged.localOnlyDebtIds, [localDebt.id]);
 });
 
 test("only a matching server record clears the pending recurring write", () => {
