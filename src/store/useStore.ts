@@ -1693,6 +1693,7 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
         const item = sanitizeRecurringSkippedDates(rawItem, get().transactions);
+        useCloudStore.getState().markRecurringUpdatePending(id, item.updatedAt);
         set((state) => ({
           recurringTransactions: [...state.recurringTransactions, item],
         }));

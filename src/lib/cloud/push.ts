@@ -326,20 +326,14 @@ export async function cloudPushRecurring(item: RecurringTransaction): Promise<vo
   try {
     await apiUpsertRecurring(t, item);
     await pullCloudAfterWrite();
-    const remote = useStore.getState().recurringTransactions.find((entry) => entry.id === item.id);
-    if (remote?.updatedAt && item.updatedAt && Date.parse(remote.updatedAt) >= Date.parse(item.updatedAt)) {
-      useCloudStore.getState().clearRecurringUpdatePending(item.id);
-    }
+    // applyHouseholdSync acknowledges matching server data; the merged local store
+    // is not an acknowledgement (the pull may fail or still omit this write).
   } catch (e) {
     const refreshedToken = await retryAfterAuthError(e);
     if (!refreshedToken) return;
     try {
       await apiUpsertRecurring(refreshedToken, item);
       await pullCloudAfterWrite();
-      const remote = useStore.getState().recurringTransactions.find((entry) => entry.id === item.id);
-      if (remote?.updatedAt && item.updatedAt && Date.parse(remote.updatedAt) >= Date.parse(item.updatedAt)) {
-        useCloudStore.getState().clearRecurringUpdatePending(item.id);
-      }
     } catch {
       /* retry on next sync */
     }

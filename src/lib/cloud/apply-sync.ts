@@ -178,6 +178,7 @@ export function applyHouseholdSync(
     pendingRecurringUpdates,
     new Set(cloud.lastSyncedRemoteGoalIds),
     pendingGoalIds,
+    new Set(cloud.lastSyncedRemoteRecurringIds),
   );
 
   const savingsGoals = merged.savingsGoals.map((g) => applyGoalMonthlyToGoal(g));
