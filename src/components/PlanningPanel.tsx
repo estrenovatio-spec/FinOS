@@ -1058,7 +1058,7 @@ export function PlanningPanel({
                 </p>
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                   <p className="min-w-0 font-medium leading-tight">{title}</p>
-                  <p className="shrink-0 text-base font-semibold tabular-nums sm:text-[1.75rem] sm:leading-none">
+                  <p className="shrink-0 text-sm font-semibold leading-tight tabular-nums sm:text-[1.75rem] sm:leading-none">
                     {formatMoney(item.amount, locale)}
                   </p>
                 </div>
@@ -2221,7 +2221,7 @@ export function PlanningPanel({
               )}
               <div className="space-y-4 border-t pt-4">
                 <div className="space-y-1">
-                  <p className="text-base font-semibold text-foreground">
+                  <p className="text-sm font-semibold leading-tight text-foreground">
                     {locale === "ru" ? "Добавить регулярный платеж" : "Create recurring rule"}
                   </p>
                 </div>
@@ -2426,23 +2426,23 @@ export function PlanningPanel({
                       <p className="text-sm font-medium text-foreground">
                         {locale === "ru" ? "Срок действия" : "Duration"}
                       </p>
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <div className="mt-3 grid grid-cols-3 gap-2">
                         <Button
                           type="button"
                           variant="outline"
                           className={cn(
-                            "h-auto min-h-[132px] flex-col items-start rounded-[22px] px-3 py-4 text-left shadow-none",
+                            "h-auto min-h-[104px] flex-col items-start rounded-[18px] px-2.5 py-3 text-left shadow-none",
                             recEndMode === "never"
                               ? "border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-50"
                               : "border-border/70 bg-background hover:bg-muted/40",
                           )}
                           onClick={() => setRecEndMode("never")}
                         >
-                          <Infinity className="mb-4 h-7 w-7 shrink-0 text-current" />
-                          <span className="text-base font-semibold">
+                          <Infinity className="mb-2 h-5 w-5 shrink-0 text-current" />
+                          <span className="text-sm font-semibold leading-tight">
                             {locale === "ru" ? "Без срока" : "No end"}
                           </span>
-                          <span className="mt-1 text-xs font-normal text-muted-foreground">
+                          <span className="mt-1 text-[11px] font-normal leading-tight text-muted-foreground">
                             {locale === "ru" ? "Платить всегда" : "Pay continuously"}
                           </span>
                         </Button>
@@ -2451,18 +2451,18 @@ export function PlanningPanel({
                           type="button"
                           variant="outline"
                           className={cn(
-                            "h-auto min-h-[132px] flex-col items-start rounded-[22px] px-3 py-4 text-left shadow-none",
+                            "h-auto min-h-[104px] flex-col items-start rounded-[18px] px-2.5 py-3 text-left shadow-none",
                             recEndMode === "date"
                               ? "border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-50"
                               : "border-border/70 bg-background hover:bg-muted/40",
                           )}
                           onClick={() => setRecEndMode("date")}
                         >
-                          <CalendarDays className="mb-4 h-7 w-7 shrink-0 text-current" />
-                          <span className="text-base font-semibold">
+                          <CalendarDays className="mb-2 h-5 w-5 shrink-0 text-current" />
+                          <span className="text-sm font-semibold leading-tight">
                             {locale === "ru" ? "До даты" : "Until date"}
                           </span>
-                          <span className="mt-1 text-xs font-normal text-muted-foreground">
+                          <span className="mt-1 text-[11px] font-normal leading-tight text-muted-foreground">
                             {locale === "ru" ? "Выберите дату" : "Choose a date"}
                           </span>
                         </Button>
@@ -2472,7 +2472,7 @@ export function PlanningPanel({
                           variant="outline"
                           disabled={recRepeat !== "monthly"}
                           className={cn(
-                            "h-auto min-h-[132px] flex-col items-start rounded-[22px] px-3 py-4 text-left shadow-none",
+                            "h-auto min-h-[104px] flex-col items-start rounded-[18px] px-2.5 py-3 text-left shadow-none",
                             recRepeat !== "monthly"
                               ? "cursor-not-allowed border-border/60 bg-muted/20 text-muted-foreground opacity-60"
                               : recEndMode === "months"
@@ -2481,11 +2481,11 @@ export function PlanningPanel({
                           )}
                           onClick={() => setRecEndMode("months")}
                         >
-                          <Clock3 className="mb-4 h-7 w-7 shrink-0 text-current" />
-                          <span className="text-base font-semibold">
+                          <Clock3 className="mb-2 h-5 w-5 shrink-0 text-current" />
+                          <span className="text-sm font-semibold leading-tight">
                             {locale === "ru" ? "Через N мес." : "After N months"}
                           </span>
-                          <span className="mt-1 text-xs font-normal text-muted-foreground">
+                          <span className="mt-1 text-[11px] font-normal leading-tight text-muted-foreground">
                             {locale === "ru" ? "Укажите срок" : "Set the term"}
                           </span>
                         </Button>
@@ -2533,7 +2533,7 @@ export function PlanningPanel({
                   <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-1/2 z-20 w-[min(calc(100vw-1rem),40rem)] -translate-x-1/2 px-1">
                     <div className="rounded-[22px] border border-border/50 bg-background/96 p-1 shadow-sm shadow-black/5 backdrop-blur-sm supports-[backdrop-filter]:bg-background/92">
                       <Button
-                        className="h-[52px] w-full rounded-[18px] px-4 text-base font-semibold shadow-sm shadow-emerald-900/10"
+                        className="h-[52px] w-full rounded-[18px] px-4 text-sm font-semibold leading-tight shadow-sm shadow-emerald-900/10"
                         onClick={handleAddRecurring}
                       >
                         {locale === "ru" ? "Создать регулярный платеж" : "Create recurring payment"}
