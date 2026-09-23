@@ -348,10 +348,19 @@ export function mergeRecurringTransactions(
   deletedIds?: ReadonlySet<string>,
   pendingUpdateIds?: Readonly<Record<string, string>>,
   transactions: Transaction[] = [],
+  previouslySyncedRemoteIds?: ReadonlySet<string>,
 ): RecurringTransaction[] {
   const localNormalized = local.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) }));
   const remoteNormalized = remote.map((r) => ({ ...r, categoryId: migrateCategoryId(r.categoryId) }));
-  const merged = mergeByKey(localNormalized, remoteNormalized, (r) => r.id, lastSyncedAt);
+  // A pull timestamp is not proof that an individual local write reached the server.
+  const merged = mergePlanningByKey(
+    localNormalized,
+    remoteNormalized,
+    (r) => r.id,
+    lastSyncedAt,
+    new Set(Object.keys(pendingUpdateIds ?? {})),
+    previouslySyncedRemoteIds ?? new Set<string>(),
+  );
   if (pendingUpdateIds && Object.keys(pendingUpdateIds).length > 0) {
     const localById = new Map(localNormalized.map((item) => [item.id, item]));
     for (const remoteItem of remoteNormalized) {
@@ -431,6 +440,7 @@ export function mergeSyncPayload(
   pendingRecurringUpdateIds?: Readonly<Record<string, string>>,
   previouslySyncedRemoteGoalIds?: ReadonlySet<string>,
   pendingGoalIds?: ReadonlySet<string>,
+  previouslySyncedRemoteRecurringIds?: ReadonlySet<string>,
 ): MergedSyncResult {
   const lastSyncedMs = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
   const remoteTxIds = new Set(remote.transactions.map((t) => t.id));
@@ -476,6 +486,7 @@ export function mergeSyncPayload(
     deletedRecurringIds,
     pendingRecurringUpdateIds,
     transactions,
+    previouslySyncedRemoteRecurringIds,
   );
   const debts = mergeDebts(localPlanning.debts, remote.debts ?? [], lastSyncedAt, deletedDebtIds);
   const moneySetup = mergeMoneySetup(localPlanning.moneySetup, remote.moneySetup);
@@ -512,6 +523,7 @@ export function mergeSyncPayload(
       if (remoteRecurringIds.has(item.id)) return false;
       if (deletedRecurringIds?.has(item.id)) return false;
       if (pendingRecurringUpdateIds?.[item.id]) return true;
+      if (!previouslySyncedRemoteRecurringIds?.has(item.id)) return true;
       if (!Number.isNaN(lastSyncedMs) && itemTime(item) <= lastSyncedMs) return false;
       return true;
     })
