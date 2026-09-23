@@ -6,7 +6,7 @@ import { TelegramInit } from "@/components/TelegramInit";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
-const iconVersion = "20260728";
+const iconVersion = "20260923";
 
 export const metadata: Metadata = {
   title: "FinOS",
