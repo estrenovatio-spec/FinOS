@@ -69,7 +69,7 @@ test("page wires Plan tab state separately from Forecast focus", () => {
   assert.match(pageSource, /writeStoredPlanSection/);
   assert.match(pageSource, /onAppViewChange\("plan"/);
   assert.match(pageSource, /min-h-\[var\(--app-viewport-height,100dvh\)\]/);
-  assert.match(pageSource, /pb-\[calc\(var\(--app-bottom-nav-height\)\+1rem\+env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(pageSource, /pb-\[calc\(var\(--app-bottom-nav-height\)\+1\.25rem\+env\(safe-area-inset-bottom\)\)\]/);
 });
 
 test("legacy tab state migrates recurring and regulars into plan recurring", () => {

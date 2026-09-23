@@ -17,7 +17,8 @@ test("planned free money summary uses human wording and long Russian date", () =
 
   assert.equal(summary?.label, "Можно потратить");
   assert.equal(summary?.subtitle, "до 31 июля 2026");
-  assert.match(summary?.caption ?? "", /базовых расходов/i);
+  assert.match(summary?.caption ?? "", /обязательных платежей/i);
+  assert.match(summary?.caption ?? "", /лимитам/i);
   assert.doesNotMatch(summary?.caption ?? "", /recurring|essential|period|forecast|planned/i);
 });
 

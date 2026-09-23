@@ -15,7 +15,7 @@ import {
 import { getDefaultCategories } from "@/lib/categories";
 import { emptyMoneySetup } from "@/lib/money-setup";
 import type { BalanceForecast, DecisionCoreResult } from "@/lib/decision-core/types";
-import { ChartColumn, House, ReceiptText } from "lucide-react";
+import { Flag, Layers3, List } from "lucide-react";
 import { useStore } from "@/store/useStore";
 
 function makeDecision(
@@ -1091,14 +1091,14 @@ test("overdue payment keeps the concrete payment amount in hero", () => {
   assert.match(view.hero.amount ?? "", /10[\s\u00A0]000 ₽/);
 });
 
-test("operations nav icon uses receipt text while other tabs stay unchanged", () => {
+test("operations nav icon uses the list icon while other tabs stay unchanged", () => {
   const operations = APP_BOTTOM_NAV_TABS.find((tab) => tab.id === "operations");
   const today = APP_BOTTOM_NAV_TABS.find((tab) => tab.id === "today");
   const forecast = APP_BOTTOM_NAV_TABS.find((tab) => tab.id === "forecast");
 
-  assert.equal(operations?.icon, ReceiptText);
-  assert.equal(today?.icon, House);
-  assert.equal(forecast?.icon, ChartColumn);
+  assert.equal(operations?.icon, List);
+  assert.equal(today?.icon, Layers3);
+  assert.equal(forecast?.icon, Flag);
 });
 
 test("focused forecast view explains why the selected context is shown", () => {
@@ -1554,7 +1554,7 @@ test("setActualCash ignores confirmed income that is dated in the future", () =>
         categoryId: "salary",
         currency: "RUB",
         note: "Зарплата",
-        date: "2026-07-23",
+        date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         owner: "me",
         goalId: null,
         goalAmount: null,

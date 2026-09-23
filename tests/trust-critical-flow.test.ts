@@ -18,6 +18,7 @@ import { calculatePlannedFreeMoneyUntilPeriodEnd } from "@/lib/free-money";
 import type { HouseholdPublic, SyncPayload } from "@/lib/household/types";
 import { emptyMoneySetup } from "@/lib/money-setup";
 import { repairRecurringLinkedTransactions } from "@/lib/recurring-occurrence";
+import { todayIso } from "@/lib/planning/analytics";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useStore } from "@/store/useStore";
 import type { Transaction } from "@/types";
@@ -1277,7 +1278,7 @@ test("confirmPendingTransaction keeps a recurring occurrence closed after sync r
 
   const paid = useStore.getState().transactions.find((item) => item.id === "water-payment");
   assert.equal(paid?.confirmed, true);
-  assert.equal(paid?.date, "2026-07-26");
+  assert.equal(paid?.date, todayIso());
   assert.equal(paid?.recurringOccurrenceDate, "2026-07-20");
   assert.ok(useCloudStore.getState().pendingTransactionUpdateIds["water-payment"]);
 
@@ -1314,7 +1315,7 @@ test("confirmPendingTransaction keeps a recurring occurrence closed after sync r
 
   const afterSync = useStore.getState().transactions.find((item) => item.id === "water-payment");
   assert.equal(afterSync?.confirmed, true);
-  assert.equal(afterSync?.date, "2026-07-26");
+  assert.equal(afterSync?.date, todayIso());
   assert.equal(afterSync?.recurringOccurrenceDate, "2026-07-20");
 
   const snapshot = decisionCoreSnapshot({
