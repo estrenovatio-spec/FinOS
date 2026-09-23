@@ -50,7 +50,8 @@ export const DICT = {
     helpFeedbackKind_idea: "Предложение",
     helpFeedbackKind_issue: "Замечание",
     helpFeedbackKind_thanks: "Спасибо",
-    helpFeedbackPlaceholder: "Напишите коротко, что улучшить или что понравилось",
+    helpFeedbackPlaceholder:
+      "Напишите коротко, что улучшить или что понравилось",
     helpFeedbackSubmit: "Отправить",
     helpFeedbackCancel: "Закрыть",
     helpFeedbackRequired: "Напишите сообщение",
@@ -179,7 +180,7 @@ export const DICT = {
     moreReportsHint: "Excel/PDF за период и история финразборов",
     moreReportsExportSection: "Экспорт операций",
     moreReportsExportHint:
-      "Выберите период — Excel включает семью, бизнес и проекты; PDF подходит для печати операций.",
+      "Выберите период — личный отчёт включает только личные операции; PDF подходит для печати операций.",
     moreReportsFrom: "С",
     moreReportsTo: "По",
     moreReportsCount: "Записей за период: {count}",
@@ -398,7 +399,8 @@ export const DICT = {
     bizSectionTax: "Налог",
     bizSectionProjects: "Источники",
     bizProjectsTopHint: "проекты и активы",
-    bizNoRecentTx: "Пока нет операций по этому бизнесу. Добавьте доход или расход выше.",
+    bizNoRecentTx:
+      "Пока нет операций по этому бизнесу. Добавьте доход или расход выше.",
     bizTaxSetup: "Настроить налог",
     bizTaxCurrent: "{rate}% · {period}",
     bizFamilyLinkHint:
@@ -428,8 +430,7 @@ export const DICT = {
     bizCushionRecommended:
       "Ориентир к резерву: {amount} ₽. Можно перевести больше, если хотите запас.",
     bizCushionSubmit: "Отложить в резерв",
-    bizCushionInvalid:
-      "Введите сумму от 1 ₽ до доступной суммы на счёте.",
+    bizCushionInvalid: "Введите сумму от 1 ₽ до доступной суммы на счёте.",
     bizUnitTax: "Налог {rate}% ({period}): {amount}",
     bizUnitTaxSettings: "Налог для этого бизнеса",
     bizTaxActiveHint: "Для «{name}», период: {period}. Меняется в ✎",
@@ -707,8 +708,7 @@ export const DICT = {
     cloudDeviceResetTitle: "Начать с чистого листа",
     cloudDeviceResetHint:
       "Очистит данные на телефоне. Если облако подключено, сразу заменит облако чистым состоянием, чтобы старая история не вернулась.",
-    cloudDeviceResetDone:
-      "Телефон очищен.",
+    cloudDeviceResetDone: "Телефон очищен.",
     cloudDeviceResetCloudDone:
       "Готово: телефон очищен, облако заменено чистым состоянием.",
     cloudWebLoginTitle: "Войти через Telegram",
@@ -756,7 +756,8 @@ export const DICT = {
     cloudSyncPush: "Отправить на облако",
     cloudSyncPushHint: "Это устройство важнее — допишется в облако",
     cloudSyncReplace: "Заменить операции в облаке",
-    cloudSyncReplaceHint: "В облаке останутся только операции этого телефона: {count}",
+    cloudSyncReplaceHint:
+      "В облаке останутся только операции этого телефона: {count}",
     cloudSyncPullConfirm:
       "Заменить операции на этом устройстве данными из облака? Локальные записи, которых нет в облаке, пропадут с экрана.",
     cloudSyncPushConfirm:
@@ -1206,8 +1207,7 @@ export const DICT = {
     helpChatSourceLocal:
       "Answer based on data on this device (cloud not connected).",
     helpFeedbackTitle: "Message the developer",
-    helpFeedbackHint:
-      "Idea, issue, or thanks — it goes straight to Telegram.",
+    helpFeedbackHint: "Idea, issue, or thanks — it goes straight to Telegram.",
     helpFeedbackOpen: "Send message",
     helpFeedbackKind_idea: "Idea",
     helpFeedbackKind_issue: "Issue",
@@ -1342,7 +1342,7 @@ export const DICT = {
     moreReportsHint: "Excel/PDF export and financial report history",
     moreReportsExportSection: "Export transactions",
     moreReportsExportHint:
-      "Pick a period — Excel includes Family, Business, and Projects; PDF is for printable entries.",
+      "Pick a period — the personal report includes personal entries only; PDF is for printable entries.",
     moreReportsFrom: "From",
     moreReportsTo: "To",
     moreReportsCount: "Entries in period: {count}",
@@ -1513,7 +1513,8 @@ export const DICT = {
     bizProjectsHowTitle: "How to use this",
     bizProjectsHow1:
       "Client / project: one-off order, consultation, side work, or recurring client.",
-    bizProjectsHow2: "Asset: invested capital, equipment, investment, or income tool.",
+    bizProjectsHow2:
+      "Asset: invested capital, equipment, investment, or income tool.",
     bizProjectsHow3:
       "Rental / investment: recurring income source. When money arrives, move it to family.",
     bizProjectsTotal: "Planned income from sources: {amount}/mo",
@@ -1557,7 +1558,8 @@ export const DICT = {
     bizSectionTax: "Tax",
     bizSectionProjects: "Sources",
     bizProjectsTopHint: "projects & assets",
-    bizNoRecentTx: "No operations for this business yet. Add income or expense above.",
+    bizNoRecentTx:
+      "No operations for this business yet. Add income or expense above.",
     bizTaxSetup: "Set tax",
     bizTaxCurrent: "{rate}% · {period}",
     bizFamilyLinkHint:
@@ -1859,8 +1861,7 @@ export const DICT = {
     cloudDeviceResetTitle: "Start fresh",
     cloudDeviceResetHint:
       "Clears this phone. If cloud is connected, it also replaces the cloud with a clean state so old history does not return.",
-    cloudDeviceResetDone:
-      "Phone cleared.",
+    cloudDeviceResetDone: "Phone cleared.",
     cloudDeviceResetCloudDone:
       "Done: phone cleared and cloud replaced with a clean state.",
     cloudWebLoginTitle: "Log in with Telegram",
@@ -1910,7 +1911,8 @@ export const DICT = {
     cloudSyncPushHint:
       "This device wins — merges your operations into the cloud",
     cloudSyncReplace: "Replace cloud operations",
-    cloudSyncReplaceHint: "Cloud will keep only this phone's operations: {count}",
+    cloudSyncReplaceHint:
+      "Cloud will keep only this phone's operations: {count}",
     cloudSyncPullConfirm:
       "Replace operations on this device with cloud data? Local-only entries will disappear from this screen.",
     cloudSyncPushConfirm:
