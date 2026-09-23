@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api/household-auth";
-import { buildBudgetExcelWorkbook, filterBusinessTransactionsByPeriod, filterTransactionsByPeriod } from "@/lib/export/transactions-export";
-import { fetchUserBusinessPayload } from "@/lib/business/db";
+import { buildBudgetExcelWorkbook, filterTransactionsByPeriod } from "@/lib/export/transactions-export";
 import { isDatabaseConfigured } from "@/lib/db";
 import { buildSyncPayload, assertMember } from "@/lib/household/service";
 import type { Locale, Transaction, CategoryDefinition } from "@/types";
-import type { BusinessTransaction, BusinessUnit } from "@/lib/business/types";
 import { getCategoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
@@ -47,22 +45,6 @@ function pdfHexText(input: string): string {
   return Buffer.from(bytes).toString("hex").toUpperCase();
 }
 
-function businessKindLabel(kind: BusinessTransaction["kind"], locale: Locale): string {
-  const isRu = locale === "ru";
-  switch (kind) {
-    case "operating_income":
-      return isRu ? "Доход бизнеса" : "Business income";
-    case "operating_expense":
-      return isRu ? "Расход бизнеса" : "Business expense";
-    case "cushion_deposit":
-      return isRu ? "В резерв бизнеса" : "Business reserve";
-    case "tax_deposit":
-      return isRu ? "На налоговый счёт" : "Tax account";
-    case "family_withdrawal":
-      return isRu ? "Вывод в семью" : "Family withdrawal";
-  }
-}
-
 type ExportPdfRow = {
   date: string;
   amount: string;
@@ -73,26 +55,14 @@ type ExportPdfRow = {
 function makeRows(params: {
   transactions: Transaction[];
   categories: CategoryDefinition[];
-  businessTransactions: BusinessTransaction[];
-  businessUnits: BusinessUnit[];
   locale: Locale;
 }): ExportPdfRow[] {
-  const isRu = params.locale === "ru";
-  const unitName = (unitId: string) =>
-    params.businessUnits.find((unit) => unit.id === unitId)?.name ?? (isRu ? "Бизнес" : "Business");
-
   return [
     ...params.transactions.map((tx) => ({
       date: tx.date,
       amount: `${tx.type === "income" ? "+" : "-"}${tx.amount} RUB`,
       category: getCategoryLabel(tx.categoryId, params.categories, params.locale),
       note: tx.note ?? "",
-    })),
-    ...params.businessTransactions.map((tx) => ({
-      date: tx.date,
-      amount: `${tx.kind === "operating_expense" || tx.kind === "family_withdrawal" || tx.kind === "tax_deposit" ? "-" : "+"}${tx.amount} RUB`,
-      category: `${isRu ? "Бизнес" : "Business"}: ${unitName(tx.unitId)}`,
-      note: `${businessKindLabel(tx.kind, params.locale)}${tx.note ? ` - ${tx.note}` : ""}`,
     })),
   ];
 }
@@ -244,8 +214,6 @@ function rowSvg(row: ExportPdfRow, y: number): string {
 async function makePdf(params: {
   transactions: Transaction[];
   categories: CategoryDefinition[];
-  businessTransactions: BusinessTransaction[];
-  businessUnits: BusinessUnit[];
   locale: Locale;
   periodStart: string;
   periodEnd: string;
@@ -275,22 +243,14 @@ export async function GET(req: NextRequest) {
   const to = req.nextUrl.searchParams.get("to")?.slice(0, 10) || new Date().toISOString().slice(0, 10);
 
   await assertMember(session.userId, session.householdId);
-  const [sync, business] = await Promise.all([
-    buildSyncPayload(session.householdId, session.userId),
-    fetchUserBusinessPayload(session.userId),
-  ]);
+  const sync = await buildSyncPayload(session.householdId, session.userId);
   const transactions = filterTransactionsByPeriod(sync.transactions, from, to);
-  const businessTransactions = filterBusinessTransactionsByPeriod(business?.transactions ?? [], from, to);
-  const businessUnits = business?.units ?? [];
-  const businessAssets = business?.assets ?? [];
   const base = `prosto-budget-${from}_${to}`;
 
   if (type === "pdf") {
     const pdf = await makePdf({
       transactions,
       categories: sync.categories,
-      businessTransactions,
-      businessUnits,
       locale,
       periodStart: from,
       periodEnd: to,
@@ -307,9 +267,10 @@ export async function GET(req: NextRequest) {
   const xlsx = buildBudgetExcelWorkbook({
     transactions,
     categories: sync.categories,
-    businessTransactions,
-    businessUnits,
-    businessAssets,
+    businessTransactions: [],
+    businessUnits: [],
+    businessAssets: [],
+    scope: "personal",
     locale,
     periodStart: from,
     periodEnd: to,

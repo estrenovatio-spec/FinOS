@@ -322,6 +322,7 @@ export function buildBudgetExcelWorkbook(params: {
   locale: Locale;
   periodStart: string;
   periodEnd: string;
+  scope?: "personal" | "combined";
 }): Uint8Array {
   const {
     transactions,
@@ -332,6 +333,7 @@ export function buildBudgetExcelWorkbook(params: {
     locale,
     periodStart,
     periodEnd,
+    scope = "combined",
   } = params;
   const isRu = locale === "ru";
   const businessUnitsById = new Map(businessUnits.map((unit) => [unit.id, unit]));
@@ -470,6 +472,26 @@ export function buildBudgetExcelWorkbook(params: {
         : "Family entries, businesses, business entries, and projects/assets. Zero values mean there were no entries for the selected period.",
     ],
   ];
+
+  if (scope === "personal") {
+    const personalMetaRows: (string | number)[][] = [
+      [isRu ? "Период" : "Period", `${periodStart} — ${periodEnd}`],
+      [isRu ? "Личных операций" : "Personal entries", transactions.length],
+      [isRu ? "Личный доход" : "Personal income", familyIncome],
+      [isRu ? "Личные расходы" : "Personal expenses", familyExpense],
+      [isRu ? "Личный итог" : "Personal net", familyIncome - familyExpense],
+      [
+        isRu ? "Что входит в файл" : "What is included",
+        isRu
+          ? "Только личные операции за выбранный период. Бизнес-операции, активы и проекты в этот отчёт не входят."
+          : "Only personal entries for the selected period. Business entries, assets, and projects are not included.",
+      ],
+    ];
+    return buildXlsxWorkbook([
+      { name: isRu ? "Личный итог" : "Personal summary", rows: personalMetaRows },
+      { name: isRu ? "Личные операции" : "Personal entries", rows: familyRows },
+    ]);
+  }
 
   return buildXlsxWorkbook([
     { name: isRu ? "Итог" : "Summary", rows: metaRows },

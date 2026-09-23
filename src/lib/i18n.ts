@@ -179,7 +179,7 @@ export const DICT = {
     moreReportsHint: "Excel/PDF за период и история финразборов",
     moreReportsExportSection: "Экспорт операций",
     moreReportsExportHint:
-      "Выберите период — Excel включает семью, бизнес и проекты; PDF подходит для печати операций.",
+      "Выберите период — личный отчёт включает только личные операции; PDF подходит для печати операций.",
     moreReportsFrom: "С",
     moreReportsTo: "По",
     moreReportsCount: "Записей за период: {count}",
@@ -1342,7 +1342,7 @@ export const DICT = {
     moreReportsHint: "Excel/PDF export and financial report history",
     moreReportsExportSection: "Export transactions",
     moreReportsExportHint:
-      "Pick a period — Excel includes Family, Business, and Projects; PDF is for printable entries.",
+      "Pick a period — the personal report includes personal entries only; PDF is for printable entries.",
     moreReportsFrom: "From",
     moreReportsTo: "To",
     moreReportsCount: "Entries in period: {count}",

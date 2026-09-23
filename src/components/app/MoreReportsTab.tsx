@@ -9,13 +9,11 @@ import { apiListAiReports, type AiReportRecord } from "@/lib/cloud/client";
 import {
   buildBudgetExcelWorkbook,
   buildTransactionsPdfBlob,
-  filterBusinessTransactionsByPeriod,
   filterTransactionsByPeriod,
   saveBlobFile,
 } from "@/lib/export/transactions-export";
 import { formatIsoPeriod } from "@/lib/format-date";
 import { t } from "@/lib/i18n";
-import { useBusinessStore } from "@/store/useBusinessStore";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useCategories, useStore, useTransactions } from "@/store/useStore";
 import { useToast } from "@/components/ui/toast";
@@ -142,9 +140,6 @@ export function MoreReportsTab() {
   const locale = useStore((s) => s.locale);
   const transactions = useTransactions();
   const categories = useCategories();
-  const businessTransactions = useBusinessStore((s) => s.transactions);
-  const businessUnits = useBusinessStore((s) => s.units);
-  const businessAssets = useBusinessStore((s) => s.assets);
   const token = useCloudStore((s) => s.token);
   const [period, setPeriod] = useState(defaultPeriod);
   const [reports, setReports] = useState<AiReportRecord[]>([]);
@@ -162,11 +157,7 @@ export function MoreReportsTab() {
     () => filterTransactionsByPeriod(transactions, period.from, period.to),
     [transactions, period.from, period.to],
   );
-  const periodBusinessTxs = useMemo(
-    () => filterBusinessTransactionsByPeriod(businessTransactions, period.from, period.to),
-    [businessTransactions, period.from, period.to],
-  );
-  const exportCount = periodTxs.length + periodBusinessTxs.length + businessAssets.length;
+  const exportCount = periodTxs.length;
 
   const loadHistory = useCallback(async () => {
     if (!token) {
@@ -381,9 +372,10 @@ export function MoreReportsTab() {
     const workbook = buildBudgetExcelWorkbook({
       transactions: periodTxs,
       categories,
-      businessTransactions: periodBusinessTxs,
-      businessUnits,
-      businessAssets,
+      businessTransactions: [],
+      businessUnits: [],
+      businessAssets: [],
+      scope: "personal",
       locale,
       periodStart: period.from,
       periodEnd: period.to,
@@ -414,7 +406,7 @@ export function MoreReportsTab() {
   };
 
   const exportPdf = async () => {
-    if (periodTxs.length + periodBusinessTxs.length === 0) {
+    if (periodTxs.length === 0) {
       toast(
         locale === "ru"
           ? "За выбранный период нет операций для PDF."
@@ -426,8 +418,8 @@ export function MoreReportsTab() {
     const pdf = buildTransactionsPdfBlob({
       transactions: periodTxs,
       categories,
-      businessTransactions: periodBusinessTxs,
-      businessUnits,
+      businessTransactions: [],
+      businessUnits: [],
       locale,
       periodStart: period.from,
       periodEnd: period.to,
