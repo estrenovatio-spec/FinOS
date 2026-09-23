@@ -3,11 +3,13 @@ export function applyLightTheme(): void {
   const root = document.documentElement;
   root.classList.remove("dark");
 
-  root.style.setProperty("--tg-bg", "#ffffff");
-  root.style.setProperty("--tg-text", "#0a0a0a");
-  root.style.setProperty("--tg-secondary", "#f4f4f5");
-  document.body.style.backgroundColor = "#ffffff";
-  document.body.style.color = "#0a0a0a";
+  // Keep the native WebView and the first painted app frame in the same
+  // warm FinOS colour, so no green/white flash is visible before React loads.
+  root.style.setProperty("--tg-bg", "#f7f1ea");
+  root.style.setProperty("--tg-text", "#24211e");
+  root.style.setProperty("--tg-secondary", "#efe8df");
+  document.body.style.backgroundColor = "#f7f1ea";
+  document.body.style.color = "#24211e";
 }
 
 /** Telegram: только viewport; цвета приложения — светлые. */
