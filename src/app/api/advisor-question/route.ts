@@ -30,6 +30,15 @@ function sanitizeValidationIssues(issues: z.ZodIssue[]) {
   }));
 }
 
+export function sanitizeAdvisorReply(reply: string): string {
+  return reply
+    .replaceAll("*", "")
+    .replaceAll("\u0060", "")
+    .replace(/^\\s*#{1,6}\\s*/gm, "")
+    .replace(/\\n{3,}/g, "\\n\\n")
+    .trim();
+}
+
 function buildSafeContextDebug(context: {
   financialContext?: {
     balances: {
@@ -163,7 +172,9 @@ export async function POST(request: NextRequest) {
         max_tokens: 700,
       });
 
-      const reply = extractPlainTextFromLlmContent(completion.choices[0]?.message?.content);
+      const reply = sanitizeAdvisorReply(
+        extractPlainTextFromLlmContent(completion.choices[0]?.message?.content),
+      );
       if (!reply) {
         return NextResponse.json({
           success: true,
