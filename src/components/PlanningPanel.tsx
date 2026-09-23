@@ -1,1747 +1,15 @@
-"use client";
-
-import {
-  BadgeDollarSign,
-  CalendarDays,
-  ChevronDown,
-  ChevronUp,
-  Clock3,
-  CircleAlert,
-  Infinity,
-  Landmark,
-  Pencil,
-  PiggyBank,
-  Repeat2,
-  Shield,
-  Tag,
-  Trash2,
-  WalletCards,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  HomeSectionCardHeader,
-  HomeSectionCollapsedBar,
-  homeSectionContentClassName,
-  sectionToggleButtonClassName,
-} from "@/components/HomeSectionCardHeader";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FinancialChart } from "@/components/FinancialChart";
-import { AiAnalysisTab } from "@/components/AiAnalysisTab";
-import {
-  getCategoriesByType,
-  getCategoryLabel,
-  getFallbackCategoryId,
-  sortCategoriesByLabel,
-} from "@/lib/categories";
-import { formatBudgetPeriodLabel, getCurrentBudgetPeriod, isDateInBudgetPeriod } from "@/lib/budget-period";
-import { formatMoney } from "@/lib/format-money";
-import {
-  formatMonthYearLong,
-  formatPlanningDeadline,
-  formatTransactionDate,
-  normalizeIsoDate,
-} from "@/lib/format-date";
-import {
-  advanceRecurringDate,
-  avgMonthlyExpenses,
-  budgetUsagePercent,
-  emergencyTargetAmount,
-  goalProgressPercent,
-  monthSpentByCategory,
-  resolveGoalMonthlyPlans,
-  resolveGoalTarget,
-  todayIso,
-} from "@/lib/planning/analytics";
-import type { GoalMonthlyPlans } from "@/lib/planning/analytics";
-import {
-  effectiveSkippedDates,
-  recurringDisplayName,
-} from "@/lib/planning/recurring-skipped";
-import {
-  resolveFutureOneTimeTransactionGroup,
-  resolveFutureRecurringOperationGroup,
-  splitPlannedFutureOperationsByMonth,
-  type FutureOperationGroup,
-} from "@/lib/planning/future-operation-groups";
-import { resolveRecurringOccurrenceDate } from "@/lib/recurring-occurrence";
-import { resolveRecurringOccurrenceStatus } from "@/lib/recurring-occurrence-status";
-import { ruPlural, t } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
-import { useCategories, useStore, useTransactions } from "@/store/useStore";
-import type { Locale, Transaction, TxType } from "@/types";
-import { EMERGENCY_GOAL_ID } from "@/types/planning";
-import type { DebtItem, RecurringFrequency, SavingsGoal } from "@/types/planning";
-
-const HOUSEHOLD_DEBT_STRATEGY_KEY = "voicebudget-household-debt-strategy";
-
-export type PlanningTab =
-  | "goals"
-  | "funds"
-  | "limits"
-  | "debts"
-  | "emergency"
-  | "recurring"
-  | "stats"
-  | "advisor";
-
-const DEFAULT_VISIBLE_TABS: PlanningTab[] = [
-  "goals",
-  "funds",
-  "limits",
-  "debts",
-  "emergency",
-  "recurring",
-  "stats",
-  "advisor",
-];
-
-function replaceTokens(template: string, tokens: Record<string, string>): string {
-  let s = template;
-  for (const [key, value] of Object.entries(tokens)) {
-    s = s.split(`{${key}}`).join(value);
-  }
-  return s;
-}
-
-function formatPlanningOperationsCount(count: number, locale: Locale): string {
-  if (locale === "ru") {
-    return `${count} ${ruPlural(count, "Ğ¾Ğ¿ĞµÑ€Ğ°Ñ†Ğ¸Ñ", "Ğ¾Ğ¿ĞµÑ€Ğ°Ñ†Ğ¸Ğ¸", "Ğ¾Ğ¿ĞµÑ€Ğ°Ñ†Ğ¸Ğ¹")}`;
-  }
-  return `${count} ${count === 1 ? "item" : "items"}`;
-}
-
-function GoalMonthlyPlansBlock({
-  plans,
-  deadline,
-  locale,
-}: {
-  plans: GoalMonthlyPlans;
-  deadline: string | null;
-  locale: Locale;
-}) {
-  return (
-    <div className="mt-0.5 space-y-0.5">
-      {deadline ? (
-        <p className="text-xs text-muted-foreground">
-          {replaceTokens(t(locale, "planningGoalUntil"), {
-            date: formatPlanningDeadline(deadline, locale),
-          })}
-          {" Â· "}
-          {replaceTokens(t(locale, "planningGoalMonthsLeft"), {
-            months: String(plans.months),
-          })}
-        </p>
-      ) : null}
-      <p className="text-xs text-muted-foreground">
-        {replaceTokens(t(locale, "planningGoalMonthlyOnAccount"), {
-          amount: formatMoney(plans.onAccount, locale),
-        })}
-      </p>
-      <p className="text-xs font-medium text-primary">
-        {replaceTokens(t(locale, "planningGoalMonthlyIfInvested"), {
-          amount: formatMoney(plans.ifInvested, locale),
-        })}
-      </p>
-    </div>
-  );
-}
-
-function ProgressBar({ percent, over }: { percent: number; over?: boolean }) {
-  const width = Math.min(100, Math.max(0, percent));
-  return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div
-        className={`h-full transition-all ${over ? "bg-destructive" : "bg-primary"}`}
-        style={{ width: `${width}%` }}
-      />
-    </div>
-  );
-}
-
-function numInput(value: string): number {
-  return Number(value.replace(/\s/g, "").replace(",", ".")) || 0;
-}
-
-function recurringEndDateFromMonths(
-  startDate: string,
-  intervalMonths: number,
-  durationMonths: number,
-): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return null;
-  const total = Math.max(1, Math.min(120, Math.round(durationMonths)));
-  let runDate = startDate;
-  const dayOfMonth = new Date(`${startDate}T12:00:00`).getDate();
-  for (let index = 1; index < total; index += 1) {
-    runDate = advanceRecurringDate(runDate, "monthly", dayOfMonth, intervalMonths);
-  }
-  return runDate;
-}
-
-function debtOwnerLabel(owner: DebtItem["owner"], locale: Locale): string {
-  if (owner === "me") return locale === "ru" ? "Ğ¯" : "Me";
-  if (owner === "partner") return locale === "ru" ? "ĞŸĞ°Ñ€Ñ‚Ğ½Ñ‘Ñ€" : "Partner";
-  return locale === "ru" ? "ĞĞ±Ñ‰Ğ¸Ğ¹" : "Shared";
-}
-
-function debtStrategyLabel(strategy: DebtItem["strategy"], locale: Locale): string {
-  if (strategy === "snowball") return locale === "ru" ? "Ğ¡Ğ½ĞµĞ¶Ğ½Ñ‹Ğ¹ ĞºĞ¾Ğ¼" : "Snowball";
-  return locale === "ru" ? "Ğ›Ğ°Ğ²Ğ¸Ğ½Ğ°" : "Avalanche";
-}
-
-function debtStrategyHelp(strategy: DebtItem["strategy"], locale: Locale): string {
-  if (strategy === "snowball") {
-    return locale === "ru"
-      ? "Ğ¡Ğ½ĞµĞ¶Ğ½Ñ‹Ğ¹ ĞºĞ¾Ğ¼: ÑĞ½Ğ°Ñ‡Ğ°Ğ»Ğ° Ğ·Ğ°ĞºÑ€Ñ‹Ğ²Ğ°ĞµĞ¼ ÑĞ°Ğ¼Ñ‹Ğ¹ Ğ¼Ğ°Ğ»ĞµĞ½ÑŒĞºĞ¸Ğ¹ Ğ´Ğ¾Ğ»Ğ³. Ğ­Ñ‚Ğ¾ Ğ±Ñ‹ÑÑ‚Ñ€ĞµĞµ Ğ´Ğ°Ñ‘Ñ‚ Ğ¾Ñ‰ÑƒÑ‰ĞµĞ½Ğ¸Ğµ Ğ¿Ğ¾Ğ±ĞµĞ´Ñ‹ Ğ¸ Ğ¿Ğ¾Ğ¼Ğ¾Ğ³Ğ°ĞµÑ‚ Ğ½Ğµ Ğ±Ñ€Ğ¾ÑĞ¸Ñ‚ÑŒ Ğ¿Ğ»Ğ°Ğ½."
-      : "Snowball: pay off the smallest debt first. It creates quick wins and helps you stay consistent.";
-  }
-  return locale === "ru"
-    ? "Ğ›Ğ°Ğ²Ğ¸Ğ½Ğ°: ÑĞ½Ğ°Ñ‡Ğ°Ğ»Ğ° Ğ³Ğ°ÑĞ¸Ğ¼ Ğ´Ğ¾Ğ»Ğ³ Ñ ÑĞ°Ğ¼Ğ¾Ğ¹ Ğ²Ñ‹ÑĞ¾ĞºĞ¾Ğ¹ ÑÑ‚Ğ°Ğ²ĞºĞ¾Ğ¹. ĞĞ±Ñ‹Ñ‡Ğ½Ğ¾ ÑÑ‚Ğ¾ Ğ¼Ğ°Ñ‚ĞµĞ¼Ğ°Ñ‚Ğ¸Ñ‡ĞµÑĞºĞ¸ Ğ²Ñ‹Ğ³Ğ¾Ğ´Ğ½ĞµĞµ, Ğ¿Ğ¾Ñ‚Ğ¾Ğ¼Ñƒ Ñ‡Ñ‚Ğ¾ Ğ¼ĞµĞ½ÑŒÑˆĞµ Ğ¿ĞµÑ€ĞµĞ¿Ğ»Ğ°Ñ‚Ğ°."
-    : "Avalanche: pay the highest-rate debt first. It is usually mathematically better because it reduces overpayment.";
-}
-
-function sortDebtsByStrategy(debts: DebtItem[], strategy: DebtItem["strategy"]): DebtItem[] {
-  const today = todayIso();
-  return [...debts].sort((a, b) => {
-    const aOverdue = a.nextPaymentDate ? a.nextPaymentDate < today : false;
-    const bOverdue = b.nextPaymentDate ? b.nextPaymentDate < today : false;
-    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
-    if (strategy === "snowball") {
-      if (a.balance !== b.balance) return a.balance - b.balance;
-      return (b.ratePct ?? 0) - (a.ratePct ?? 0);
-    }
-    const ar = a.ratePct ?? -1;
-    const br = b.ratePct ?? -1;
-    if (br !== ar) return br - ar;
-    return a.balance - b.balance;
-  });
-}
-
-function goalDeadlineTime(deadline: string | null): number | null {
-  if (!deadline) return null;
-  const time = new Date(`${deadline}T12:00:00`).getTime();
-  return Number.isNaN(time) ? null : time;
-}
-
-function sortGoalsByPriority(goals: SavingsGoal[], transactions: Transaction[]): SavingsGoal[] {
-  const now = new Date();
-  now.setHours(12, 0, 0, 0);
-  const today = now.getTime();
-
-  return [...goals].sort((a, b) => {
-    const aTarget = resolveGoalTarget(a, transactions);
-    const bTarget = resolveGoalTarget(b, transactions);
-    const aDone = aTarget > 0 && a.savedAmount >= aTarget;
-    const bDone = bTarget > 0 && b.savedAmount >= bTarget;
-    if (aDone !== bDone) return aDone ? 1 : -1;
-
-    const aStarted = a.savedAmount > 0;
-    const bStarted = b.savedAmount > 0;
-    if (aStarted !== bStarted) return aStarted ? -1 : 1;
-
-    const aDeadline = goalDeadlineTime(a.deadline);
-    const bDeadline = goalDeadlineTime(b.deadline);
-    const aRemaining = Math.max(0, aTarget - a.savedAmount);
-    const bRemaining = Math.max(0, bTarget - b.savedAmount);
-    if (aDeadline !== null && bDeadline !== null) {
-      const aDays = Math.floor((aDeadline - today) / (24 * 60 * 60 * 1000));
-      const bDays = Math.floor((bDeadline - today) / (24 * 60 * 60 * 1000));
-      if (aDays !== bDays) return aDays - bDays;
-      if (aRemaining !== bRemaining) return aRemaining - bRemaining;
-    }
-    if (aDeadline !== null) return -1;
-    if (bDeadline !== null) return 1;
-    if (aRemaining !== bRemaining) return aRemaining - bRemaining;
-
-    const aMonthly = a.monthlyContribution ?? 0;
-    const bMonthly = b.monthlyContribution ?? 0;
-    if (aMonthly !== bMonthly) return bMonthly - aMonthly;
-
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-  });
-}
-
-export function PlanningPanel({
-  collapsible = true,
-  activeTab,
-  onActiveTabChange,
-  visibleTabs = DEFAULT_VISIBLE_TABS,
-  focusEntityId = null,
-}: {
-  collapsible?: boolean;
-  activeTab?: PlanningTab;
-  onActiveTabChange?: (tab: PlanningTab) => void;
-  visibleTabs?: PlanningTab[];
-  focusEntityId?: string | null;
-} = {}) {
-  const locale = useStore((s) => s.locale);
-  const transactions = useTransactions();
-  const categories = useCategories();
-  const savingsGoals = useStore((s) => s.savingsGoals);
-  const categoryBudgets = useStore((s) => s.categoryBudgets);
-  const recurringTransactions = useStore((s) => s.recurringTransactions);
-  const debts = useStore((s) => s.debts);
-  const addGoal = useStore((s) => s.addGoal);
-  const updateGoal = useStore((s) => s.updateGoal);
-  const depositGoal = useStore((s) => s.depositGoal);
-  const withdrawGoal = useStore((s) => s.withdrawGoal);
-  const revertLastGoalDeposit = useStore((s) => s.revertLastGoalDeposit);
-  const removeGoal = useStore((s) => s.removeGoal);
-  const enableEmergencyFund = useStore((s) => s.enableEmergencyFund);
-  const setCategoryBudget = useStore((s) => s.setCategoryBudget);
-  const removeCategoryBudget = useStore((s) => s.removeCategoryBudget);
-  const addRecurring = useStore((s) => s.addRecurring);
-  const addTransaction = useStore((s) => s.addTransaction);
-  const updateRecurring = useStore((s) => s.updateRecurring);
-  const removeRecurring = useStore((s) => s.removeRecurring);
-  const deleteTransaction = useStore((s) => s.deleteTransaction);
-  const addDebt = useStore((s) => s.addDebt);
-  const updateDebt = useStore((s) => s.updateDebt);
-  const payDebt = useStore((s) => s.payDebt);
-  const removeDebt = useStore((s) => s.removeDebt);
-  const entryOwner = useStore((s) => s.entryOwner);
-  const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
-  const setBudgetMonthStartDay = useStore((s) => s.setBudgetMonthStartDay);
-  const collapsed = useStore((s) => s.planningPanelCollapsed);
-  const setPlanningPanelCollapsed = useStore((s) => s.setPlanningPanelCollapsed);
-
-  const [hydrated, setHydrated] = useState(false);
-  const [expandedFutureMonths, setExpandedFutureMonths] = useState<Record<string, boolean>>({});
-  const [expandedRecurringCards, setExpandedRecurringCards] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    const finish = () => setHydrated(true);
-    if (useStore.persist.hasHydrated()) {
-      finish();
-      return;
-    }
-    return useStore.persist.onFinishHydration(finish);
-  }, []);
-
-  const open = !collapsible || (hydrated && !collapsed);
-  const planningTabClass =
-    "h-auto min-h-9 w-full min-w-0 rounded-md px-2 text-center text-xs font-semibold leading-tight whitespace-normal text-foreground/70 transition-colors data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm";
-
-  const toggleOpen = useCallback(() => {
-    setPlanningPanelCollapsed(!useStore.getState().planningPanelCollapsed);
-  }, [setPlanningPanelCollapsed]);
-  const [goalName, setGoalName] = useState("");
-  const [goalTarget, setGoalTarget] = useState("");
-  const [goalDeadline, setGoalDeadline] = useState("");
-  const [depositGoalId, setDepositGoalId] = useState<string | null>(null);
-  const [depositGoalMode, setDepositGoalMode] = useState<"deposit" | "withdraw">("deposit");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [editGoalId, setEditGoalId] = useState<string | null>(null);
-  const [editGoalName, setEditGoalName] = useState("");
-  const [editGoalTarget, setEditGoalTarget] = useState("");
-  const [editGoalDeadline, setEditGoalDeadline] = useState("");
-  const [fundName, setFundName] = useState("");
-  const [editFundId, setEditFundId] = useState<string | null>(null);
-  const [editFundName, setEditFundName] = useState("");
-  const [fundInfoOpen, setFundInfoOpen] = useState(false);
-  const [limitCategoryId, setLimitCategoryId] = useState("");
-  const [limitAmount, setLimitAmount] = useState("");
-  const [recType, setRecType] = useState<TxType>("expense");
-  const [recCategoryId, setRecCategoryId] = useState(() => getFallbackCategoryId("expense"));
-  const [recAmount, setRecAmount] = useState("");
-  const [recNote, setRecNote] = useState("");
-  const [recComment, setRecComment] = useState("");
-  const [recRepeat, setRecRepeat] = useState<"once" | RecurringFrequency>("monthly");
-  const [recStartDate, setRecStartDate] = useState(() => todayIso());
-  const recStartDateInputRef = useRef<HTMLInputElement | null>(null);
-  const [recEndMode, setRecEndMode] = useState<"never" | "date" | "months">("never");
-  const [recEndDate, setRecEndDate] = useState("");
-  const [recDurationMonths, setRecDurationMonths] = useState("12");
-  const [debtName, setDebtName] = useState("");
-  const [debtBalance, setDebtBalance] = useState("");
-  const [debtMinPayment, setDebtMinPayment] = useState("");
-  const [debtRate, setDebtRate] = useState("");
-  const [debtDate, setDebtDate] = useState("");
-  const [debtOwner, setDebtOwner] = useState<DebtItem["owner"]>("all");
-  const [debtStrategy, setDebtStrategy] = useState<DebtItem["strategy"]>("avalanche");
-  const [debtPayId, setDebtPayId] = useState<string | null>(null);
-  const [debtPayAmount, setDebtPayAmount] = useState("");
-  const [editDebtId, setEditDebtId] = useState<string | null>(null);
-  const [editDebtName, setEditDebtName] = useState("");
-  const [editDebtBalance, setEditDebtBalance] = useState("");
-  const [editDebtMinPayment, setEditDebtMinPayment] = useState("");
-  const [editDebtRate, setEditDebtRate] = useState("");
-  const [editDebtDate, setEditDebtDate] = useState("");
-  const [editDebtOwner, setEditDebtOwner] = useState<DebtItem["owner"]>("all");
-  const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
-  const [planningTab, setPlanningTab] = useState<PlanningTab>(
-    activeTab && visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0] ?? "goals",
-  );
-  const currentPlanningTab =
-    activeTab && visibleTabs.includes(activeTab) ? activeTab : planningTab;
-
-  useEffect(() => {
-    if (activeTab && visibleTabs.includes(activeTab)) return;
-    if (visibleTabs.includes(planningTab)) return;
-    setPlanningTab(visibleTabs[0] ?? "goals");
-  }, [activeTab, planningTab, visibleTabs]);
-
-  useEffect(() => {
-    if (!focusEntityId) return;
-    const element = document.querySelector<HTMLElement>(
-      `[data-plan-entity-id="${focusEntityId}"]`,
-    );
-    if (!element) return;
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [focusEntityId, currentPlanningTab]);
-
-  const changePlanningTab = useCallback(
-    (value: string) => {
-      const next = value as PlanningTab;
-      if (!visibleTabs.includes(next)) return;
-      if (!activeTab) {
-        setPlanningTab(next);
-      }
-      onActiveTabChange?.(next);
-    },
-    [activeTab, onActiveTabChange, visibleTabs],
-  );
-
-  const customGoals = useMemo(
-    () =>
-      sortGoalsByPriority(
-        savingsGoals.filter((g) => g.kind !== "emergency" && g.targetAmount > 0),
-        transactions,
-      ),
-    [savingsGoals, transactions],
-  );
-  const funds = useMemo(
-    () =>
-      [...savingsGoals]
-        .filter((g) => g.kind !== "emergency" && g.targetAmount <= 0)
-        .sort(
-          (a, b) =>
-            b.savedAmount - a.savedAmount ||
-            a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-        ),
-    [savingsGoals],
-  );
-  const emergencyGoal = savingsGoals.find((g) => g.id === EMERGENCY_GOAL_ID || g.kind === "emergency");
-  const expenseCategories = useMemo(
-    () => sortCategoriesByLabel(categories.filter((c) => c.type === "expense"), categories, locale),
-    [categories, locale],
-  );
-  const sortedCategoryBudgets = useMemo(
-    () =>
-      [...categoryBudgets].sort((a, b) =>
-        getCategoryLabel(a.categoryId, categories, locale).localeCompare(
-          getCategoryLabel(b.categoryId, categories, locale),
-          locale === "ru" ? "ru" : "en",
-          { sensitivity: "base" },
-        ),
-      ),
-    [categoryBudgets, categories, locale],
-  );
-  const avgMonthly = useMemo(() => avgMonthlyExpenses(transactions), [transactions]);
-  const budgetPeriodLabel = useMemo(
-    () => formatBudgetPeriodLabel(getCurrentBudgetPeriod(budgetMonthStartDay), locale),
-    [budgetMonthStartDay, locale],
-  );
-  const debtTotals = useMemo(
-    () => ({
-      balance: debts.reduce((sum, d) => sum + d.balance, 0),
-      minPayment: debts.reduce((sum, d) => sum + d.minPayment, 0),
-    }),
-    [debts],
-  );
-  const sortedDebts = useMemo(
-    () => sortDebtsByStrategy(debts, debtStrategy),
-    [debts, debtStrategy],
-  );
-  const debtFocus = useMemo(() => {
-    const active = sortedDebts.filter((d) => d.balance > 0);
-    if (active.length === 0) return null;
-    return active[0];
-  }, [sortedDebts]);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(HOUSEHOLD_DEBT_STRATEGY_KEY);
-    if (stored === "snowball" || stored === "avalanche") {
-      setDebtStrategy(stored);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(HOUSEHOLD_DEBT_STRATEGY_KEY, debtStrategy);
-  }, [debtStrategy]);
-
-  const editingGoal = editGoalId
-    ? customGoals.find((g) => g.id === editGoalId) ?? null
-    : null;
-
-  const createMonthlyPreview = useMemo(() => {
-    const target = goalTarget ? Number(goalTarget.replace(/\s/g, "")) : 0;
-    const deadline = goalDeadline.trim() || null;
-    return resolveGoalMonthlyPlans(target, 0, deadline);
-  }, [goalTarget, goalDeadline]);
-
-  const editMonthlyPreview = useMemo(() => {
-    if (!editingGoal) return null;
-    const target = editGoalTarget ? Number(editGoalTarget.replace(/\s/g, "")) : 0;
-    const deadline = editGoalDeadline.trim() || null;
-    return resolveGoalMonthlyPlans(target, editingGoal.savedAmount, deadline);
-  }, [editingGoal, editGoalTarget, editGoalDeadline]);
-
-  const handleAddGoal = () => {
-    const name = goalName.trim();
-    if (!name) return;
-    const target = goalTarget ? Number(goalTarget.replace(/\s/g, "")) : 0;
-    addGoal(name, target > 0 ? target : 0, goalDeadline.trim() || null);
-    setGoalName("");
-    setGoalTarget("");
-    setGoalDeadline("");
-  };
-
-  const handleAddFund = () => {
-    const name = fundName.trim();
-    if (!name) return;
-    addGoal(name, 0, null);
-    setFundName("");
-  };
-
-  const handleGoalTransfer = (id: string) => {
-    const raw = depositAmount.replace(/\s/g, "");
-    const amount = Number(raw);
-    if (!raw.trim()) return;
-    if (!amount && depositGoalMode === "deposit") {
-      revertLastGoalDeposit(id);
-      setDepositAmount("");
-      setDepositGoalId(null);
-      return;
-    }
-    if (depositGoalMode === "withdraw") {
-      withdrawGoal(id, amount);
-    } else {
-      depositGoal(id, amount);
-    }
-    setDepositAmount("");
-    setDepositGoalId(null);
-  };
-
-  const handleSaveGoalEdit = (id: string) => {
-    const target = editGoalTarget ? Number(editGoalTarget.replace(/\s/g, "")) : 0;
-    updateGoal(id, {
-      name: editGoalName.trim(),
-      targetAmount: target > 0 ? target : 0,
-      deadline: editGoalDeadline.trim() || null,
-    });
-    setEditGoalId(null);
-    setEditGoalName("");
-    setEditGoalTarget("");
-    setEditGoalDeadline("");
-  };
-
-  const startEditGoal = (goal: SavingsGoal, displayTarget: number) => {
-    setEditGoalId(goal.id);
-    setEditGoalName(goal.name);
-    setEditGoalTarget(displayTarget > 0 ? String(displayTarget) : "");
-    setEditGoalDeadline(goal.deadline ?? "");
-    setDepositGoalId(null);
-  };
-
-  const startEditFund = (fund: SavingsGoal) => {
-    setEditFundId(fund.id);
-    setEditFundName(fund.name);
-    setDepositGoalId(null);
-  };
-
-  const handleSaveFundEdit = (id: string) => {
-    const name = editFundName.trim();
-    if (!name) return;
-    updateGoal(id, { name });
-    setEditFundId(null);
-    setEditFundName("");
-  };
-
-  const handleSetLimit = () => {
-    const amount = Number(limitAmount.replace(/\s/g, ""));
-    if (!limitCategoryId || !amount) return;
-    setCategoryBudget(limitCategoryId, amount);
-    setLimitAmount("");
-  };
-
-  const handleRecStartDateInput = useCallback((value: string) => {
-    const normalized = normalizeIsoDate(value);
-    if (normalized) {
-      setRecStartDate(normalized);
-    }
-  }, []);
-
-  const handleAddRecurring = () => {
-    const amount = Number(recAmount.replace(/\s/g, ""));
-    const title = recNote.trim();
-    const effectiveRecStartDate =
-      normalizeIsoDate(recStartDateInputRef.current?.value) ??
-      normalizeIsoDate(recStartDate) ??
-      todayIso();
-    if (!amount || !title) return;
-    const categoryId = recCategoryId || getFallbackCategoryId(recType);
-    const note = [title, recComment.trim()].filter(Boolean).join(" Â· ").slice(0, 120);
-    if (recRepeat === "once") {
-      addTransaction({
-        amount,
-        type: recType,
-        categoryId,
-        currency: "RUB",
-        note,
-        date: effectiveRecStartDate,
-        owner: entryOwner,
-        confirmed: false,
-      });
-      setRecStartDate(effectiveRecStartDate);
-      setRecAmount("");
-      setRecNote("");
-      setRecComment("");
-      setRecEndMode("never");
-      setRecEndDate("");
-      setRecDurationMonths("12");
-      return;
-    }
-    const start = new Date(`${effectiveRecStartDate}T12:00:00`);
-    const dayOfMonth = recRepeat === "monthly" ? start.getDate() : null;
-    const intervalMonths = recRepeat === "monthly" ? 1 : null;
-    const endDate =
-      recEndMode === "date"
-        ? recEndDate || null
-        : recEndMode === "months" && recRepeat === "monthly"
-          ? recurringEndDateFromMonths(
-              effectiveRecStartDate,
-              intervalMonths ?? 1,
-              Number(recDurationMonths) || 1,
-            )
-          : null;
-    addRecurring({
-      amount,
-      type: recType,
-      categoryId,
-      note,
-      owner: entryOwner,
-      frequency: recRepeat,
-      intervalMonths,
-      dayOfMonth,
-      nextRunDate: effectiveRecStartDate,
-      endDate,
-    });
-    setRecStartDate(effectiveRecStartDate);
-    setRecAmount("");
-    setRecNote("");
-    setRecComment("");
-    setRecEndMode("never");
-    setRecEndDate("");
-    setRecDurationMonths("12");
-  };
-
-  const handleAddDebt = () => {
-    const name = debtName.trim();
-    const balance = numInput(debtBalance);
-    if (!name || balance <= 0) return;
-    addDebt({
-      name,
-      owner: debtOwner,
-      balance,
-      minPayment: Math.max(0, numInput(debtMinPayment)),
-      ratePct: debtRate.trim() ? numInput(debtRate) : null,
-      nextPaymentDate: debtDate.trim() || null,
-      strategy: debtStrategy,
-      priority: "normal",
-    });
-    setDebtName("");
-    setDebtBalance("");
-    setDebtMinPayment("");
-    setDebtRate("");
-    setDebtDate("");
-  };
-
-  const handleDebtPayment = (id: string) => {
-    const amount = numInput(debtPayAmount);
-    if (amount <= 0) return;
-    const paid = payDebt(id, amount);
-    if (!paid) return;
-    setDebtPayId(null);
-    setDebtPayAmount("");
-  };
-
-  const startEditDebt = (debt: DebtItem) => {
-    setEditDebtId(debt.id);
-    setEditDebtName(debt.name);
-    setEditDebtBalance(String(debt.balance || ""));
-    setEditDebtMinPayment(String(debt.minPayment || ""));
-    setEditDebtRate(debt.ratePct == null ? "" : String(debt.ratePct));
-    setEditDebtDate(debt.nextPaymentDate ?? "");
-    setEditDebtOwner(debt.owner);
-    setDebtPayId(null);
-  };
-
-  const cancelEditDebt = () => {
-    setEditDebtId(null);
-    setEditDebtName("");
-    setEditDebtBalance("");
-    setEditDebtMinPayment("");
-    setEditDebtRate("");
-    setEditDebtDate("");
-    setEditDebtOwner("all");
-  };
-
-  const saveEditDebt = (debt: DebtItem) => {
-    const name = editDebtName.trim();
-    const balance = numInput(editDebtBalance);
-    if (!name || balance < 0) return;
-    updateDebt(debt.id, {
-      name,
-      owner: editDebtOwner,
-      balance,
-      minPayment: Math.max(0, numInput(editDebtMinPayment)),
-      ratePct: editDebtRate.trim() ? numInput(editDebtRate) : null,
-      nextPaymentDate: editDebtDate.trim() || null,
-    });
-    cancelEditDebt();
-  };
-
-  const handleRecurringDateChange = (id: string, date: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-    const d = new Date(`${date}T12:00:00`);
-    const item = recurringTransactions.find((r) => r.id === id);
-    if (!item) return;
-    updateRecurring(id, {
-      nextRunDate: date,
-      dayOfMonth: item.frequency === "monthly" ? d.getDate() : item.dayOfMonth,
-    });
-  };
-
-  const handleRecurringEndDateChange = (id: string, date: string) => {
-    const item = recurringTransactions.find((r) => r.id === id);
-    if (!item) return;
-    updateRecurring(id, {
-      endDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
-    });
-  };
-
-  const recurringEndPreview = useMemo(() => {
-    if (recEndMode !== "months" || recRepeat !== "monthly") return null;
-    return recurringEndDateFromMonths(
-      recStartDate,
-      1,
-      Number(recDurationMonths) || 1,
-    );
-  }, [recDurationMonths, recEndMode, recRepeat, recStartDate]);
-
-  const recurringFormCategories = useMemo(
-    () => getCategoriesByType(categories, recType, locale),
-    [categories, locale, recType],
-  );
-
-  useEffect(() => {
-    if (recurringFormCategories.some((category) => category.id === recCategoryId)) return;
-    setRecCategoryId(getFallbackCategoryId(recType));
-  }, [recCategoryId, recType, recurringFormCategories]);
-
-  const recurringPeriod = useMemo(
-    () => getCurrentBudgetPeriod(budgetMonthStartDay),
-    [budgetMonthStartDay],
-  );
-  const futureOperationToday = useMemo(() => todayIso(), []);
-  const recurringCardsBase = useMemo(() => {
-    const today = todayIso();
-    return recurringTransactions
-      .map((item) => {
-        const originalIndex = recurringTransactions.findIndex((entry) => entry.id === item.id);
-        const periodTransactions = transactions.filter(
-          (tx) =>
-            tx.recurringId === item.id &&
-            isDateInBudgetPeriod(resolveRecurringOccurrenceDate(tx), recurringPeriod),
-        );
-        const paidTransactions = periodTransactions.filter((tx) => tx.confirmed !== false);
-        const pendingTransactions = periodTransactions.filter((tx) => tx.confirmed === false);
-        const skippedInPeriod = (item.skippedDates ?? []).filter((date) =>
-          isDateInBudgetPeriod(date, recurringPeriod),
-        );
-        const pendingDates = pendingTransactions
-          .map((tx) => resolveRecurringOccurrenceDate(tx))
-          .sort();
-        const paidDates = paidTransactions
-          .map((tx) => resolveRecurringOccurrenceDate(tx))
-          .sort();
-        const fallbackOccurrenceDate =
-          isDateInBudgetPeriod(item.nextRunDate, recurringPeriod)
-            ? item.nextRunDate
-            : (skippedInPeriod[0] ?? item.nextRunDate);
-        const relevantOccurrenceDate =
-          pendingDates[0] ??
-          paidDates.at(-1) ??
-          skippedInPeriod[0] ??
-          fallbackOccurrenceDate;
-        const resolvedOccurrence = resolveRecurringOccurrenceStatus({
-          item,
-          transactions,
-          occurrenceDate: relevantOccurrenceDate,
-          today,
-        });
-        const pending =
-          resolvedOccurrence.status === "pending" ||
-          resolvedOccurrence.status === "rescheduled";
-        const paid = resolvedOccurrence.status === "paid";
-        const overdue = resolvedOccurrence.status === "overdue";
-        const lastPaidDate = paid ? resolvedOccurrence.paidAt : null;
-        const status: "paid" | "pending" | "overdue" | "upcoming" | "paused" =
-          pending
-            ? "pending"
-            : paid
-              ? "paid"
-              : !item.enabled
-                ? "paused"
-                : overdue
-                  ? "overdue"
-                  : "upcoming";
-        return {
-          item,
-          paid,
-          pending,
-          status,
-          resolvedStatus: resolvedOccurrence.status,
-          lastPaidDate,
-          skippedInPeriod,
-          scheduledDate: resolvedOccurrence.scheduledDate,
-          occurrenceDate: resolvedOccurrence.occurrenceDate,
-          relevantOccurrenceDate: resolvedOccurrence.occurrenceDate,
-          sortDate: pending
-            ? resolvedOccurrence.scheduledDate
-            : resolvedOccurrence.occurrenceDate,
-          originalIndex,
-        };
-      });
-  }, [recurringPeriod, recurringTransactions, transactions]);
-
-  const futureOperationTransactions = useMemo(() => {
-    return transactions
-      .filter((transaction) => transaction.recurringId == null)
-      .filter((transaction) => transaction.confirmed === false)
-      .sort((left, right) => left.date.localeCompare(right.date));
-  }, [transactions]);
-
-  const futureOperationSections = useMemo(() => {
-    type FutureOperationListItem =
-      | {
-          kind: "one-time";
-          key: string;
-          sortDate: string;
-          transaction: Transaction;
-        }
-      | {
-          kind: "recurring";
-          key: string;
-          sortDate: string;
-          card: (typeof recurringCardsBase)[number];
-        };
-
-    const sections: Record<FutureOperationGroup, FutureOperationListItem[]> = {
-      planned: [],
-      due: [],
-      paid: [],
-    };
-
-    for (const transaction of futureOperationTransactions) {
-      const group = resolveFutureOneTimeTransactionGroup(transaction, futureOperationToday);
-      sections[group].push({
-        kind: "one-time",
-        key: transaction.id,
-        sortDate: transaction.date.slice(0, 10),
-        transaction,
-      });
-    }
-
-    for (const card of recurringCardsBase) {
-      const group = resolveFutureRecurringOperationGroup(
-        {
-          paid: card.paid,
-          resolvedStatus: card.resolvedStatus,
-          scheduledDate: card.scheduledDate,
-        },
-        futureOperationToday,
-      );
-      sections[group].push({
-        kind: "recurring",
-        key: card.item.id,
-        sortDate: group === "paid" ? card.lastPaidDate ?? card.occurrenceDate : card.scheduledDate,
-        card,
-      });
-    }
-
-    sections.planned.sort((left, right) => left.sortDate.localeCompare(right.sortDate));
-    sections.due.sort((left, right) => left.sortDate.localeCompare(right.sortDate));
-    sections.paid.sort((left, right) => right.sortDate.localeCompare(left.sortDate));
-
-    return sections;
-  }, [futureOperationToday, futureOperationTransactions, recurringCardsBase]);
-
-  const plannedFutureOperations = useMemo(
-    () => splitPlannedFutureOperationsByMonth(futureOperationSections.planned, futureOperationToday),
-    [futureOperationSections.planned, futureOperationToday],
-  );
-
-  const futureOperationDisplaySections = useMemo(() => {
-    const sections: Array<{
-      key: string;
-      label: string;
-      items: Array<(typeof futureOperationSections.planned)[number]>;
-    }> = [];
-
-    if (plannedFutureOperations.currentMonth.length > 0) {
-      sections.push({
-        key: "planned",
-        label: t(locale, "planningRecurringSectionPlanned"),
-        items: plannedFutureOperations.currentMonth,
-      });
-    }
-
-    for (const bucket of plannedFutureOperations.laterMonths) {
-      sections.push({
-        key: `later-${bucket.monthKey}`,
-        label: formatMonthYearLong(`${bucket.monthKey}-15`, locale),
-        items: bucket.items,
-      });
-    }
-
-    if (futureOperationSections.due.length > 0) {
-      sections.push({
-        key: "due",
-        label: t(locale, "planningRecurringSectionDue"),
-        items: futureOperationSections.due,
-      });
-    }
-
-    if (futureOperationSections.paid.length > 0) {
-      sections.push({
-        key: "paid",
-        label: t(locale, "planningRecurringSectionPaid"),
-        items: futureOperationSections.paid,
-      });
-    }
-
-    return sections;
-  }, [futureOperationSections, locale, plannedFutureOperations]);
-
-  function futureSectionPillClassName(sectionKey: string) {
-    if (sectionKey === "paid") {
-      return "border-emerald-200/80 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-100";
-    }
-    if (sectionKey === "due") {
-      return "border-amber-300/80 bg-amber-100/80 text-amber-950 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/50 dark:text-amber-100";
-    }
-    return "border-amber-200/80 bg-amber-50 text-amber-900 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/40 dark:text-amber-100";
-  }
-
-  const renderFutureOperationCard = (
-    entry:
-      | (typeof futureOperationSections.planned)[number]
-      | (typeof futureOperationSections.due)[number]
-      | (typeof futureOperationSections.paid)[number],
-  ) => {
-      const pendingCardClassName =
-        "border-amber-200/90 bg-amber-50/80 dark:border-amber-800/60 dark:bg-amber-950/30";
-      const pendingBadgeClassName =
-        "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-100";
-      const paidCardClassName =
-        "border-emerald-200/80 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/25";
-      const paidBadgeClassName =
-        "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100";
-
-      if (entry.kind === "one-time") {
-        const transaction = entry.transaction;
-        const categoryLabel = getCategoryLabel(transaction.categoryId, categories, locale);
-        const title = transaction.note.trim() || categoryLabel;
-        return (
-          <div
-            key={entry.key}
-            className={cn("rounded-lg border p-3", pendingCardClassName)}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p
-                  className={cn(
-                    "mb-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
-                    pendingBadgeClassName,
-                  )}
-                >
-                  {transaction.type === "income"
-                    ? locale === "ru"
-                      ? "Ğ Ğ°Ğ·Ğ¾Ğ²Ñ‹Ğ¹ Ğ´Ğ¾Ñ…Ğ¾Ğ´"
-                      : "One-time income"
-                    : locale === "ru"
-                      ? "Ğ Ğ°Ğ·Ğ¾Ğ²Ñ‹Ğ¹ Ğ¿Ğ»Ğ°Ñ‚Ñ‘Ğ¶"
-                      : "One-time payment"}
-                </p>
-                <p className="font-medium leading-tight">{title}</p>
-                <p className="mt-0.5 text-sm font-semibold tabular-nums">
-                  {transaction.type === "income" ? "+" : "âˆ’"}
-                  {formatMoney(transaction.amount, locale)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatTransactionDate(transaction.date, locale)}
-                  {" Â· "}
-                  {locale === "ru" ? "ĞĞ¶Ğ¸Ğ´Ğ°ĞµÑ‚ÑÑ" : "Expected"}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 shrink-0 text-destructive"
-                onClick={() => deleteTransaction(transaction.id)}
-                aria-label={locale === "ru" ? "Ğ£Ğ´Ğ°Ğ»Ğ¸Ñ‚ÑŒ Ğ¾Ğ¿ĞµÑ€Ğ°Ñ†Ğ¸Ñ" : "Delete operation"}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        );
-      }
-
-      const { item, status, lastPaidDate, skippedInPeriod } = entry.card;
-      const recurringCardExpanded = expandedRecurringCards[item.id] ?? false;
-      const categoryLabel = getCategoryLabel(item.categoryId, categories, locale);
-      const title = recurringDisplayName(item, categoryLabel);
-      const skipped = effectiveSkippedDates(item, transactions);
-      const skipTotal = skipped.length * item.amount;
-      return (
-        <div
-          key={entry.key}
-          data-plan-entity-id={item.id}
-          className={cn(
-            "rounded-lg border p-3",
-            item.enabled
-              ? status === "paid"
-                ? paidCardClassName
-                : pendingCardClassName
-              : "border-red-200/80 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/25",
-          )}
-        >
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    "mb-2 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
-                    status === "paid"
-                      ? paidBadgeClassName
-                      : item.enabled
-                        ? pendingBadgeClassName
-                        : "bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-100",
-                  )}
-                >
-                  {status === "paid"
-                    ? t(locale, "planningRecurringStatusPaid")
-                    : status === "pending"
-                      ? t(locale, "planningRecurringStatusPending")
-                      : item.enabled
-                        ? t(locale, "planningRecurringStatusActive")
-                        : t(locale, "planningRecurringStatusPaused")}
-                </p>
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                  <p className="min-w-0 font-medium leading-tight">{title}</p>
-                  <p className="shrink-0 text-base font-semibold tabular-nums sm:text-[1.75rem] sm:leading-none">
-                    {formatMoney(item.amount, locale)}
-                  </p>
-                </div>
-              </div>
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "min-h-10 rounded-2xl px-4",
-                    item.enabled
-                      ? status === "paid"
-                        ? "border-emerald-300/80 bg-white/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
-                        : "border-amber-300/80 bg-white/85 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
-                      : "border-red-300/80 bg-white/80 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40",
-                  )}
-                  onClick={() => updateRecurring(item.id, { enabled: !item.enabled })}
-                >
-                  {item.enabled
-                    ? locale === "ru"
-                      ? "ĞŸÑ€Ğ¸Ğ¾ÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ñ‚ÑŒ"
-                      : "Pause"
-                    : locale === "ru"
-                      ? "Ğ’Ğ¾Ğ·Ğ¾Ğ±Ğ½Ğ¾Ğ²Ğ¸Ñ‚ÑŒ"
-                      : "Resume"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 shrink-0 text-destructive"
-                  onClick={() => removeRecurring(item.id)}
-                  aria-label={locale === "ru" ? "Ğ£Ğ´Ğ°Ğ»Ğ¸Ñ‚ÑŒ ÑĞµÑ€Ğ¸Ñ" : "Delete series"}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full border border-border/70 bg-background/75"
-                  onClick={() =>
-                    setExpandedRecurringCards((current) => ({
-                      ...current,
-                      [item.id]: !recurringCardExpanded,
-                    }))
-                  }
-                  aria-expanded={recurringCardExpanded}
-                  aria-label={
-                    recurringCardExpanded
-                      ? locale === "ru"
-                        ? "Ğ¡Ğ²ĞµÑ€Ğ½ÑƒÑ‚ÑŒ ĞºĞ°Ñ€Ñ‚Ğ¾Ñ‡ĞºÑƒ"
-                        : "Collapse card"
-                      : locale === "ru"
-                        ? "Ğ Ğ°Ğ·Ğ²ĞµÑ€Ğ½ÑƒÑ‚ÑŒ ĞºĞ°Ñ€Ñ‚Ğ¾Ñ‡ĞºÑƒ"
-                        : "Expand card"
-                  }
-                >
-                  {recurringCardExpanded ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            {recurringCardExpanded ? (
-              <div className="space-y-3 border-t border-border/50 pt-3">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
-                    {item.frequency === "weekly"
-                      ? t(locale, "planningRecurringWeekly")
-                      : item.frequency === "monthly"
-                        ? (item.intervalMonths ?? 1) > 1
-                          ? replaceTokens(t(locale, "planningRecurringEveryMonths"), {
-                              count: String(item.intervalMonths ?? 1),
-                            })
-                          : t(locale, "planningRecurringMonthly")
-                        : t(locale, "planningRecurringYearly")}
-                    {" Â· "}
-                    {replaceTokens(t(locale, "planningRecurringNext"), {
-                      date: formatTransactionDate(item.nextRunDate, locale),
-                    })}
-                  </p>
-                  {item.endDate ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {locale === "ru"
-                        ? `Ğ—Ğ°ĞºĞ°Ğ½Ñ‡Ğ¸Ğ²Ğ°ĞµÑ‚ÑÑ ${formatTransactionDate(item.endDate, locale)}`
-                        : `Ends on ${formatTransactionDate(item.endDate, locale)}`}
-                    </p>
-                  ) : null}
-                  {lastPaidDate ? (
-                    <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                      {replaceTokens(t(locale, "planningRecurringPaidOn"), {
-                        date: formatTransactionDate(lastPaidDate, locale),
-                      })}
-                    </p>
-                  ) : null}
-                  {skippedInPeriod.length > 0 && !lastPaidDate ? (
-                    <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                      {replaceTokens(t(locale, "planningRecurringSkippedInPeriod"), {
-                        count: String(skippedInPeriod.length),
-                      })}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="flex flex-col items-start gap-1.5 text-xs text-muted-foreground">
-                    <span className="shrink-0">{t(locale, "planningRecurringDate")}</span>
-                    <Input
-                      type="date"
-                      className="h-9 w-full text-xs"
-                      value={item.nextRunDate}
-                      onChange={(e) => handleRecurringDateChange(item.id, e.target.value)}
-                    />
-                  </label>
-                  <label className="flex flex-col items-start gap-1.5 text-xs text-muted-foreground">
-                    <span className="shrink-0">
-                      {locale === "ru" ? "Ğ”Ğ¾ Ğ´Ğ°Ñ‚Ñ‹" : "Until"}
-                    </span>
-                    <Input
-                      type="date"
-                      className="h-9 w-full text-xs"
-                      value={item.endDate ?? ""}
-                      onChange={(e) => handleRecurringEndDateChange(item.id, e.target.value)}
-                    />
-                  </label>
-                </div>
-                {skipped.length > 0 ? (
-                  <div className="rounded-md border border-amber-300/70 bg-amber-50/80 px-2.5 py-2 text-xs dark:border-amber-800/60 dark:bg-amber-950/40">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100">
-                      {t(locale, "planningRecurringSkippedTitle")}
-                    </p>
-                    <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                      {skipped.map((d) => (
-                        <li key={d} className="tabular-nums">
-                          {replaceTokens(t(locale, "planningRecurringSkippedLine"), {
-                            date: formatTransactionDate(d, locale),
-                          })}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-1.5 font-semibold tabular-nums text-foreground">
-                      {replaceTokens(t(locale, "planningRecurringSkippedTotal"), {
-                        amount: formatMoney(skipTotal, locale),
-                        count: String(skipped.length),
-                      })}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      );
-  };
-
-  const showToggle = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className={sectionToggleButtonClassName}
-      onClick={toggleOpen}
-    >
-      {open && hydrated ? (
-        <>
-          <ChevronUp className="h-4 w-4" />
-          {t(locale, "planningHide")}
-        </>
-      ) : (
-        <>
-          <ChevronDown className="h-4 w-4" />
-          {t(locale, "planningShow")}
-        </>
-      )}
-    </Button>
-  );
-
-  if (collapsible && hydrated && !open) {
-    return (
-      <div data-onboarding="planning">
-        <HomeSectionCollapsedBar
-          icon={PiggyBank}
-          title={t(locale, "planningTitle")}
-          action={showToggle}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <Card className="border-primary/20" data-onboarding="planning">
-      <HomeSectionCardHeader
-        icon={PiggyBank}
-        title={t(locale, "planningTitle")}
-        action={collapsible ? showToggle : null}
-      />
-      {open ? (
-        <CardContent className={homeSectionContentClassName}>
-          <Tabs value={currentPlanningTab} onValueChange={changePlanningTab}>
-            <TabsList className="mb-3 grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-primary/20 bg-primary/10 p-1 shadow-sm sm:grid-cols-3">
-              {visibleTabs.includes("goals") ? (
-                <TabsTrigger value="goals" className={planningTabClass}>
-                  {t(locale, "planningTabGoals")}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("funds") ? (
-                <TabsTrigger value="funds" className={planningTabClass}>
-                  {t(locale, "planningTabFunds")}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("limits") ? (
-                <TabsTrigger value="limits" className={planningTabClass}>
-                  {t(locale, "planningTabLimits")}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("debts") ? (
-                <TabsTrigger value="debts" className={planningTabClass}>
-                  {locale === "ru" ? "Ğ”Ğ¾Ğ»Ğ³Ğ¸" : "Debts"}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("emergency") ? (
-                <TabsTrigger value="emergency" className={planningTabClass}>
-                  {t(locale, "planningTabEmergency")}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("recurring") ? (
-                <TabsTrigger value="recurring" className={planningTabClass}>
-                  {t(locale, "planningTabRecurring")}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("stats") ? (
-                <TabsTrigger value="stats" className={planningTabClass}>
-                  {locale === "ru" ? "Ğ¡Ñ‚Ğ°Ñ‚Ğ¸ÑÑ‚Ğ¸ĞºĞ°" : "Stats"}
-                </TabsTrigger>
-              ) : null}
-              {visibleTabs.includes("advisor") ? (
-                <TabsTrigger value="advisor" className={planningTabClass}>
-                  {locale === "ru" ? "Ğ¡Ğ¾Ğ²ĞµÑ‚Ğ½Ğ¸Ğº" : "Advisor"}
-                </TabsTrigger>
-              ) : null}
-            </TabsList>
-
-            {visibleTabs.includes("goals") ? (
-            <TabsContent value="goals" className="space-y-3">
-              {customGoals.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t(locale, "planningGoalEmpty")}</p>
-              ) : (
-                customGoals.map((goal) => {
-                  const target = resolveGoalTarget(goal, transactions);
-                  const percent = goalProgressPercent(goal, transactions);
-                  const remaining = Math.max(0, target - goal.savedAmount);
-                  const monthlyPlans = resolveGoalMonthlyPlans(
-                    target,
-                    goal.savedAmount,
-                    goal.deadline,
-                  );
-                  return (
-                    <div key={goal.id} data-plan-entity-id={goal.id} className="space-y-2 rounded-lg border p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-medium">{goal.name}</p>
-                          {monthlyPlans ? (
-                            <GoalMonthlyPlansBlock
-                              plans={monthlyPlans}
-                              deadline={goal.deadline}
-                              locale={locale}
-                            />
-                          ) : null}
-                          <p className="text-xs text-muted-foreground">
-                            {target > 0
-                              ? replaceTokens(t(locale, "planningGoalSaved"), {
-                                  saved: formatMoney(goal.savedAmount, locale),
-                                  target: formatMoney(target, locale),
-                                  percent: String(percent),
-                                })
-                              : replaceTokens(t(locale, "planningGoalSavedNoTarget"), {
-                                  saved: formatMoney(goal.savedAmount, locale),
-                                })}
-                          </p>
-                          {remaining > 0 ? (
-                            <p className="text-xs text-muted-foreground">
-                              {replaceTokens(t(locale, "planningGoalRemaining"), {
-                                amount: formatMoney(remaining, locale),
-                              })}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex shrink-0 gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            onClick={() => startEditGoal(goal, target)}
-                            aria-label={t(locale, "planningGoalEdit")}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 text-destructive"
-                            onClick={() => removeGoal(goal.id)}
-                            aria-label={t(locale, "planningGoalDelete")}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <ProgressBar percent={percent} />
-                      {editGoalId === goal.id ? (
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap gap-2">
-                            <Input
-                              placeholder={t(locale, "planningGoalName")}
-                              value={editGoalName}
-                              onChange={(e) => setEditGoalName(e.target.value)}
-                            />
-                            <Input
-                              type="number"
-                              placeholder={t(locale, "planningGoalTarget")}
-                              value={editGoalTarget}
-                              onChange={(e) => setEditGoalTarget(e.target.value)}
-                            />
-                            <Input
-                              type="date"
-                              aria-label={t(locale, "planningGoalDeadline")}
-                              value={editGoalDeadline}
-                              onChange={(e) => setEditGoalDeadline(e.target.value)}
-                            />
-                          </div>
-                          {editGoalId === goal.id && editMonthlyPreview ? (
-                            <GoalMonthlyPlansBlock
-                              plans={editMonthlyPreview}
-                              deadline={editGoalDeadline.trim() || null}
-                              locale={locale}
-                            />
-                          ) : null}
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleSaveGoalEdit(goal.id)}
-                            >
-                              {t(locale, "planningGoalEditSave")}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setEditGoalId(null)}
-                            >
-                              {t(locale, "cancel")}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
-                      {depositGoalId === goal.id ? (
-                        <div className="flex gap-2">
-                          <Input
-                            type="number"
-                            placeholder={t(locale, "planningGoalDepositAmount")}
-                            value={depositAmount}
-                            onChange={(e) => setDepositAmount(e.target.value)}
-                          />
-                          <Button size="sm" onClick={() => handleGoalTransfer(goal.id)}>
-                            OK
-                          </Button>
-                        </div>
-                      ) : null}
-                      {depositGoalId === goal.id ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          {t(locale, "planningGoalDepositUndo")}
-                        </p>
-                      ) : null}
-                      {depositGoalId !== goal.id ? (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setDepositGoalMode("deposit");
-                              setDepositGoalId(goal.id);
-                            }}
-                          >
-                            {t(locale, "planningGoalDeposit")}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={goal.savedAmount <= 0}
-                            onClick={() => {
-                              setDepositGoalMode("withdraw");
-                              setDepositGoalId(goal.id);
-                            }}
-                          >
-                            {t(locale, "planningGoalWithdraw")}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-              <div className="flex flex-col gap-2 border-t pt-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  <Input
-                    placeholder={t(locale, "planningGoalName")}
-                    value={goalName}
-                    onChange={(e) => setGoalName(e.target.value)}
-                    className="sm:min-w-[8rem] sm:flex-1"
-                  />
-                  <Input
-                    type="number"
-                    placeholder={t(locale, "planningGoalTarget")}
-                    value={goalTarget}
-                    onChange={(e) => setGoalTarget(e.target.value)}
-                    className="sm:w-32"
-                  />
-                  <Input
-                    type="date"
-                    aria-label={t(locale, "planningGoalDeadline")}
-                    value={goalDeadline}
-                    onChange={(e) => setGoalDeadline(e.target.value)}
-                    className="sm:w-40"
-                  />
-                </div>
-                {createMonthlyPreview ? (
-                  <GoalMonthlyPlansBlock
-                    plans={createMonthlyPreview}
-                    deadline={goalDeadline.trim() || null}
-                    locale={locale}
-                  />
-                ) : null}
-                <Button className="sm:self-start" onClick={handleAddGoal}>
-                  {t(locale, "planningGoalAdd")}
-                </Button>
-              </div>
-            </TabsContent>
-            ) : null}
-
-            {visibleTabs.includes("funds") ? (
-            <TabsContent value="funds" className="space-y-3">
-              <div className="rounded-lg border bg-muted/40 p-3">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-3 text-left"
-                  onClick={() => setFundInfoOpen((open) => !open)}
-                  aria-expanded={fundInfoOpen}
-                  aria-label={t(locale, "planningFundInfoAria")}
-                >
-                  <div>
-                    <p className="text-sm font-medium">{t(locale, "planningFundTitle")}</p>
-                    <p className="text-xs text-muted-foreground">{t(locale, "planningFundHint")}</p>
-                  </div>
-                  <CircleAlert className="h-4 w-4 shrink-0 text-muted-foreground" />
-                </button>
-                {fundInfoOpen ? (
-                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                    {t(locale, "planningFundInfo")}
-                  </p>
-                ) : null}
-              </div>
-
-              {funds.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t(locale, "planningFundEmpty")}</p>
-              ) : (
-                funds.map((fund) => (
-                  <div key={fund.id} data-plan-entity-id={fund.id} className="space-y-2 rounded-lg border p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium">{fund.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {replaceTokens(t(locale, "planningFundSaved"), {
-                            saved: formatMoney(fund.savedAmount, locale),
-                          })}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => startEditFund(fund)}
-                          aria-label={t(locale, "planningGoalEdit")}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0 text-destructive"
-                          onClick={() => removeGoal(fund.id)}
-                          aria-label={t(locale, "planningGoalDelete")}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    {editFundId === fund.id ? (
-                      <div className="flex flex-col gap-2">
-                        <Input
-                          placeholder={t(locale, "planningFundName")}
-                          value={editFundName}
-                          onChange={(e) => setEditFundName(e.target.value)}
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleSaveFundEdit(fund.id)}>
-                            {t(locale, "planningGoalEditSave")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditFundId(null)}
-                          >
-                            {t(locale, "cancel")}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                    {depositGoalId === fund.id ? (
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          placeholder={t(locale, "planningGoalDepositAmount")}
-                          value={depositAmount}
-                          onChange={(e) => setDepositAmount(e.target.value)}
-                        />
-                        <Button size="sm" onClick={() => handleGoalTransfer(fund.id)}>
-                          OK
-                        </Button>
-                      </div>
-                    ) : null}
-                    {depositGoalId !== fund.id ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setDepositGoalMode("deposit");
-                            setDepositGoalId(fund.id);
-                          }}
-                        >
-                          {t(locale, "planningGoalDeposit")}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={fund.savedAmount <= 0}
-                          onClick={() => {
-                            setDepositGoalMode("withdraw");
-                            setDepositGoalId(fund.id);
-                          }}
-                        >
-                          {t(locale, "planningGoalWithdraw")}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))
-              )}
-
-              <div className="flex flex-col gap-2 border-t pt-3">
-                <Input
-                  placeholder={t(locale, "planningFundName")}
-                  value={fundName}
-                  onChange={(e) => setFundName(e.target.value)}
-                  className="sm:max-w-sm"
-                />
-                <Button className="sm:self-start" onClick={handleAddFund}>
-                  {t(locale, "planningFundAdd")}
-                </Button>
-              </div>
-            </TabsContent>
-            ) : null}
-
-            {visibleTabs.includes("limits") ? (
-            <TabsContent value="limits" className="space-y-3">
-              <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
-                <p className="text-sm font-medium">{t(locale, "budgetMonthStart")}</p>
-                <p className="text-xs text-muted-foreground">{t(locale, "budgetMonthStartHint")}</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">{t(locale, "budgetMonthStartDay")}</span>
-                    <select
-                      className="flex h-9 rounded-md border border-input bg-background px-2 text-sm"
-                      value={budgetMonthStartDay}
-                      onChange={(e) => setBudgetMonthStartDay(Number(e.target.value))}
-                    >
-                      {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <span className="text-xs text-muted-foreground">
-                    {t(locale, "chartPeriod", { period: budgetPeriodLabel })}
-                  </span>
-                </div>
-              </div>
-              {categoryBudgets.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t(locale, "planningLimitEmpty")}</p>
-              ) : (
-                sortedCategoryBudgets.map((budget) => {
-                  const spent = monthSpentByCategory(
-                    transactions,
-                    budget.categoryId,
-                    budgetMonthStartDay,
-                  );
-                  const percent = budgetUsagePercent(spent, budget.monthlyLimit);
-                  const over = spent > budget.monthlyLimit;
-                  const label = getCategoryLabel(budget.categoryId, categories, locale);
-                  return (
-                    <div key={budget.categoryId} data-plan-entity-id={budget.categoryId} className="space-y-2 rounded-lg border p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium">{label}</p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeCategoryBudget(budget.categoryId)}
-                        >
-                          {t(locale, "planningLimitRemove")}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {replaceTokens(t(locale, "planningLimitSpent"), {
-                          spent: formatMoney(spent, locale),
-                          limit: formatMoney(budget.monthlyLimit, locale),
-                          percent: String(percent),
-                        })}
-                      </p>
-                      {over ? (
-                        <p className="text-xs text-destructive">
-                          {replaceTokens(t(locale, "planningLimitOver"), {
-                            amount: formatMoney(spent - budget.monthlyLimit, locale),
-                          })}
-                        </p>
-                      ) : null}
-                      <ProgressBar percent={percent} over={over} />
-                    </div>
-                  );
-                })
-              )}
-              <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row">
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={limitCategoryId}
-                  onChange={(e) => setLimitCategoryId(e.target.value)}
-                >
-                  <option value="">{t(locale, "planningLimitCategory")}</option>
-                  {expenseCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {getCategoryLabel(c.id, categories, locale)}
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  type="number"
-                  placeholder={t(locale, "planningLimitAmount")}
-                  value={limitAmount}
-                  onChange={(e) => setLimitAmount(e.target.value)}
-                />
-                <Button onClick={handleSetLimit}>{t(locale, "planningLimitSet")}</Button>
-              </div>
-            </TabsContent>
-            ) : null}
-
-            {visibleTabs.includes("debts") ? (
-            <TabsContent value="debts" className="space-y-3">
-              <div className="rounded-lg border border-amber-300/70 bg-amber-50/70 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/25">
-                <div className="flex items-start gap-2">
-                  <Landmark className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
-                  <div className="min-w-0">
-                    <p className="font-medium">
-                      {locale === "ru" ? "Ğ”Ğ¾Ğ»Ğ³Ğ¸ Ğ¸ Ğ¾Ğ±ÑĞ·Ğ°Ñ‚ĞµĞ»ÑŒÑÑ‚Ğ²Ğ°" : "Debts and obligations"}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <div className="rounded-md bg-background/70 px-2 py-1.5">
-                    <p className="text-[11px] text-muted-foreground">
-                      {locale === "ru" ? "ĞÑÑ‚Ğ°Ñ‚Ğ¾Ğº" : "Balance"}
-                    </p>
-                    <p className="font-bold tabular-nums">
-                      {formatMoney(debtTotals.balance, locale)}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-background/70 px-2 py-1.5">
-                    <p className="text-[11px] text-muted-foreground">
-                      {locale === "ru" ? "ĞœĞ¸Ğ½. Ğ¿Ğ»Ğ°Ñ‚Ñ‘Ğ¶" : "Min payment"}
-                    </p>
-                    <p className="font-bold tabular-nums">
-                      {formatMoney(debtTotals.minPayment, locale)}
-                    </p>
-                  </div>
-                </div>
-                {debtFocus ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
+YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éíßÎûÕ:-jZ.¶›­–)Ş³R'W6R6Æ–VçB#° ¦–×÷'B°¢&FvTFöÆÆ%6–vâÀ¢6ÆVæF$F—2À¢6†Wg&öäF÷vâÀ¢6†Wg&öåWÀ¢6Æö6³2À¢6—&6ÆTÆW'BÀ¢–æf–æ—G’À¢ÆæFÖ&²À¢Væ6–ÂÀ¢–vw”&æ²À¢&WVC"À¢6†–VÆBÀ¢FrÀ¢G&6ƒ"À¢vÆÆWD6&G2À§Òg&öÒ&ÇV6–FR×&V7B#°¦–×÷'B²W6T6ÆÆ&6²ÂW6TVffV7BÂW6TÖVÖòÂW6U&VbÂW6U7FFRÒg&öÒ'&V7B#°¦–×÷'B²'WGFöâÒg&öÒ$ö6ö×öæVçG2÷V’ö'WGFöâ#°¦–×÷'B°¢†öÖU6V7F–öä6&D†VFW"À¢†öÖU6V7F–öä6öÆÆ6VD&"À¢†öÖU6V7F–öä6öçFVçD6Æ74æÖRÀ¢6V7F–öåFövvÆT'WGFöä6Æ74æÖRÀ§Òg&öÒ$ö6ö×öæVçG2ô†öÖU6V7F–öä6&D†VFW"#°¦–×÷'B²6&BÂ6&D6öçFVçBÒg&öÒ$ö6ö×öæVçG2÷V’ö6&B#°¦–×÷'B²–çWBÒg&öÒ$ö6ö×öæVçG2÷V’ö–çWB#°¦–×÷'B²F'2ÂF'46öçFVçBÂF'4Æ—7BÂF'5G&–vvW"Òg&öÒ$ö6ö×öæVçG2÷V’÷F'2#°¦–×÷'B²f–ææ6–Ä6†'BÒg&öÒ$ö6ö×öæVçG2ôf–ææ6–Ä6†'B#°¦–×÷'B²”æÇ—6—5F"Òg&öÒ$ö6ö×öæVçG2ô”æÇ—6—5F"#°¦–×÷'B²W6UFö7BÒg&öÒ$ö6ö×öæVçG2÷V’÷Fö7B#°¦–×÷'B°¢vWD6FVv÷&–W4'•G—RÀ¢vWD6FVv÷'”Æ&VÂÀ¢vWDfÆÆ&6´6FVv÷'”–BÀ¢6÷'D6FVv÷&–W4'”Æ&VÂÀ§Òg&öÒ$öÆ–"ö6FVv÷&–W2#°¦–×÷'B²f÷&ÖD'VFvWEW&–öDÆ&VÂÂvWD7W'&VçD'VFvWEW&–öBÂ—4FFT–ä'VFvWEW&–öBÒg&öÒ$öÆ–"ö'VFvWB×W&–öB#°¦–×÷'B²f÷&ÖDÖöæW’Òg&öÒ$öÆ–"öf÷&ÖBÖÖöæW’#°¦–×÷'B°¢f÷&ÖDÖöçF…–V$ÆöærÀ¢f÷&ÖEÆææ–ætFVFÆ–æRÀ¢f÷&ÖEG&ç67F–öäFFRÀ¢æ÷&ÖÆ—¦T—6ôFFRÀ§Òg&öÒ$öÆ–"öf÷&ÖBÖFFR#°¦–×÷'B°¢Gfæ6U&V7W'&–ætFFRÀ¢ftÖöçF†Ç”W‡Vç6W2À¢'VFvWEW6vUW&6VçBÀ¢VÖW&vVæ7•F&vWDÖ÷VçBÀ¢vöÅ&öw&W75W&6VçBÀ¢ÖöçF…7VçD'”6FVv÷'’À¢&W6öÇfTvöÄÖöçF†Ç•Æç2À¢&W6öÇfTvöÅF&vWBÀ¢FöF”—6òÀ§Òg&öÒ$öÆ–"÷Æææ–æröæÇ—F–72#°¦–×÷'BG—R²vöÄÖöçF†Ç•Æç2Òg&öÒ$öÆ–"÷Æææ–æröæÇ—F–72#°¦–×÷'B°¢VffV7F—fU6¶—VDFFW2À¢&V7W'&–ætF—7Æ”æÖRÀ§Òg&öÒ$öÆ–"÷Æææ–ær÷&V7W'&–ær×6¶—VB#°¦–×÷'B°¢&W6öÇfTgWGW&TöæUF–ÖUG&ç67F–öäw&÷WÀ¢&W6öÇfTgWGW&U&V7W'&–æt÷W&F–öäw&÷WÀ¢7Æ—EÆææVDgWGW&T÷W&F–öç4'”ÖöçF‚À¢G—RgWGW&T÷W&F–öäw&÷WÀ§Òg&öÒ$öÆ–"÷Æææ–ærögWGW&RÖ÷W&F–öâÖw&÷W2#°¦–×÷'B²&W6öÇfU&V7W'&–ætö67W'&Væ6TFFRÒg&öÒ$öÆ–"÷&V7W'&–ærÖö67W'&Væ6R#°¦–×÷'B²&W6öÇfU&V7W'&–ætö67W'&Væ6U7FGW2Òg&öÒ$öÆ–"÷&V7W'&–ærÖö67W'&Væ6R×7FGW2#°¦–×÷'B²'UÇW&ÂÂBÒg&öÒ$öÆ–"ö“†â#°¦–×÷'B²6âÒg&öÒ$öÆ–"÷WF–Ç2#°¦–×÷'B²W6T6FVv÷&–W2ÂW6U7F÷&RÂW6UG&ç67F–öç2Òg&öÒ$÷7F÷&R÷W6U7F÷&R#°¦–×÷'BG—R²Æö6ÆRÂG&ç67F–öâÂG…G—RÒg&öÒ$÷G—W2#°¦–×÷'B²TÔU$tTä5•ôtôÅô”BÒg&öÒ$÷G—W2÷Æææ–ær#°¦–×÷'BG—R²FV'D—FVÒÂ&V7W'&–ætg&WVVæ7’Â6f–æw4vöÂÒg&öÒ$÷G—W2÷Æææ–ær#° ¦6öç7B„õU4T„ôÄEôDT%Eõ5E$DTu•ô´U’Ò'fö–6V'VFvWBÖ†÷W6V†öÆBÖFV'B×7G&FVw’#° ¦W‡÷'BG—RÆææ–æuF"Ğ¢Â&vöÇ2 ¢Â&gVæG2 ¢Â&Æ–Ö—G2 ¢Â&FV'G2 ¢Â&VÖW&vVæ7’ ¢Â'&V7W'&–ær ¢Â'7FG2 ¢Â&Gf—6÷"#° ¦6öç7BDTdTÅEõd•4”$ÄUõD%3¢Æææ–æuF%µÒÒ°¢&vöÇ2"À¢&gVæG2"À¢&Æ–Ö—G2"À¢&FV'G2"À¢&VÖW&vVæ7’"À¢'&V7W'&–ær"À¢'7FG2"À¢&Gf—6÷""À¥Ó° ¦gVæ7F–öâ&WÆ6UFö¶Vç2‡FV×ÆFS¢7G&–ærÂFö¶Vç3¢&V6÷&CÇ7G&–ærÂ7G&–æsâ“¢7G&–ær°¢ÆWB2ÒFV×ÆFS°¢f÷"†6öç7B¶¶W’ÂfÇVUÒöbö&¦V7BæVçG&–W2‡Fö¶Vç2’’°¢2Ò2ç7Æ—B†²G¶¶W—×Ö’æ¦ö–â‡fÇVR“°¢Ğ¢&WGW&â3°§Ğ ¦gVæ7F–öâf÷&ÖEÆææ–æt÷W&F–öç46÷VçB†6÷VçC¢çVÖ&W"ÂÆö6ÆS¢Æö6ÆR“¢7G&–ær°¢–b†Æö6ÆRÓÓÒ''R"’°¢&WGW&âG¶6÷VçGÒG·'UÇW&Â†6÷VçBÂ-íı]mò"Â-íı]m‚"Â-íı]m’"—Ö°¢Ğ¢&WGW&âG¶6÷VçGÒG¶6÷VçBÓÓÒò&—FVÒ"¢&—FV×2'Ö°§Ğ ¦gVæ7F–öâvöÄÖöçF†Ç•Æç4&Æö6²‡°¢Æç2À¢FVFÆ–æRÀ¢Æö6ÆRÀ§Ó¢°¢Æç3¢vöÄÖöçF†Ç•Æç3°¢FVFÆ–æS¢7G&–ærÂçVÆÃ°¢Æö6ÆS¢Æö6ÆS°§Ò’°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ&×BÓãR76R×’ÓãR#à¢¶FVFÆ–æRò€¢Ç6Æ74æÖSÒ'FW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–ætvöÅVçF–Â"’Â°¢FFS¢f÷&ÖEÆææ–ætFVFÆ–æR†FVFÆ–æRÂÆö6ÆR’À¢Ò—Ğ¢²"+r'Ğ¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–ætvöÄÖöçF‡4ÆVgB"’Â°¢ÖöçF‡3¢7G&–ær‡Æç2æÖöçF‡2’À¢Ò—Ğ¢Â÷à¢’¢çVÆÇĞ¢Ç6Æ74æÖSÒ'FW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–ætvöÄÖöçF†Ç”öä66÷VçB"’Â°¢Ö÷VçC¢f÷&ÖDÖöæW’‡Æç2æöä66÷VçBÂÆö6ÆR’À¢Ò—Ğ¢Â÷à¢Ç6Æ74æÖSÒ'FW‡B×‡2föçBÖÖVF—VÒFW‡B×&–Ö'’#à¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–ætvöÄÖöçF†Ç”–d–çfW7FVB"’Â°¢Ö÷VçC¢f÷&ÖDÖöæW’‡Æç2æ–d–çfW7FVBÂÆö6ÆR’À¢Ò—Ğ¢Â÷à¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâ&öw&W74&"‡²W&6VçBÂ÷fW"Ó¢²W&6VçC¢çVÖ&W#²÷fW#ó¢&ööÆVâÒ’°¢6öç7Bv–GF‚ÒÖF‚æÖ–âƒÂÖF‚æÖ‚ƒÂW&6VçB’“°¢&WGW&â€¢ÆF—b6Æ74æÖSÒ&‚Ó"rÖgVÆÂ÷fW&fÆ÷rÖ†–FFVâ&÷VæFVBÖgVÆÂ&rÖ×WFVB#à¢ÆF—`¢6Æ74æÖS×¶‚ÖgVÆÂG&ç6—F–öâÖÆÂG¶÷fW"ò&&rÖFW7G'V7F—fR"¢&&r×&–Ö'’'ÖĞ¢7G–ÆS×·²v–GFƒ¢G·v–GF‡ÒV×Ğ¢óà¢ÂöF—cà¢“°§Ğ ¦gVæ7F–öâçVÔ–çWB‡fÇVS¢7G&–ær“¢çVÖ&W"°¢&WGW&âçVÖ&W"‡fÇVRç&WÆ6R‚õÇ2örÂ""’ç&WÆ6R‚"Â"Â"â"’’ÇÂ°§Ğ ¦gVæ7F–öâ&V7W'&–ætVæDFFTg&öÔÖöçF‡2€¢7F'DFFS¢7G&–ærÀ¢–çFW'fÄÖöçF‡3¢çVÖ&W"À¢GW&F–öäÖöçF‡3¢çVÖ&W"À¢“¢7G&–ærÂçVÆÂ°¢–b‚õåÆG³GÒÕÆG³'ÒÕÆG³'ÒBòçFW7B‡7F'DFFR’’&WGW&âçVÆÃ°¢6öç7BF÷FÂÒÖF‚æÖ‚ƒÂÖF‚æÖ–âƒ#ÂÖF‚ç&÷VæB†GW&F–öäÖöçF‡2’’“°¢ÆWB'VäFFRÒ7F'DFFS°¢6öç7BF”ödÖöçF‚ÒæWrFFR†G·7F'DFFWÕC#££’ævWDFFR‚“°¢f÷"†ÆWB–æFW‚Ò²–æFW‚ÂF÷FÃ²–æFW‚³Ò’°¢'VäFFRÒGfæ6U&V7W'&–ætFFR‡'VäFFRÂ&ÖöçF†Ç’"ÂF”ödÖöçF‚Â–çFW'fÄÖöçF‡2“°¢Ğ¢&WGW&â'VäFFS°§Ğ ¦gVæ7F–öâFV'D÷væW$Æ&VÂ†÷væW#¢FV'D—FVÕ²&÷væW"%ÒÂÆö6ÆS¢Æö6ÆR“¢7G&–ær°¢–b†÷væW"ÓÓÒ&ÖR"’&WGW&âÆö6ÆRÓÓÒ''R"ò-
+ò"¢$ÖR#°¢–b†÷væW"ÓÓÒ''FæW""’&WGW&âÆö6ÆRÓÓÒ''R"ò-	ı-İ"¢%'FæW"#°¢&WGW&âÆö6ÆRÓÓÒ''R"ò-	í’"¢%6†&VB#°§Ğ ¦gVæ7F–öâFV'E7G&FVw”Æ&VÂ‡7G&FVw“¢FV'D—FVÕ²'7G&FVw’%ÒÂÆö6ÆS¢Æö6ÆR“¢7G&–ær°¢–b‡7G&FVw’ÓÓÒ'6æ÷v&ÆÂ"’&WGW&âÆö6ÆRÓÓÒ''R"ò-
+İ]mİ½’­íÂ"¢%6æ÷v&ÆÂ#°¢&WGW&âÆö6ÆRÓÓÒ''R"ò-	½-İ"¢$fÆæ6†R#°§Ğ ¦gVæ7F–öâFV'E7G&FVw”†VÇ‡7G&FVw“¢FV'D—FVÕ²'7G&FVw’%ÒÂÆö6ÆS¢Æö6ÆR“¢7G&–ær°¢–b‡7G&FVw’ÓÓÒ'6æ÷v&ÆÂ"’°¢&WGW&âÆö6ÆRÓÓÒ''R ¢ò-
+İ]mİ½’­íÃ¢İ}½}­½-]ÂÍ½’Í½]İÍ­’Mí½2â
+İ-â½-]RM"í=]İRıí]M²‚ıíÍí=]"İRí-Âı½Òâ ¢¢%6æ÷v&ÆÃ¢’öfbF†R6ÖÆÆW7BFV'Bf—'7Bâ—B7&VFW2V–6²v–ç2æB†VÇ2–÷R7F’6öç6—7FVçBâ#°¢Ğ¢&WGW&âÆö6ÆRÓÓÒ''R ¢ò-	½-İ¢İ}½=ÂMí½2Íí’-½í­í’--­í’â	í½}İâİ-âÍ-]Í-}]­‚-½=íMİ]RÂıí-íÍ2}-âÍ]İÍRı]]ı½-â ¢¢$fÆæ6†S¢’F†R†–v†W7B×&FRFV'Bf—'7Bâ—B—2W7VÆÇ’ÖF†VÖF–6ÆÇ’&WGFW"&V6W6R—B&VGV6W2÷fW'–ÖVçBâ#°§Ğ ¦gVæ7F–öâ6÷'DFV'G4'•7G&FVw’†FV'G3¢FV'D—FVÕµÒÂ7G&FVw“¢FV'D—FVÕ²'7G&FVw’%Ò“¢FV'D—FVÕµÒ°¢6öç7BFöF’ÒFöF”—6ò‚“°¢&WGW&â²ââæFV'G5Òç6÷'B‚†Â"’Óâ°¢6öç7B÷fW&GVRÒææW‡E–ÖVçDFFRòææW‡E–ÖVçDFFRÂFöF’¢fÇ6S°¢6öç7B$÷fW&GVRÒ"ææW‡E–ÖVçDFFRò"ææW‡E–ÖVçDFFRÂFöF’¢fÇ6S°¢–b†÷fW&GVRÓÒ$÷fW&GVR’&WGW&â÷fW&GVRòÓ¢°¢–b‡7G&FVw’ÓÓÒ'6æ÷v&ÆÂ"’°¢–b†æ&Ææ6RÓÒ"æ&Ææ6R’&WGW&âæ&Ææ6RÒ"æ&Ææ6S°¢&WGW&â†"ç&FU7Bóò’Ò†ç&FU7Bóò“°¢Ğ¢6öç7B"Òç&FU7BóòÓ°¢6öç7B'"Ò"ç&FU7BóòÓ°¢–b†'"ÓÒ"’&WGW&â'"Ò#°¢&WGW&âæ&Ææ6RÒ"æ&Ææ6S°¢Ò“°§Ğ ¦gVæ7F–öâvöÄFVFÆ–æUF–ÖR†FVFÆ–æS¢7G&–ærÂçVÆÂ“¢çVÖ&W"ÂçVÆÂ°¢–b‚FVFÆ–æR’&WGW&âçVÆÃ°¢6öç7BF–ÖRÒæWrFFR†G¶FVFÆ–æWÕC#££’ævWEF–ÖR‚“°¢&WGW&âçVÖ&W"æ—4æâ‡F–ÖR’òçVÆÂ¢F–ÖS°§Ğ ¦gVæ7F–öâ6÷'DvöÇ4'•&–÷&—G’†vöÇ3¢6f–æw4vöÅµÒÂG&ç67F–öç3¢G&ç67F–öåµÒ“¢6f–æw4vöÅµÒ°¢6öç7Bæ÷rÒæWrFFR‚“°¢æ÷rç6WD†÷W'2ƒ"ÂÂÂ“°¢6öç7BFöF’Òæ÷rævWEF–ÖR‚“° ¢&WGW&â²ââævöÇ5Òç6÷'B‚†Â"’Óâ°¢6öç7BF&vWBÒ&W6öÇfTvöÅF&vWB†ÂG&ç67F–öç2“°¢6öç7B%F&vWBÒ&W6öÇfTvöÅF&vWB†"ÂG&ç67F–öç2“°¢6öç7BFöæRÒF&vWBâbbç6fVDÖ÷VçBãÒF&vWC°¢6öç7B$FöæRÒ%F&vWBâbb"ç6fVDÖ÷VçBãÒ%F&vWC°¢–b†FöæRÓÒ$FöæR’&WGW&âFöæRò¢Ó° ¢6öç7B7F'FVBÒç6fVDÖ÷VçBâ°¢6öç7B%7F'FVBÒ"ç6fVDÖ÷VçBâ°¢–b†7F'FVBÓÒ%7F'FVB’&WGW&â7F'FVBòÓ¢° ¢6öç7BFVFÆ–æRÒvöÄFVFÆ–æUF–ÖR†æFVFÆ–æR“°¢6öç7B$FVFÆ–æRÒvöÄFVFÆ–æUF–ÖR†"æFVFÆ–æR“°¢6öç7B&VÖ–æ–ærÒÖF‚æÖ‚ƒÂF&vWBÒç6fVDÖ÷VçB“°¢6öç7B%&VÖ–æ–ærÒÖF‚æÖ‚ƒÂ%F&vWBÒ"ç6fVDÖ÷VçB“°¢–b†FVFÆ–æRÓÒçVÆÂbb$FVFÆ–æRÓÒçVÆÂ’°¢6öç7BF—2ÒÖF‚æfÆö÷"‚†FVFÆ–æRÒFöF’’òƒ#B¢c¢c¢’“°¢6öç7B$F—2ÒÖF‚æfÆö÷"‚†$FVFÆ–æRÒFöF’’òƒ#B¢c¢c¢’“°¢–b†F—2ÓÒ$F—2’&WGW&âF—2Ò$F—3°¢–b†&VÖ–æ–ærÓÒ%&VÖ–æ–ær’&WGW&â&VÖ–æ–ærÒ%&VÖ–æ–æs°¢Ğ¢–b†FVFÆ–æRÓÒçVÆÂ’&WGW&âÓ°¢–b†$FVFÆ–æRÓÒçVÆÂ’&WGW&â°¢–b†&VÖ–æ–ærÓÒ%&VÖ–æ–ær’&WGW&â&VÖ–æ–ærÒ%&VÖ–æ–æs° ¢6öç7BÖöçF†Ç’ÒæÖöçF†Ç”6öçG&–'WF–öâóò°¢6öç7B$ÖöçF†Ç’Ò"æÖöçF†Ç”6öçG&–'WF–öâóò°¢–b†ÖöçF†Ç’ÓÒ$ÖöçF†Ç’’&WGW&â$ÖöçF†Ç’ÒÖöçF†Ç“° ¢&WGW&âææÖRæÆö6ÆT6ö×&R†"ææÖRÂVæFVf–æVBÂ²6Vç6—F—f—G“¢&&6R"Ò“°¢Ò“°§Ğ ¦W‡÷'BgVæ7F–öâÆææ–æuæVÂ‡°¢6öÆÆ6–&ÆRÒG'VRÀ¢7F—fUF"À¢öä7F—fUF$6†ævRÀ¢f—6–&ÆUF'2ÒDTdTÅEõd•4”$ÄUõD%2À¢fö7W4VçF—G”–BÒçVÆÂÀ§Ó¢°¢6öÆÆ6–&ÆSó¢&ööÆVã°¢7F—fUF#ó¢Æææ–æuF#°¢öä7F—fUF$6†ævSó¢‡F#¢Æææ–æuF"’Óâfö–C°¢f—6–&ÆUF'3ó¢Æææ–æuF%µÓ°¢fö7W4VçF—G”–Có¢7G&–ærÂçVÆÃ°§ÒÒ·Ò’°¢6öç7BÆö6ÆRÒW6U7F÷&R‚‡2’Óâ2æÆö6ÆR“°¢6öç7B²Fö7BÒÒW6UFö7B‚“°¢6öç7BG&ç67F–öç2ÒW6UG&ç67F–öç2‚“°¢6öç7B6FVv÷&–W2ÒW6T6FVv÷&–W2‚“°¢6öç7B6f–æw4vöÇ2ÒW6U7F÷&R‚‡2’Óâ2ç6f–æw4vöÇ2“°¢6öç7B6FVv÷'”'VFvWG2ÒW6U7F÷&R‚‡2’Óâ2æ6FVv÷'”'VFvWG2“°¢6öç7B&V7W'&–æuG&ç67F–öç2ÒW6U7F÷&R‚‡2’Óâ2ç&V7W'&–æuG&ç67F–öç2“°¢6öç7BFV'G2ÒW6U7F÷&R‚‡2’Óâ2æFV'G2“°¢6öç7BFDvöÂÒW6U7F÷&R‚‡2’Óâ2æFDvöÂ“°¢6öç7BWFFTvöÂÒW6U7F÷&R‚‡2’Óâ2çWFFTvöÂ“°¢6öç7BFW÷6—DvöÂÒW6U7F÷&R‚‡2’Óâ2æFW÷6—DvöÂ“°¢6öç7Bv—F†G&tvöÂÒW6U7F÷&R‚‡2’Óâ2çv—F†G&tvöÂ“°¢6öç7B&WfW'DÆ7DvöÄFW÷6—BÒW6U7F÷&R‚‡2’Óâ2ç&WfW'DÆ7DvöÄFW÷6—B“°¢6öç7B&VÖ÷fTvöÂÒW6U7F÷&R‚‡2’Óâ2ç&VÖ÷fTvöÂ“°¢6öç7BVæ&ÆTVÖW&vVæ7”gVæBÒW6U7F÷&R‚‡2’Óâ2æVæ&ÆTVÖW&vVæ7”gVæB“°¢6öç7B6WD6FVv÷'”'VFvWBÒW6U7F÷&R‚‡2’Óâ2ç6WD6FVv÷'”'VFvWB“°¢6öç7B&VÖ÷fT6FVv÷'”'VFvWBÒW6U7F÷&R‚‡2’Óâ2ç&VÖ÷fT6FVv÷'”'VFvWB“°¢6öç7BFE&V7W'&–ærÒW6U7F÷&R‚‡2’Óâ2æFE&V7W'&–ær“°¢6öç7BFEG&ç67F–öâÒW6U7F÷&R‚‡2’Óâ2æFEG&ç67F–öâ“°¢6öç7BWFFU&V7W'&–ærÒW6U7F÷&R‚‡2’Óâ2çWFFU&V7W'&–ær“°¢6öç7B&VÖ÷fU&V7W'&–ærÒW6U7F÷&R‚‡2’Óâ2ç&VÖ÷fU&V7W'&–ær“°¢6öç7BFVÆWFUG&ç67F–öâÒW6U7F÷&R‚‡2’Óâ2æFVÆWFUG&ç67F–öâ“°¢6öç7BFDFV'BÒW6U7F÷&R‚‡2’Óâ2æFDFV'B“°¢6öç7BWFFTFV'BÒW6U7F÷&R‚‡2’Óâ2çWFFTFV'B“°¢6öç7B”FV'BÒW6U7F÷&R‚‡2’Óâ2ç”FV'B“°¢6öç7B&VÖ÷fTFV'BÒW6U7F÷&R‚‡2’Óâ2ç&VÖ÷fTFV'B“°¢6öç7BVçG'”÷væW"ÒW6U7F÷&R‚‡2’Óâ2æVçG'”÷væW"“°¢6öç7B'VFvWDÖöçF…7F'DF’ÒW6U7F÷&R‚‡2’Óâ2æ'VFvWDÖöçF…7F'DF’“°¢6öç7B6WD'VFvWDÖöçF…7F'DF’ÒW6U7F÷&R‚‡2’Óâ2ç6WD'VFvWDÖöçF…7F'DF’“°¢6öç7B6öÆÆ6VBÒW6U7F÷&R‚‡2’Óâ2çÆææ–æuæVÄ6öÆÆ6VB“°¢6öç7B6WEÆææ–æuæVÄ6öÆÆ6VBÒW6U7F÷&R‚‡2’Óâ2ç6WEÆææ–æuæVÄ6öÆÆ6VB“° ¢6öç7B¶‡–G&FVBÂ6WD‡–G&FVEÒÒW6U7FFR†fÇ6R“°¢6öç7B¶W‡æFVDgWGW&TÖöçF‡2Â6WDW‡æFVDgWGW&TÖöçF‡5ÒÒW6U7FFSÅ&V6÷&CÇ7G&–ærÂ&ööÆVããâ‡·Ò“°¢6öç7B¶W‡æFVE&V7W'&–æt6&G2Â6WDW‡æFVE&V7W'&–æt6&G5ÒÒW6U7FFSÅ&V6÷&CÇ7G&–ærÂ&ööÆVããâ‡·Ò“° ¢W6TVffV7B‚‚’Óâ°¢6öç7Bf–æ—6‚Ò‚’Óâ6WD‡–G&FVB‡G'VR“°¢–b‡W6U7F÷&RçW'6—7Bæ†4‡–G&FVB‚’’°¢f–æ—6‚‚“°¢&WGW&ã°¢Ğ¢&WGW&âW6U7F÷&RçW'6—7Bæöäf–æ—6„‡–G&F–öâ†f–æ—6‚“°¢ÒÂµÒ“° ¢6öç7B÷VâÒ6öÆÆ6–&ÆRÇÂ†‡–G&FVBbb6öÆÆ6VB“°¢6öç7BÆææ–æuF$6Æ72Ğ¢&‚ÖWFòÖ–âÖ‚Ó’rÖgVÆÂÖ–â×rÓ&÷VæFVBÖÖB‚Ó"FW‡BÖ6VçFW"FW‡B×‡2föçB×6VÖ–&öÆBÆVF–ær×F–v‡Bv†—FW76RÖæ÷&ÖÂFW‡BÖf÷&Vw&÷VæBósG&ç6—F–öâÖ6öÆ÷'2FFÕ·7FFSÖ7F—fUÓ¦&r×&–Ö'’FFÕ·7FFSÖ7F—fUÓ§FW‡B×&–Ö'’Öf÷&Vw&÷VæBFFÕ·7FFSÖ7F—fUÓ§6†F÷r×6Ò#° ¢6öç7BFövvÆT÷VâÒW6T6ÆÆ&6²‚‚’Óâ°¢6WEÆææ–æuæVÄ6öÆÆ6VB‚W6U7F÷&RævWE7FFR‚’çÆææ–æuæVÄ6öÆÆ6VB“°¢ÒÂ·6WEÆææ–æuæVÄ6öÆÆ6VEÒ“°¢6öç7B¶vöÄæÖRÂ6WDvöÄæÖUÒÒW6U7FFR‚""“°¢6öç7B¶vöÅF&vWBÂ6WDvöÅF&vWEÒÒW6U7FFR‚""“°¢6öç7B¶vöÄFVFÆ–æRÂ6WDvöÄFVFÆ–æUÒÒW6U7FFR‚""“°¢6öç7B¶FW÷6—DvöÄ–BÂ6WDFW÷6—DvöÄ–EÒÒW6U7FFSÇ7G&–ærÂçVÆÃâ†çVÆÂ“°¢6öç7B¶FW÷6—DvöÄÖöFRÂ6WDFW÷6—DvöÄÖöFUÒÒW6U7FFSÂ&FW÷6—B"Â'v—F†G&r#â‚&FW÷6—B"“°¢6öç7B¶FW÷6—DÖ÷VçBÂ6WDFW÷6—DÖ÷VçEÒÒW6U7FFR‚""“°¢6öç7B¶VF—DvöÄ–BÂ6WDVF—DvöÄ–EÒÒW6U7FFSÇ7G&–ærÂçVÆÃâ†çVÆÂ“°¢6öç7B¶VF—DvöÄæÖRÂ6WDVF—DvöÄæÖUÒÒW6U7FFR‚""“°¢6öç7B¶VF—DvöÅF&vWBÂ6WDVF—DvöÅF&vWEÒÒW6U7FFR‚""“°¢6öç7B¶VF—DvöÄFVFÆ–æRÂ6WDVF—DvöÄFVFÆ–æUÒÒW6U7FFR‚""“°¢6öç7B¶gVæDæÖRÂ6WDgVæDæÖUÒÒW6U7FFR‚""“°¢6öç7B¶VF—DgVæD–BÂ6WDVF—DgVæD–EÒÒW6U7FFSÇ7G&–ærÂçVÆÃâ†çVÆÂ“°¢6öç7B¶VF—DgVæDæÖRÂ6WDVF—DgVæDæÖUÒÒW6U7FFR‚""“°¢6öç7B¶gVæD–æfô÷VâÂ6WDgVæD–æfô÷VåÒÒW6U7FFR†fÇ6R“°¢6öç7B¶Æ–Ö—D6FVv÷'”–BÂ6WDÆ–Ö—D6FVv÷'”–EÒÒW6U7FFR‚""“°¢6öç7B¶Æ–Ö—DÖ÷VçBÂ6WDÆ–Ö—DÖ÷VçEÒÒW6U7FFR‚""“°¢6öç7B·&V5G—RÂ6WE&V5G—UÒÒW6U7FFSÅG…G—Sâ‚&W‡Vç6R"“°¢6öç7B·&V46FVv÷'”–BÂ6WE&V46FVv÷'”–EÒÒW6U7FFR‚‚’ÓâvWDfÆÆ&6´6FVv÷'”–B‚&W‡Vç6R"’“°¢6öç7B·&V4Ö÷VçBÂ6WE&V4Ö÷VçEÒÒW6U7FFR‚""“°¢6öç7B·&V4æ÷FRÂ6WE&V4æ÷FUÒÒW6U7FFR‚""“°¢6öç7B·&V46öÖÖVçBÂ6WE&V46öÖÖVçEÒÒW6U7FFR‚""“°¢6öç7B·&V5&WVBÂ6WE&V5&WVEÒÒW6U7FFSÂ&öæ6R"Â&V7W'&–ætg&WVVæ7“â‚&ÖöçF†Ç’"“°¢6öç7B·&V57F'DFFRÂ6WE&V57F'DFFUÒÒW6U7FFR‚‚’ÓâFöF”—6ò‚’“°¢6öç7B&V57F'DFFT–çWE&VbÒW6U&VcÄ…DÔÄ–çWDVÆVÖVçBÂçVÆÃâ†çVÆÂ“°¢6öç7B·&V4VæDÖöFRÂ6WE&V4VæDÖöFUÒÒW6U7FFSÂ&æWfW""Â&FFR"Â&ÖöçF‡2#â‚&æWfW""“°¢6öç7B·&V4VæDFFRÂ6WE&V4VæDFFUÒÒW6U7FFR‚""“°¢6öç7B·&V4GW&F–öäÖöçF‡2Â6WE&V4GW&F–öäÖöçF‡5ÒÒW6U7FFR‚#""“°¢6öç7B¶FV'DæÖRÂ6WDFV'DæÖUÒÒW6U7FFR‚""“°¢6öç7B¶FV'D&Ææ6RÂ6WDFV'D&Ææ6UÒÒW6U7FFR‚""“°¢6öç7B¶FV'DÖ–å–ÖVçBÂ6WDFV'DÖ–å–ÖVçEÒÒW6U7FFR‚""“°¢6öç7B¶FV'E&FRÂ6WDFV'E&FUÒÒW6U7FFR‚""“°¢6öç7B¶FV'DFFRÂ6WDFV'DFFUÒÒW6U7FFR‚""“°¢6öç7B¶FV'D÷væW"Â6WDFV'D÷væW%ÒÒW6U7FFSÄFV'D—FVÕ²&÷væW"%Óâ‚&ÆÂ"“°¢6öç7B¶FV'E7G&FVw’Â6WDFV'E7G&FVw•ÒÒW6U7FFSÄFV'D—FVÕ²'7G&FVw’%Óâ‚&fÆæ6†R"“°¢6öç7B¶FV'E”–BÂ6WDFV'E”–EÒÒW6U7FFSÇ7G&–ærÂçVÆÃâ†çVÆÂ“°¢6öç7B¶FV'E”Ö÷VçBÂ6WDFV'E”Ö÷VçEÒÒW6U7FFR‚""“°¢6öç7B¶VF—DFV'D–BÂ6WDVF—DFV'D–EÒÒW6U7FFSÇ7G&–ærÂçVÆÃâ†çVÆÂ“°¢6öç7B¶VF—DFV'DæÖRÂ6WDVF—DFV'DæÖUÒÒW6U7FFR‚""“°¢6öç7B¶VF—DFV'D&Ææ6RÂ6WDVF—DFV'D&Ææ6UÒÒW6U7FFR‚""“°¢6öç7B¶VF—DFV'DÖ–å–ÖVçBÂ6WDVF—DFV'DÖ–å–ÖVçEÒÒW6U7FFR‚""“°¢6öç7B¶VF—DFV'E&FRÂ6WDVF—DFV'E&FUÒÒW6U7FFR‚""“°¢6öç7B¶VF—DFV'DFFRÂ6WDVF—DFV'DFFUÒÒW6U7FFR‚""“°¢6öç7B¶VF—DFV'D÷væW"Â6WDVF—DFV'D÷væW%ÒÒW6U7FFSÄFV'D—FVÕ²&÷væW"%Óâ‚&ÆÂ"“°¢6öç7B¶VÖW&vVæ7”–æfô÷VâÂ6WDVÖW&vVæ7”–æfô÷VåÒÒW6U7FFR†fÇ6R“°¢6öç7B·Æææ–æuF"Â6WEÆææ–æuF%ÒÒW6U7FFSÅÆææ–æuF#â€¢7F—fUF"bbf—6–&ÆUF'2æ–æ6ÇVFW2†7F—fUF"’ò7F—fUF"¢f—6–&ÆUF'5³Òóò&vöÇ2"À¢“°¢6öç7B7W'&VçEÆææ–æuF"Ğ¢7F—fUF"bbf—6–&ÆUF'2æ–æ6ÇVFW2†7F—fUF"’ò7F—fUF"¢Æææ–æuF#° ¢W6TVffV7B‚‚’Óâ°¢–b†7F—fUF"bbf—6–&ÆUF'2æ–æ6ÇVFW2†7F—fUF"’’&WGW&ã°¢–b‡f—6–&ÆUF'2æ–æ6ÇVFW2‡Æææ–æuF"’’&WGW&ã°¢6WEÆææ–æuF"‡f—6–&ÆUF'5³Òóò&vöÇ2"“°¢ÒÂ¶7F—fUF"ÂÆææ–æuF"Âf—6–&ÆUF'5Ò“° ¢W6TVffV7B‚‚’Óâ°¢–b‚fö7W4VçF—G”–B’&WGW&ã°¢6öç7BVÆVÖVçBÒFö7VÖVçBçVW'•6VÆV7F÷#Ä…DÔÄVÆVÖVçCâ€¢¶FF×ÆâÖVçF—G’Ö–CÒ"G¶fö7W4VçF—G”–GÒ%ÖÀ¢“°¢–b‚VÆVÖVçB’&WGW&ã°¢VÆVÖVçBç67&öÆÄ–çFõf–Wr‡²&V†f–÷#¢'6Öö÷F‚"Â&Æö6³¢&6VçFW""Ò“°¢ÒÂ¶fö7W4VçF—G”–BÂ7W'&VçEÆææ–æuF%Ò“° ¢6öç7B6†ævUÆææ–æuF"ÒW6T6ÆÆ&6²€¢‡fÇVS¢7G&–ær’Óâ°¢6öç7BæW‡BÒfÇVR2Æææ–æuF#°¢–b‚f—6–&ÆUF'2æ–æ6ÇVFW2†æW‡B’’&WGW&ã°¢–b‚7F—fUF"’°¢6WEÆææ–æuF"†æW‡B“°¢Ğ¢öä7F—fUF$6†ævSòâ†æW‡B“°¢ÒÀ¢¶7F—fUF"Âöä7F—fUF$6†ævRÂf—6–&ÆUF'5ÒÀ¢“° ¢6öç7B7W7FöÔvöÇ2ÒW6TÖVÖò€¢‚’Óà¢6÷'DvöÇ4'•&–÷&—G’€¢6f–æw4vöÇ2æf–ÇFW"‚†r’Óâræ¶–æBÓÒ&VÖW&vVæ7’"bbrçF&vWDÖ÷VçBâ’À¢G&ç67F–öç2À¢’À¢·6f–æw4vöÇ2ÂG&ç67F–öç5ÒÀ¢“°¢6öç7BgVæG2ÒW6TÖVÖò€¢‚’Óà¢²ââç6f–æw4vöÇ5Ğ¢æf–ÇFW"‚†r’Óâræ¶–æBÓÒ&VÖW&vVæ7’"bbrçF&vWDÖ÷VçBÃÒ¢ç6÷'B€¢†Â"’Óà¢"ç6fVDÖ÷VçBÒç6fVDÖ÷VçBÇÀ¢ææÖRæÆö6ÆT6ö×&R†"ææÖRÂVæFVf–æVBÂ²6Vç6—F—f—G“¢&&6R"Ò’À¢’À¢·6f–æw4vöÇ5ÒÀ¢“°¢6öç7BVÖW&vVæ7”vöÂÒ6f–æw4vöÇ2æf–æB‚†r’Óâræ–BÓÓÒTÔU$tTä5•ôtôÅô”BÇÂræ¶–æBÓÓÒ&VÖW&vVæ7’"“°¢6öç7BW‡Vç6T6FVv÷&–W2ÒW6TÖVÖò€¢‚’Óâ6÷'D6FVv÷&–W4'”Æ&VÂ†6FVv÷&–W2æf–ÇFW"‚†2’Óâ2çG—RÓÓÒ&W‡Vç6R"’Â6FVv÷&–W2ÂÆö6ÆR’À¢¶6FVv÷&–W2ÂÆö6ÆUÒÀ¢“°¢6öç7B6÷'FVD6FVv÷'”'VFvWG2ÒW6TÖVÖò€¢‚’Óà¢²ââæ6FVv÷'”'VFvWG5Òç6÷'B‚†Â"’Óà¢vWD6FVv÷'”Æ&VÂ†æ6FVv÷'”–BÂ6FVv÷&–W2ÂÆö6ÆR’æÆö6ÆT6ö×&R€¢vWD6FVv÷'”Æ&VÂ†"æ6FVv÷'”–BÂ6FVv÷&–W2ÂÆö6ÆR’À¢Æö6ÆRÓÓÒ''R"ò''R"¢&Vâ"À¢²6Vç6—F—f—G“¢&&6R"ÒÀ¢’À¢’À¢¶6FVv÷'”'VFvWG2Â6FVv÷&–W2ÂÆö6ÆUÒÀ¢“°¢6öç7BftÖöçF†Ç’ÒW6TÖVÖò‚‚’ÓâftÖöçF†Ç”W‡Vç6W2‡G&ç67F–öç2’Â·G&ç67F–öç5Ò“°¢6öç7B'VFvWEW&–öDÆ&VÂÒW6TÖVÖò€¢‚’Óâf÷&ÖD'VFvWEW&–öDÆ&VÂ†vWD7W'&VçD'VFvWEW&–öB†'VFvWDÖöçF…7F'DF’’ÂÆö6ÆR’À¢¶'VFvWDÖöçF…7F'DF’ÂÆö6ÆUÒÀ¢“°¢6öç7BFV'EF÷FÇ2ÒW6TÖVÖò€¢‚’Óâ‡°¢&Ææ6S¢FV'G2ç&VGV6R‚‡7VÒÂB’Óâ7VÒ²Bæ&Ææ6RÂ’À¢Ö–å–ÖVçC¢FV'G2ç&VGV6R‚‡7VÒÂB’Óâ7VÒ²BæÖ–å–ÖVçBÂ’À¢Ò’À¢¶FV'G5ÒÀ¢“°¢6öç7B6÷'FVDFV'G2ÒW6TÖVÖò€¢‚’Óâ6÷'DFV'G4'•7G&FVw’†FV'G2ÂFV'E7G&FVw’’À¢¶FV'G2ÂFV'E7G&FVw•ÒÀ¢“°¢6öç7BFV'Dfö7W2ÒW6TÖVÖò‚‚’Óâ°¢6öç7B7F—fRÒ6÷'FVDFV'G2æf–ÇFW"‚†B’ÓâBæ&Ææ6Râ“°¢–b†7F—fRæÆVæwF‚ÓÓÒ’&WGW&âçVÆÃ°¢&WGW&â7F—fU³Ó°¢ÒÂ·6÷'FVDFV'G5Ò“° ¢W6TVffV7B‚‚’Óâ°¢6öç7B7F÷&VBÒÆö6Å7F÷&vRævWD—FVÒ„„õU4T„ôÄEôDT%Eõ5E$DTu•ô´U’“°¢–b‡7F÷&VBÓÓÒ'6æ÷v&ÆÂ"ÇÂ7F÷&VBÓÓÒ&fÆæ6†R"’°¢6WDFV'E7G&FVw’‡7F÷&VB“°¢Ğ¢ÒÂµÒ“° ¢W6TVffV7B‚‚’Óâ°¢Æö6Å7F÷&vRç6WD—FVÒ„„õU4T„ôÄEôDT%Eõ5E$DTu•ô´U’ÂFV'E7G&FVw’“°¢ÒÂ¶FV'E7G&FVw•Ò“° ¢6öç7BVF—F–ætvöÂÒVF—DvöÄ–@¢ò7W7FöÔvöÇ2æf–æB‚†r’Óâræ–BÓÓÒVF—DvöÄ–B’óòçVÆÀ¢¢çVÆÃ° ¢6öç7B7&VFTÖöçF†Ç•&Wf–WrÒW6TÖVÖò‚‚’Óâ°¢6öç7BF&vWBÒvöÅF&vWBòçVÖ&W"†vöÅF&vWBç&WÆ6R‚õÇ2örÂ""’’¢°¢6öç7BFVFÆ–æRÒvöÄFVFÆ–æRçG&–Ò‚’ÇÂçVÆÃ°¢&WGW&â&W6öÇfTvöÄÖöçF†Ç•Æç2‡F&vWBÂÂFVFÆ–æR“°¢ÒÂ¶vöÅF&vWBÂvöÄFVFÆ–æUÒ“° ¢6öç7BVF—DÖöçF†Ç•&Wf–WrÒW6TÖVÖò‚‚’Óâ°¢–b‚VF—F–ætvöÂ’&WGW&âçVÆÃ°¢6öç7BF&vWBÒVF—DvöÅF&vWBòçVÖ&W"†VF—DvöÅF&vWBç&WÆ6R‚õÇ2örÂ""’’¢°¢6öç7BFVFÆ–æRÒVF—DvöÄFVFÆ–æRçG&–Ò‚’ÇÂçVÆÃ°¢&WGW&â&W6öÇfTvöÄÖöçF†Ç•Æç2‡F&vWBÂVF—F–ætvöÂç6fVDÖ÷VçBÂFVFÆ–æR“°¢ÒÂ¶VF—F–ætvöÂÂVF—DvöÅF&vWBÂVF—DvöÄFVFÆ–æUÒ“° ¢6öç7B†æFÆTFDvöÂÒ‚’Óâ°¢6öç7BæÖRÒvöÄæÖRçG&–Ò‚“°¢–b‚æÖR’&WGW&ã°¢6öç7BF&vWBÒvöÅF&vWBòçVÖ&W"†vöÅF&vWBç&WÆ6R‚õÇ2örÂ""’’¢°¢FDvöÂ†æÖRÂF&vWBâòF&vWB¢ÂvöÄFVFÆ–æRçG&–Ò‚’ÇÂçVÆÂ“°¢6WDvöÄæÖR‚""“°¢6WDvöÅF&vWB‚""“°¢6WDvöÄFVFÆ–æR‚""“°¢Ó° ¢6öç7B†æFÆTFDgVæBÒ‚’Óâ°¢6öç7BæÖRÒgVæDæÖRçG&–Ò‚“°¢–b‚æÖR’&WGW&ã°¢FDvöÂ†æÖRÂÂçVÆÂ“°¢6WDgVæDæÖR‚""“°¢Ó° ¢6öç7B†æFÆTvöÅG&ç6fW"Ò†–C¢7G&–ær’Óâ°¢6öç7B&rÒFW÷6—DÖ÷VçBç&WÆ6R‚õÇ2örÂ""“°¢6öç7BÖ÷VçBÒçVÖ&W"‡&r“°¢–b‚&rçG&–Ò‚’’&WGW&ã°¢–b‚Ö÷VçBbbFW÷6—DvöÄÖöFRÓÓÒ&FW÷6—B"’°¢&WfW'DÆ7DvöÄFW÷6—B†–B“°¢6WDFW÷6—DÖ÷VçB‚""“°¢6WDFW÷6—DvöÄ–B†çVÆÂ“°¢&WGW&ã°¢Ğ¢–b†FW÷6—DvöÄÖöFRÓÓÒ'v—F†G&r"’°¢v—F†G&tvöÂ†–BÂÖ÷VçB“°¢ÒVÇ6R°¢FW÷6—DvöÂ†–BÂÖ÷VçB“°¢Ğ¢6WDFW÷6—DÖ÷VçB‚""“°¢6WDFW÷6—DvöÄ–B†çVÆÂ“°¢Ó° ¢6öç7B†æFÆU6fTvöÄVF—BÒ†–C¢7G&–ær’Óâ°¢6öç7BF&vWBÒVF—DvöÅF&vWBòçVÖ&W"†VF—DvöÅF&vWBç&WÆ6R‚õÇ2örÂ""’’¢°¢WFFTvöÂ†–BÂ°¢æÖS¢VF—DvöÄæÖRçG&–Ò‚’À¢F&vWDÖ÷VçC¢F&vWBâòF&vWB¢À¢FVFÆ–æS¢VF—DvöÄFVFÆ–æRçG&–Ò‚’ÇÂçVÆÂÀ¢Ò“°¢6WDVF—DvöÄ–B†çVÆÂ“°¢6WDVF—DvöÄæÖR‚""“°¢6WDVF—DvöÅF&vWB‚""“°¢6WDVF—DvöÄFVFÆ–æR‚""“°¢Ó° ¢6öç7B7F'DVF—DvöÂÒ†vöÃ¢6f–æw4vöÂÂF—7Æ•F&vWC¢çVÖ&W"’Óâ°¢6WDVF—DvöÄ–B†vöÂæ–B“°¢6WDVF—DvöÄæÖR†vöÂææÖR“°¢6WDVF—DvöÅF&vWB†F—7Æ•F&vWBâò7G&–ær†F—7Æ•F&vWB’¢""“°¢6WDVF—DvöÄFVFÆ–æR†vöÂæFVFÆ–æRóò""“°¢6WDFW÷6—DvöÄ–B†çVÆÂ“°¢Ó° ¢6öç7B7F'DVF—DgVæBÒ†gVæC¢6f–æw4vöÂ’Óâ°¢6WDVF—DgVæD–B†gVæBæ–B“°¢6WDVF—DgVæDæÖR†gVæBææÖR“°¢6WDFW÷6—DvöÄ–B†çVÆÂ“°¢Ó° ¢6öç7B†æFÆU6fTgVæDVF—BÒ†–C¢7G&–ær’Óâ°¢6öç7BæÖRÒVF—DgVæDæÖRçG&–Ò‚“°¢–b‚æÖR’&WGW&ã°¢WFFTvöÂ†–BÂ²æÖRÒ“°¢6WDVF—DgVæD–B†çVÆÂ“°¢6WDVF—DgVæDæÖR‚""“°¢Ó° ¢6öç7B†æFÆU6WDÆ–Ö—BÒ‚’Óâ°¢6öç7BÖ÷VçBÒçVÖ&W"†Æ–Ö—DÖ÷VçBç&WÆ6R‚õÇ2örÂ""’“°¢–b‚Æ–Ö—D6FVv÷'”–BÇÂÖ÷VçB’&WGW&ã°¢6WD6FVv÷'”'VFvWB†Æ–Ö—D6FVv÷'”–BÂÖ÷VçB“°¢6WDÆ–Ö—DÖ÷VçB‚""“°¢Ó° ¢6öç7B†æFÆU&V57F'DFFT–çWBÒW6T6ÆÆ&6²‚‡fÇVS¢7G&–ær’Óâ°¢6öç7Bæ÷&ÖÆ—¦VBÒæ÷&ÖÆ—¦T—6ôFFR‡fÇVR“°¢–b†æ÷&ÖÆ—¦VB’°¢6WE&V57F'DFFR†æ÷&ÖÆ—¦VB“°¢Ğ¢ÒÂµÒ“° ¢6öç7B†æFÆTFE&V7W'&–ærÒ‚’Óâ°¢6öç7BÖ÷VçBÒçVÖ&W"‡&V4Ö÷VçBç&WÆ6R‚õÇ2örÂ""’“°¢6öç7BF—FÆRÒ&V4æ÷FRçG&–Ò‚“°¢6öç7BVffV7F—fU&V57F'DFFRĞ¢æ÷&ÖÆ—¦T—6ôFFR‡&V57F'DFFT–çWE&Vbæ7W'&VçCòçfÇVR’óğ¢æ÷&ÖÆ—¦T—6ôFFR‡&V57F'DFFR’óğ¢FöF”—6ò‚“°¢–b‚Ö÷VçBÇÂF—FÆR’&WGW&ã°¢6öç7B6FVv÷'”–BÒ&V46FVv÷'”–BÇÂvWDfÆÆ&6´6FVv÷'”–B‡&V5G—R“°¢6öç7Bæ÷FRÒ·F—FÆRÂ&V46öÖÖVçBçG&–Ò‚•Òæf–ÇFW"„&ööÆVâ’æ¦ö–â‚"+r"’ç6Æ–6RƒÂ#“°¢–b‡&V5&WVBÓÓÒ&öæ6R"’°¢FEG&ç67F–öâ‡°¢Ö÷VçBÀ¢G—S¢&V5G—RÀ¢6FVv÷'”–BÀ¢7W'&Væ7“¢%%T""À¢æ÷FRÀ¢FFS¢VffV7F—fU&V57F'DFFRÀ¢÷væW#¢VçG'”÷væW"À¢6öæf—&ÖVC¢fÇ6RÀ¢Ò“°¢6WE&V57F'DFFR†VffV7F—fU&V57F'DFFR“°¢6WE&V4Ö÷VçB‚""“°¢6WE&V4æ÷FR‚""“°¢6WE&V46öÖÖVçB‚""“°¢6WE&V4VæDÖöFR‚&æWfW""“°¢6WE&V4VæDFFR‚""“°¢6WE&V4GW&F–öäÖöçF‡2‚#""“°¢Fö7B€¢Æö6ÆRÓÓÒ''R ¢ò	íı]mò*²G·F—FÆWÜ+²İG¶f÷&ÖDÖöæW’†Ö÷VçBÂÆö6ÆR—Òí}Mİæ ¢¢(	ÂG·F—FÆWŞ(	Òf÷"G¶f÷&ÖDÖöæW’†Ö÷VçBÂÆö6ÆR—Òv27&VFVBæÀ¢'7V66W72"À¢“°¢&WGW&ã°¢Ğ¢6öç7B7F'BÒæWrFFR†G¶VffV7F—fU&V57F'DFFWÕC#££“°¢6öç7BF”ödÖöçF‚Ò&V5&WVBÓÓÒ&ÖöçF†Ç’"ò7F'BævWDFFR‚’¢çVÆÃ°¢6öç7B–çFW'fÄÖöçF‡2Ò&V5&WVBÓÓÒ&ÖöçF†Ç’"ò¢çVÆÃ°¢6öç7BVæDFFRĞ¢&V4VæDÖöFRÓÓÒ&FFR ¢ò&V4VæDFFRÇÂçVÆÀ¢¢&V4VæDÖöFRÓÓÒ&ÖöçF‡2"bb&V5&WVBÓÓÒ&ÖöçF†Ç’ ¢ò&V7W'&–ætVæDFFTg&öÔÖöçF‡2€¢VffV7F—fU&V57F'DFFRÀ¢–çFW'fÄÖöçF‡2óòÀ¢çVÖ&W"‡&V4GW&F–öäÖöçF‡2’ÇÂÀ¢¢¢çVÆÃ°¢FE&V7W'&–ær‡°¢Ö÷VçBÀ¢G—S¢&V5G—RÀ¢6FVv÷'”–BÀ¢æ÷FRÀ¢÷væW#¢VçG'”÷væW"À¢g&WVVæ7“¢&V5&WVBÀ¢–çFW'fÄÖöçF‡2À¢F”ödÖöçF‚À¢æW‡E'VäFFS¢VffV7F—fU&V57F'DFFRÀ¢VæDFFRÀ¢Ò“°¢6WE&V57F'DFFR†VffV7F—fU&V57F'DFFR“°¢6WE&V4Ö÷VçB‚""“°¢6WE&V4æ÷FR‚""“°¢6WE&V46öÖÖVçB‚""“°¢6WE&V4VæDÖöFR‚&æWfW""“°¢6WE&V4VæDFFR‚""“°¢6WE&V4GW&F–öäÖöçF‡2‚#""“°¢Fö7B€¢Æö6ÆRÓÓÒ''R ¢ò
+]==½ıİ½’G·&V5G—RÓÓÒ&–æ6öÖR"ò-Mí]íB"¢-ı½-b'Ò*²G·F—FÆWÜ+²İG¶f÷&ÖDÖöæW’†Ö÷VçBÂÆö6ÆR—Òí}MÒæ ¢¢&V7W'&–ærG·&V5G—RÓÓÒ&–æ6öÖR"ò&–æ6öÖR"¢'–ÖVçB'Ò(	ÂG·F—FÆWŞ(	Òf÷"G¶f÷&ÖDÖöæW’†Ö÷VçBÂÆö6ÆR—Òv27&VFVBæÀ¢'7V66W72"À¢“°¢Ó° ¢6öç7B†æFÆTFDFV'BÒ‚’Óâ°¢6öç7BæÖRÒFV'DæÖRçG&–Ò‚“°¢6öç7B&Ææ6RÒçVÔ–çWB†FV'D&Ææ6R“°¢–b‚æÖRÇÂ&Ææ6RÃÒ’&WGW&ã°¢FDFV'B‡°¢æÖRÀ¢÷væW#¢FV'D÷væW"À¢&Ææ6RÀ¢Ö–å–ÖVçC¢ÖF‚æÖ‚ƒÂçVÔ–çWB†FV'DÖ–å–ÖVçB’’À¢&FU7C¢FV'E&FRçG&–Ò‚’òçVÔ–çWB†FV'E&FR’¢çVÆÂÀ¢æW‡E–ÖVçDFFS¢FV'DFFRçG&–Ò‚’ÇÂçVÆÂÀ¢7G&FVw“¢FV'E7G&FVw’À¢&–÷&—G“¢&æ÷&ÖÂ"À¢Ò“°¢6WDFV'DæÖR‚""“°¢6WDFV'D&Ææ6R‚""“°¢6WDFV'DÖ–å–ÖVçB‚""“°¢6WDFV'E&FR‚""“°¢6WDFV'DFFR‚""“°¢Ó° ¢6öç7B†æFÆTFV'E–ÖVçBÒ†–C¢7G&–ær’Óâ°¢6öç7BÖ÷VçBÒçVÔ–çWB†FV'E”Ö÷VçB“°¢–b†Ö÷VçBÃÒ’&WGW&ã°¢6öç7B–BÒ”FV'B†–BÂÖ÷VçB“°¢–b‚–B’&WGW&ã°¢6WDFV'E”–B†çVÆÂ“°¢6WDFV'E”Ö÷VçB‚""“°¢Ó° ¢6öç7B7F'DVF—DFV'BÒ†FV'C¢FV'D—FVÒ’Óâ°¢6WDVF—DFV'D–B†FV'Bæ–B“°¢6WDVF—DFV'DæÖR†FV'BææÖR“°¢6WDVF—DFV'D&Ææ6R…7G&–ær†FV'Bæ&Ææ6RÇÂ""’“°¢6WDVF—DFV'DÖ–å–ÖVçB…7G&–ær†FV'BæÖ–å–ÖVçBÇÂ""’“°¢6WDVF—DFV'E&FR†FV'Bç&FU7BÓÒçVÆÂò""¢7G&–ær†FV'Bç&FU7B’“°¢6WDVF—DFV'DFFR†FV'BææW‡E–ÖVçDFFRóò""“°¢6WDVF—DFV'D÷væW"†FV'Bæ÷væW"“°¢6WDFV'E”–B†çVÆÂ“°¢Ó° ¢6öç7B6æ6VÄVF—DFV'BÒ‚’Óâ°¢6WDVF—DFV'D–B†çVÆÂ“°¢6WDVF—DFV'DæÖR‚""“°¢6WDVF—DFV'D&Ææ6R‚""“°¢6WDVF—DFV'DÖ–å–ÖVçB‚""“°¢6WDVF—DFV'E&FR‚""“°¢6WDVF—DFV'DFFR‚""“°¢6WDVF—DFV'D÷væW"‚&ÆÂ"“°¢Ó° ¢6öç7B6fTVF—DFV'BÒ†FV'C¢FV'D—FVÒ’Óâ°¢6öç7BæÖRÒVF—DFV'DæÖRçG&–Ò‚“°¢6öç7B&Ææ6RÒçVÔ–çWB†VF—DFV'D&Ææ6R“°¢–b‚æÖRÇÂ&Ææ6RÂ’&WGW&ã°¢WFFTFV'B†FV'Bæ–BÂ°¢æÖRÀ¢÷væW#¢VF—DFV'D÷væW"À¢&Ææ6RÀ¢Ö–å–ÖVçC¢ÖF‚æÖ‚ƒÂçVÔ–çWB†VF—DFV'DÖ–å–ÖVçB’’À¢&FU7C¢VF—DFV'E&FRçG&–Ò‚’òçVÔ–çWB†VF—DFV'E&FR’¢çVÆÂÀ¢æW‡E–ÖVçDFFS¢VF—DFV'DFFRçG&–Ò‚’ÇÂçVÆÂÀ¢Ò“°¢6æ6VÄVF—DFV'B‚“°¢Ó° ¢6öç7B†æFÆU&V7W'&–ætFFT6†ævRÒ†–C¢7G&–ærÂFFS¢7G&–ær’Óâ°¢–b‚õåÆG³GÒÕÆG³'ÒÕÆG³'ÒBòçFW7B†FFR’’&WGW&ã°¢6öç7BBÒæWrFFR†G¶FFWÕC#££“°¢6öç7B—FVÒÒ&V7W'&–æuG&ç67F–öç2æf–æB‚‡"’Óâ"æ–BÓÓÒ–B“°¢–b‚—FVÒ’&WGW&ã°¢WFFU&V7W'&–ær†–BÂ°¢æW‡E'VäFFS¢FFRÀ¢F”ödÖöçFƒ¢—FVÒæg&WVVæ7’ÓÓÒ&ÖöçF†Ç’"òBævWDFFR‚’¢—FVÒæF”ödÖöçF‚À¢Ò“°¢Ó° ¢6öç7B†æFÆU&V7W'&–ætVæDFFT6†ævRÒ†–C¢7G&–ærÂFFS¢7G&–ær’Óâ°¢6öç7B—FVÒÒ&V7W'&–æuG&ç67F–öç2æf–æB‚‡"’Óâ"æ–BÓÓÒ–B“°¢–b‚—FVÒ’&WGW&ã°¢WFFU&V7W'&–ær†–BÂ°¢VæDFFS¢õåÆG³GÒÕÆG³'ÒÕÆG³'ÒBòçFW7B†FFR’òFFR¢çVÆÂÀ¢Ò“°¢Ó° ¢6öç7B&V7W'&–ætVæE&Wf–WrÒW6TÖVÖò‚‚’Óâ°¢–b‡&V4VæDÖöFRÓÒ&ÖöçF‡2"ÇÂ&V5&WVBÓÒ&ÖöçF†Ç’"’&WGW&âçVÆÃ°¢&WGW&â&V7W'&–ætVæDFFTg&öÔÖöçF‡2€¢&V57F'DFFRÀ¢À¢çVÖ&W"‡&V4GW&F–öäÖöçF‡2’ÇÂÀ¢“°¢ÒÂ·&V4GW&F–öäÖöçF‡2Â&V4VæDÖöFRÂ&V5&WVBÂ&V57F'DFFUÒ“° ¢6öç7B&V7W'&–ætf÷&Ô6FVv÷&–W2ÒW6TÖVÖò€¢‚’ÓâvWD6FVv÷&–W4'•G—R†6FVv÷&–W2Â&V5G—RÂÆö6ÆR’À¢¶6FVv÷&–W2ÂÆö6ÆRÂ&V5G—UÒÀ¢“° ¢W6TVffV7B‚‚’Óâ°¢–b‡&V7W'&–ætf÷&Ô6FVv÷&–W2ç6öÖR‚†6FVv÷'’’Óâ6FVv÷'’æ–BÓÓÒ&V46FVv÷'”–B’’&WGW&ã°¢6WE&V46FVv÷'”–B†vWDfÆÆ&6´6FVv÷'”–B‡&V5G—R’“°¢ÒÂ·&V46FVv÷'”–BÂ&V5G—RÂ&V7W'&–ætf÷&Ô6FVv÷&–W5Ò“° ¢6öç7B&V7W'&–æuW&–öBÒW6TÖVÖò€¢‚’ÓâvWD7W'&VçD'VFvWEW&–öB†'VFvWDÖöçF…7F'DF’’À¢¶'VFvWDÖöçF…7F'DF•ÒÀ¢“°¢6öç7BgWGW&T÷W&F–öåFöF’ÒW6TÖVÖò‚‚’ÓâFöF”—6ò‚’ÂµÒ“°¢6öç7B&V7W'&–æt6&G4&6RÒW6TÖVÖò‚‚’Óâ°¢6öç7BFöF’ÒFöF”—6ò‚“°¢&WGW&â&V7W'&–æuG&ç67F–öç0¢æÖ‚†—FVÒ’Óâ°¢6öç7B÷&–v–æÄ–æFW‚Ò&V7W'&–æuG&ç67F–öç2æf–æD–æFW‚‚†VçG'’’ÓâVçG'’æ–BÓÓÒ—FVÒæ–B“°¢6öç7BW&–öEG&ç67F–öç2ÒG&ç67F–öç2æf–ÇFW"€¢‡G‚’Óà¢G‚ç&V7W'&–æt–BÓÓÒ—FVÒæ–Bb`¢—4FFT–ä'VFvWEW&–öB‡&W6öÇfU&V7W'&–ætö67W'&Væ6TFFR‡G‚’Â&V7W'&–æuW&–öB’À¢“°¢6öç7B–EG&ç67F–öç2ÒW&–öEG&ç67F–öç2æf–ÇFW"‚‡G‚’ÓâG‚æ6öæf—&ÖVBÓÒfÇ6R“°¢6öç7BVæF–æuG&ç67F–öç2ÒW&–öEG&ç67F–öç2æf–ÇFW"‚‡G‚’ÓâG‚æ6öæf—&ÖVBÓÓÒfÇ6R“°¢6öç7B6¶—VD–åW&–öBÒ†—FVÒç6¶—VDFFW2óòµÒ’æf–ÇFW"‚†FFR’Óà¢—4FFT–ä'VFvWEW&–öB†FFRÂ&V7W'&–æuW&–öB’À¢“°¢6öç7BVæF–ætFFW2ÒVæF–æuG&ç67F–öç0¢æÖ‚‡G‚’Óâ&W6öÇfU&V7W'&–ætö67W'&Væ6TFFR‡G‚’¢ç6÷'B‚“°¢6öç7B–DFFW2Ò–EG&ç67F–öç0¢æÖ‚‡G‚’Óâ&W6öÇfU&V7W'&–ætö67W'&Væ6TFFR‡G‚’¢ç6÷'B‚“°¢6öç7BfÆÆ&6´ö67W'&Væ6TFFRĞ¢—4FFT–ä'VFvWEW&–öB†—FVÒææW‡E'VäFFRÂ&V7W'&–æuW&–öB¢ò—FVÒææW‡E'VäFFP¢¢‡6¶—VD–åW&–öE³Òóò—FVÒææW‡E'VäFFR“°¢6öç7B&VÆWfçDö67W'&Væ6TFFRĞ¢VæF–ætFFW5³Òóğ¢–DFFW2æB‚Ó’óğ¢6¶—VD–åW&–öE³Òóğ¢fÆÆ&6´ö67W'&Væ6TFFS°¢6öç7B&W6öÇfVDö67W'&Væ6RÒ&W6öÇfU&V7W'&–ætö67W'&Væ6U7FGW2‡°¢—FVÒÀ¢G&ç67F–öç2À¢ö67W'&Væ6TFFS¢&VÆWfçDö67W'&Væ6TFFRÀ¢FöF’À¢Ò“°¢6öç7BVæF–ærĞ¢&W6öÇfVDö67W'&Væ6Rç7FGW2ÓÓÒ'VæF–ær"ÇÀ¢&W6öÇfVDö67W'&Væ6Rç7FGW2ÓÓÒ'&W66†VGVÆVB#°¢6öç7B–BÒ&W6öÇfVDö67W'&Væ6Rç7FGW2ÓÓÒ'–B#°¢6öç7B÷fW&GVRÒ&W6öÇfVDö67W'&Væ6Rç7FGW2ÓÓÒ&÷fW&GVR#°¢6öç7BÆ7E–DFFRÒ–Bò&W6öÇfVDö67W'&Væ6Rç–DB¢çVÆÃ°¢6öç7B7FGW3¢'–B"Â'VæF–ær"Â&÷fW&GVR"Â'W6öÖ–ær"Â'W6VB"Ğ¢VæF–æp¢ò'VæF–ær ¢¢–@¢ò'–B ¢¢—FVÒæVæ&ÆV@¢ò'W6VB ¢¢÷fW&GVP¢ò&÷fW&GVR ¢¢'W6öÖ–ær#°¢&WGW&â°¢—FVÒÀ¢–BÀ¢VæF–ærÀ¢7FGW2À¢&W6öÇfVE7FGW3¢&W6öÇfVDö67W'&Væ6Rç7FGW2À¢Æ7E–DFFRÀ¢6¶—VD–åW&–öBÀ¢66†VGVÆVDFFS¢&W6öÇfVDö67W'&Væ6Rç66†VGVÆVDFFRÀ¢ö67W'&Væ6TFFS¢&W6öÇfVDö67W'&Væ6Ræö67W'&Væ6TFFRÀ¢&VÆWfçDö67W'&Væ6TFFS¢&W6öÇfVDö67W'&Væ6Ræö67W'&Væ6TFFRÀ¢6÷'DFFS¢VæF–æp¢ò&W6öÇfVDö67W'&Væ6Rç66†VGVÆVDFFP¢¢&W6öÇfVDö67W'&Væ6Ræö67W'&Væ6TFFRÀ¢÷&–v–æÄ–æFW‚À¢Ó°¢Ò“°¢ÒÂ·&V7W'&–æuW&–öBÂ&V7W'&–æuG&ç67F–öç2ÂG&ç67F–öç5Ò“° ¢6öç7BgWGW&T÷W&F–öåG&ç67F–öç2ÒW6TÖVÖò‚‚’Óâ°¢&WGW&âG&ç67F–öç0¢æf–ÇFW"‚‡G&ç67F–öâ’ÓâG&ç67F–öâç&V7W'&–æt–BÓÒçVÆÂ¢æf–ÇFW"‚‡G&ç67F–öâ’ÓâG&ç67F–öâæ6öæf—&ÖVBÓÓÒfÇ6R¢ç6÷'B‚†ÆVgBÂ&–v‡B’ÓâÆVgBæFFRæÆö6ÆT6ö×&R‡&–v‡BæFFR’“°¢ÒÂ·G&ç67F–öç5Ò“° ¢6öç7BgWGW&T÷W&F–öå6V7F–öç2ÒW6TÖVÖò‚‚’Óâ°¢G—RgWGW&T÷W&F–öäÆ—7D—FVÒĞ¢Â°¢¶–æC¢&öæR×F–ÖR#°¢¶W“¢7G&–æs°¢6÷'DFFS¢7G&–æs°¢G&ç67F–öã¢G&ç67F–öã°¢Ğ¢Â°¢¶–æC¢'&V7W'&–ær#°¢¶W“¢7G&–æs°¢6÷'DFFS¢7G&–æs°¢6&C¢‡G—Vöb&V7W'&–æt6&G4&6R•¶çVÖ&W%Ó°¢Ó° ¢6öç7B6V7F–öç3¢&V6÷&CÄgWGW&T÷W&F–öäw&÷WÂgWGW&T÷W&F–öäÆ—7D—FVÕµÓâÒ°¢ÆææVC¢µÒÀ¢GVS¢µÒÀ¢–C¢µÒÀ¢Ó° ¢f÷"†6öç7BG&ç67F–öâöbgWGW&T÷W&F–öåG&ç67F–öç2’°¢6öç7Bw&÷WÒ&W6öÇfTgWGW&TöæUF–ÖUG&ç67F–öäw&÷W‡G&ç67F–öâÂgWGW&T÷W&F–öåFöF’“°¢6V7F–öç5¶w&÷WÒçW6‚‡°¢¶–æC¢&öæR×F–ÖR"À¢¶W“¢G&ç67F–öâæ–BÀ¢6÷'DFFS¢G&ç67F–öâæFFRç6Æ–6RƒÂ’À¢G&ç67F–öâÀ¢Ò“°¢Ğ ¢f÷"†6öç7B6&Böb&V7W'&–æt6&G4&6R’°¢6öç7Bw&÷WÒ&W6öÇfTgWGW&U&V7W'&–æt÷W&F–öäw&÷W€¢°¢–C¢6&Bç–BÀ¢&W6öÇfVE7FGW3¢6&Bç&W6öÇfVE7FGW2À¢66†VGVÆVDFFS¢6&Bç66†VGVÆVDFFRÀ¢ÒÀ¢gWGW&T÷W&F–öåFöF’À¢“°¢6V7F–öç5¶w&÷WÒçW6‚‡°¢¶–æC¢'&V7W'&–ær"À¢¶W“¢6&Bæ—FVÒæ–BÀ¢6÷'DFFS¢w&÷WÓÓÒ'–B"ò6&BæÆ7E–DFFRóò6&Bæö67W'&Væ6TFFR¢6&Bç66†VGVÆVDFFRÀ¢6&BÀ¢Ò“°¢Ğ ¢6V7F–öç2çÆææVBç6÷'B‚†ÆVgBÂ&–v‡B’ÓâÆVgBç6÷'DFFRæÆö6ÆT6ö×&R‡&–v‡Bç6÷'DFFR’“°¢6V7F–öç2æGVRç6÷'B‚†ÆVgBÂ&–v‡B’ÓâÆVgBç6÷'DFFRæÆö6ÆT6ö×&R‡&–v‡Bç6÷'DFFR’“°¢6V7F–öç2ç–Bç6÷'B‚†ÆVgBÂ&–v‡B’Óâ&–v‡Bç6÷'DFFRæÆö6ÆT6ö×&R†ÆVgBç6÷'DFFR’“° ¢&WGW&â6V7F–öç3°¢ÒÂ¶gWGW&T÷W&F–öåFöF’ÂgWGW&T÷W&F–öåG&ç67F–öç2Â&V7W'&–æt6&G4&6UÒ“° ¢6öç7BÆææVDgWGW&T÷W&F–öç2ÒW6TÖVÖò€¢‚’Óâ7Æ—EÆææVDgWGW&T÷W&F–öç4'”ÖöçF‚†gWGW&T÷W&F–öå6V7F–öç2çÆææVBÂgWGW&T÷W&F–öåFöF’’À¢¶gWGW&T÷W&F–öå6V7F–öç2çÆææVBÂgWGW&T÷W&F–öåFöF•ÒÀ¢“° ¢6öç7BgWGW&T÷W&F–öäF—7Æ•6V7F–öç2ÒW6TÖVÖò‚‚’Óâ°¢6öç7B6V7F–öç3¢'&“Ç°¢¶W“¢7G&–æs°¢Æ&VÃ¢7G&–æs°¢—FV×3¢'&“Â‡G—VöbgWGW&T÷W&F–öå6V7F–öç2çÆææVB•¶çVÖ&W%Óã°¢ÓâÒµÓ° ¢–b‡ÆææVDgWGW&T÷W&F–öç2æ7W'&VçDÖöçF‚æÆVæwF‚â’°¢6V7F–öç2çW6‚‡°¢¶W“¢'ÆææVB"À¢Æ&VÃ¢B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu6V7F–öåÆææVB"’À¢—FV×3¢ÆææVDgWGW&T÷W&F–öç2æ7W'&VçDÖöçF‚À¢Ò“°¢Ğ ¢f÷"†6öç7B'V6¶WBöbÆææVDgWGW&T÷W&F–öç2æÆFW$ÖöçF‡2’°¢6V7F–öç2çW6‚‡°¢¶W“¢ÆFW"ÒG¶'V6¶WBæÖöçF„¶W—ÖÀ¢Æ&VÃ¢f÷&ÖDÖöçF…–V$Æöær†G¶'V6¶WBæÖöçF„¶W—ÒÓVÂÆö6ÆR’À¢—FV×3¢'V6¶WBæ—FV×2À¢Ò“°¢Ğ ¢–b†gWGW&T÷W&F–öå6V7F–öç2æGVRæÆVæwF‚â’°¢6V7F–öç2çW6‚‡°¢¶W“¢&GVR"À¢Æ&VÃ¢B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu6V7F–öäGVR"’À¢—FV×3¢gWGW&T÷W&F–öå6V7F–öç2æGVRÀ¢Ò“°¢Ğ ¢–b†gWGW&T÷W&F–öå6V7F–öç2ç–BæÆVæwF‚â’°¢6V7F–öç2çW6‚‡°¢¶W“¢'–B"À¢Æ&VÃ¢B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu6V7F–öå–B"’À¢—FV×3¢gWGW&T÷W&F–öå6V7F–öç2ç–BÀ¢Ò“°¢Ğ ¢&WGW&â6V7F–öç3°¢ÒÂ¶gWGW&T÷W&F–öå6V7F–öç2ÂÆö6ÆRÂÆææVDgWGW&T÷W&F–öç5Ò“° ¢gVæ7F–öâgWGW&U6V7F–öå–ÆÄ6Æ74æÖR‡6V7F–öä¶W“¢7G&–ær’°¢–b‡6V7F–öä¶W’ÓÓÒ'–B"’°¢&WGW&â&&÷&FW"ÖVÖW&ÆBÓ#óƒ&rÖVÖW&ÆBÓSFW‡BÖVÖW&ÆBÓ“6†F÷r×6ÒF&³¦&÷&FW"ÖVÖW&ÆBÓƒósF&³¦&rÖVÖW&ÆBÓ“SóCF&³§FW‡BÖVÖW&ÆBÓ#°¢Ğ¢–b‡6V7F–öä¶W’ÓÓÒ&GVR"’°¢&WGW&â&&÷&FW"ÖÖ&W"Ó3óƒ&rÖÖ&W"ÓóƒFW‡BÖÖ&W"Ó“S6†F÷r×6ÒF&³¦&÷&FW"ÖÖ&W"ÓƒósF&³¦&rÖÖ&W"Ó“SóSF&³§FW‡BÖÖ&W"Ó#°¢Ğ¢&WGW&â&&÷&FW"ÖÖ&W"Ó#óƒ&rÖÖ&W"ÓSFW‡BÖÖ&W"Ó“6†F÷r×6ÒF&³¦&÷&FW"ÖÖ&W"ÓƒósF&³¦&rÖÖ&W"Ó“SóCF&³§FW‡BÖÖ&W"Ó#°¢Ğ ¢6öç7B&VæFW$gWGW&T÷W&F–öä6&BÒ€¢VçG'“ ¢Â‡G—VöbgWGW&T÷W&F–öå6V7F–öç2çÆææVB•¶çVÖ&W%Ğ¢Â‡G—VöbgWGW&T÷W&F–öå6V7F–öç2æGVR•¶çVÖ&W%Ğ¢Â‡G—VöbgWGW&T÷W&F–öå6V7F–öç2ç–B•¶çVÖ&W%ÒÀ¢’Óâ°¢6öç7BVæF–æt6&D6Æ74æÖRĞ¢&&÷&FW"ÖÖ&W"Ó#ó“&rÖÖ&W"ÓSóƒF&³¦&÷&FW"ÖÖ&W"ÓƒócF&³¦&rÖÖ&W"Ó“Só3#°¢6öç7BVæF–æt&FvT6Æ74æÖRĞ¢&&rÖÖ&W"ÓFW‡BÖÖ&W"ÓƒF&³¦&rÖÖ&W"Ó“ócF&³§FW‡BÖÖ&W"Ó#°¢6öç7B–D6&D6Æ74æÖRĞ¢&&÷&FW"ÖVÖW&ÆBÓ#óƒ&rÖVÖW&ÆBÓSócF&³¦&÷&FW"ÖVÖW&ÆBÓ“óSF&³¦&rÖVÖW&ÆBÓ“Só#R#°¢6öç7B–D&FvT6Æ74æÖRĞ¢&&rÖVÖW&ÆBÓFW‡BÖVÖW&ÆBÓƒF&³¦&rÖVÖW&ÆBÓ“ócF&³§FW‡BÖVÖW&ÆBÓ#° ¢–b†VçG'’æ¶–æBÓÓÒ&öæR×F–ÖR"’°¢6öç7BG&ç67F–öâÒVçG'’çG&ç67F–öã°¢6öç7B6FVv÷'”Æ&VÂÒvWD6FVv÷'”Æ&VÂ‡G&ç67F–öâæ6FVv÷'”–BÂ6FVv÷&–W2ÂÆö6ÆR“°¢6öç7BF—FÆRÒG&ç67F–öâææ÷FRçG&–Ò‚’ÇÂ6FVv÷'”Æ&VÃ°¢&WGW&â€¢ÆF—`¢¶W“×¶VçG'’æ¶W—Ğ¢6Æ74æÖS×¶6â‚'&÷VæFVBÖÆr&÷&FW"Ó2"ÂVæF–æt6&D6Æ74æÖR—Ğ¢à¢ÆF—b6Æ74æÖSÒ&fÆW‚—FV×2×7F'B§W7F–g’Ö&WGvVVâvÓ2#à¢ÆF—b6Æ74æÖSÒ&Ö–â×rÓ#à¢Ç ¢6Æ74æÖS×¶6â€¢&Ö"Ó–æÆ–æRÖfÆW‚&÷VæFVBÖÖB‚Ó"’ÓãRFW‡B×‡2föçBÖÖVF—VÒ"À¢VæF–æt&FvT6Æ74æÖRÀ¢—Ğ¢à¢·G&ç67F–öâçG—RÓÓÒ&–æ6öÖR ¢òÆö6ÆRÓÓÒ''R ¢ò-
+}í-½’Mí]íB ¢¢$öæR×F–ÖR–æ6öÖR ¢¢Æö6ÆRÓÓÒ''R ¢ò-
+}í-½’ı½-b ¢¢$öæR×F–ÖR–ÖVçB'Ğ¢Â÷à¢Ç6Æ74æÖSÒ&föçBÖÖVF—VÒÆVF–ær×F–v‡B#ç·F—FÆWÓÂ÷à¢Ç6Æ74æÖSÒ&×BÓãRFW‡B×6ÒföçB×6VÖ–&öÆBF'VÆ"ÖçV×2#à¢·G&ç67F–öâçG—RÓÓÒ&–æ6öÖR"ò"²"¢.(‰"'Ğ¢¶f÷&ÖDÖöæW’‡G&ç67F–öâæÖ÷VçBÂÆö6ÆR—Ğ¢Â÷à¢Ç6Æ74æÖSÒ&×BÓFW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢¶f÷&ÖEG&ç67F–öäFFR‡G&ç67F–öâæFFRÂÆö6ÆR—Ğ¢²"+r'Ğ¢¶Æö6ÆRÓÓÒ''R"ò-	ímM]-ò"¢$W‡V7FVB'Ğ¢Â÷à¢ÂöF—cà¢Ä'WGFöà¢f&–çCÒ&v†÷7B ¢6—¦SÒ&–6öâ ¢6Æ74æÖSÒ&‚ÓrÓ6‡&–æ²ÓFW‡BÖFW7G'V7F—fR ¢öä6Æ–6³×²‚’ÓâFVÆWFUG&ç67F–öâ‡G&ç67F–öâæ–B—Ğ¢&–ÖÆ&VÃ×¶Æö6ÆRÓÓÒ''R"ò-
+=M½-Âíı]mâ"¢$FVÆWFR÷W&F–öâ'Ğ¢à¢ÅG&6ƒ"6Æ74æÖSÒ&‚ÓBrÓB"óà¢Âô'WGFöãà¢ÂöF—cà¢ÂöF—cà¢“°¢Ğ ¢6öç7B²—FVÒÂ7FGW2ÂÆ7E–DFFRÂ6¶—VD–åW&–öBÒÒVçG'’æ6&C°¢6öç7B&V7W'&–æt6&DW‡æFVBÒW‡æFVE&V7W'&–æt6&G5¶—FVÒæ–EÒóòfÇ6S°¢6öç7B6FVv÷'”Æ&VÂÒvWD6FVv÷'”Æ&VÂ†—FVÒæ6FVv÷'”–BÂ6FVv÷&–W2ÂÆö6ÆR“°¢6öç7BF—FÆRÒ&V7W'&–ætF—7Æ”æÖR†—FVÒÂ6FVv÷'”Æ&VÂ“°¢6öç7B6¶—VBÒVffV7F—fU6¶—VDFFW2†—FVÒÂG&ç67F–öç2“°¢6öç7B6¶—F÷FÂÒ6¶—VBæÆVæwF‚¢—FVÒæÖ÷VçC°¢&WGW&â€¢ÆF—`¢¶W“×¶VçG'’æ¶W—Ğ¢FF×ÆâÖVçF—G’Ö–C×¶—FVÒæ–GĞ¢6Æ74æÖS×¶6â€¢'&÷VæFVBÖÆr&÷&FW"Ó2"À¢—FVÒæVæ&ÆV@¢ò7FGW2ÓÓÒ'–B ¢ò–D6&D6Æ74æÖP¢¢VæF–æt6&D6Æ74æÖP¢¢&&÷&FW"×&VBÓ#óƒ&r×&VBÓSócF&³¦&÷&FW"×&VBÓ“óSF&³¦&r×&VBÓ“Só#R"À¢—Ğ¢à¢ÆF—b6Æ74æÖSÒ'76R×’Ó2#à¢ÆF—b6Æ74æÖSÒ&fÆW‚fÆW‚×w&—FV×2×7F'BvÓ2#à¢ÆF—b6Æ74æÖSÒ&Ö–â×rÓfÆW‚Ó#à¢Ç ¢6Æ74æÖS×¶6â€¢&Ö"Ó"–æÆ–æRÖfÆW‚&÷VæFVBÖÖB‚Ó"’ÓãRFW‡B×‡2föçBÖÖVF—VÒ"À¢7FGW2ÓÓÒ'–B ¢ò–D&FvT6Æ74æÖP¢¢—FVÒæVæ&ÆV@¢òVæF–æt&FvT6Æ74æÖP¢¢&&r×&VBÓFW‡B×&VBÓƒF&³¦&r×&VBÓ“ócF&³§FW‡B×&VBÓ"À¢—Ğ¢à¢·7FGW2ÓÓÒ'–B ¢òB†Æö6ÆRÂ'Æææ–æu&V7W'&–æu7FGW5–B"¢¢7FGW2ÓÓÒ'VæF–ær ¢òB†Æö6ÆRÂ'Æææ–æu&V7W'&–æu7FGW5VæF–ær"¢¢—FVÒæVæ&ÆV@¢òB†Æö6ÆRÂ'Æææ–æu&V7W'&–æu7FGW47F—fR"¢¢B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu7FGW5W6VB"—Ğ¢Â÷à¢ÆF—b6Æ74æÖSÒ&fÆW‚fÆW‚Ö6öÂvÓ6Ó¦fÆW‚×&÷r6Ó¦—FV×2Ö&6VÆ–æR6Ó¦§W7F–g’Ö&WGvVVâ6Ó¦vÓ2#à¢Ç6Æ74æÖSÒ&Ö–â×rÓföçBÖÖVF—VÒÆVF–ær×F–v‡B#ç·F—FÆWÓÂ÷à¢Ç6Æ74æÖSÒ'6‡&–æ²ÓFW‡BÖ&6RföçB×6VÖ–&öÆBF'VÆ"ÖçV×26Ó§FW‡BÕ³ãsW&VÕÒ6Ó¦ÆVF–ærÖæöæR#à¢¶f÷&ÖDÖöæW’†—FVÒæÖ÷VçBÂÆö6ÆR—Ğ¢Â÷à¢ÂöF—cà¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ&ÖÂÖWFòfÆW‚6‡&–æ²Ó—FV×2Ö6VçFW"vÓ"#à¢Ä'WGFöà¢f&–çCÒ&÷WFÆ–æR ¢6—¦SÒ'6Ò ¢6Æ74æÖS×¶6â€¢&Ö–âÖ‚Ó&÷VæFVBÓ'†Â‚ÓB"À¢—FVÒæVæ&ÆV@¢ò7FGW2ÓÓÒ'–B ¢ò&&÷&FW"ÖVÖW&ÆBÓ3óƒ&r×v†—FRóƒ†÷fW#¦&rÖVÖW&ÆBÓSF&³¦&÷&FW"ÖVÖW&ÆBÓƒF&³¦&rÖVÖW&ÆBÓ“SóC ¢¢&&÷&FW"ÖÖ&W"Ó3óƒ&r×v†—FRóƒR†÷fW#¦&rÖÖ&W"ÓSF&³¦&÷&FW"ÖÖ&W"ÓƒF&³¦&rÖÖ&W"Ó“SóC ¢¢&&÷&FW"×&VBÓ3óƒ&r×v†—FRóƒ†÷fW#¦&r×&VBÓSF&³¦&÷&FW"×&VBÓƒF&³¦&r×&VBÓ“SóC"À¢—Ğ¢öä6Æ–6³×²‚’ÓâWFFU&V7W'&–ær†—FVÒæ–BÂ²Væ&ÆVC¢—FVÒæVæ&ÆVBÒ—Ğ¢à¢¶—FVÒæVæ&ÆV@¢òÆö6ÆRÓÓÒ''R ¢ò-	ıí-İí--Â ¢¢%W6R ¢¢Æö6ÆRÓÓÒ''R ¢ò-	-í}íİí--Â ¢¢%&W7VÖR'Ğ¢Âô'WGFöãà¢Ä'WGFöà¢f&–çCÒ&v†÷7B ¢6—¦SÒ&–6öâ ¢6Æ74æÖSÒ&‚ÓrÓ6‡&–æ²ÓFW‡BÖFW7G'V7F—fR ¢öä6Æ–6³×²‚’Óâ&VÖ÷fU&V7W'&–ær†—FVÒæ–B—Ğ¢&–ÖÆ&VÃ×¶Æö6ÆRÓÓÒ''R"ò-
+=M½-Â]â"¢$FVÆWFR6W&–W2'Ğ¢à¢ÅG&6ƒ"6Æ74æÖSÒ&‚ÓBrÓB"óà¢Âô'WGFöãà¢Ä'WGFöà¢f&–çCÒ&v†÷7B ¢6—¦SÒ&–6öâ ¢6Æ74æÖSÒ&‚ÓrÓ6‡&–æ²Ó&÷VæFVBÖgVÆÂ&÷&FW"&÷&FW"Ö&÷&FW"ós&rÖ&6¶w&÷VæBósR ¢öä6Æ–6³×²‚’Óà¢6WDW‡æFVE&V7W'&–æt6&G2‚†7W'&VçB’Óâ‡°¢ââæ7W'&VçBÀ¢¶—FVÒæ–EÓ¢&V7W'&–æt6&DW‡æFVBÀ¢Ò’¢Ğ¢&–ÖW‡æFVC×·&V7W'&–æt6&DW‡æFVGĞ¢&–ÖÆ&VÃ×°¢&V7W'&–æt6&DW‡æFV@¢òÆö6ÆRÓÓÒ''R ¢ò-
+-]İ=-Â­-í}­2 ¢¢$6öÆÆ6R6&B ¢¢Æö6ÆRÓÓÒ''R ¢ò-
+}-]İ=-Â­-í}­2 ¢¢$W‡æB6&B ¢Ğ¢à¢·&V7W'&–æt6&DW‡æFVBò€¢Ä6†Wg&öåW6Æ74æÖSÒ&‚ÓBrÓB"óà¢’¢€¢Ä6†Wg&öäF÷vâ6Æ74æÖSÒ&‚ÓBrÓB"óà¢—Ğ¢Âô'WGFöãà¢ÂöF—cà¢ÂöF—cà ¢·&V7W'&–æt6&DW‡æFVBò€¢ÆF—b6Æ74æÖSÒ'76R×’Ó2&÷&FW"×B&÷&FW"Ö&÷&FW"óSBÓ2#à¢ÆF—b6Æ74æÖSÒ&Ö–â×rÓ#à¢Ç6Æ74æÖSÒ'FW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢¶—FVÒæg&WVVæ7’ÓÓÒ'vVV¶Ç’ ¢òB†Æö6ÆRÂ'Æææ–æu&V7W'&–æuvVV¶Ç’"¢¢—FVÒæg&WVVæ7’ÓÓÒ&ÖöçF†Ç’ ¢ò†—FVÒæ–çFW'fÄÖöçF‡2óò’â¢ò&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–æu&V7W'&–ætWfW'”ÖöçF‡2"’Â°¢6÷VçC¢7G&–ær†—FVÒæ–çFW'fÄÖöçF‡2óò’À¢Ò¢¢B†Æö6ÆRÂ'Æææ–æu&V7W'&–ætÖöçF†Ç’"¢¢B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu–V&Ç’"—Ğ¢²"+r'Ğ¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–æu&V7W'&–ætæW‡B"’Â°¢FFS¢f÷&ÖEG&ç67F–öäFFR†—FVÒææW‡E'VäFFRÂÆö6ÆR’À¢Ò—Ğ¢Â÷à¢¶—FVÒæVæDFFRò€¢Ç6Æ74æÖSÒ&×BÓFW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢¶Æö6ÆRÓÓÒ''R ¢ò	}­İ}-]-òG¶f÷&ÖEG&ç67F–öäFFR†—FVÒæVæDFFRÂÆö6ÆR—Ö ¢¢VæG2öâG¶f÷&ÖEG&ç67F–öäFFR†—FVÒæVæDFFRÂÆö6ÆR—ÖĞ¢Â÷à¢’¢çVÆÇĞ¢¶Æ7E–DFFRò€¢Ç6Æ74æÖSÒ&×BÓFW‡B×‡2föçBÖÖVF—VÒFW‡BÖVÖW&ÆBÓsF&³§FW‡BÖVÖW&ÆBÓ3#à¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu–Döâ"’Â°¢FFS¢f÷&ÖEG&ç67F–öäFFR†Æ7E–DFFRÂÆö6ÆR’À¢Ò—Ğ¢Â÷à¢’¢çVÆÇĞ¢·6¶—VD–åW&–öBæÆVæwF‚âbbÆ7E–DFFRò€¢Ç6Æ74æÖSÒ&×BÓFW‡B×‡2föçBÖÖVF—VÒFW‡BÖÖ&W"ÓsF&³§FW‡BÖÖ&W"Ó3#à¢·&WÆ6UFö¶Vç2‡B†Æö6ÆRÂ'Æææ–æu&V7W'&–æu6¶—VD–åW&–öB"’Â°¢6÷VçC¢7G&–ær‡6¶—VD–åW&–öBæÆVæwF‚’À¢Ò—Ğ¢Â÷à¢’¢çVÆÇĞ¢ÂöF—cà¢ÆF—b6Æ74æÖSÒ&w&–Bw&–BÖ6öÇ2ÓvÓ"6Ó¦w&–BÖ6öÇ2Ó"#à¢ÆÆ&VÂ6Æ74æÖSÒ&fÆW‚fÆW‚Ö6öÂ—FV×2×7F'BvÓãRFW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢Ç7â6Æ74æÖSÒ'6‡&–æ²Ó#ç·B†Æö6ÆRÂ'Æææ–æu&V7W'&–ætFFR"—ÓÂ÷7ãà¢Ä–çW@¢G—SÒ&FFR ¢6Æ74æÖSÒ&‚Ó’rÖgVÆÂFW‡B×‡2 ¢fÇVS×¶—FVÒææW‡E'VäFFWĞ¢öä6†ævS×²†R’Óâ†æFÆU&V7W'&–ætFFT6†ævR†—FVÒæ–BÂRçF&vWBçfÇVR—Ğ¢óà¢ÂöÆ&VÃà¢ÆÆ&VÂ6Æ74æÖSÒ&fÆW‚fÆW‚Ö6öÂ—FV×2×7F'BvÓãRFW‡B×‡2FW‡BÖ×WFVBÖf÷&Vw&÷VæB#à¢Ç7â6Æ74æÖSÒ'6‡&–æ²Ó#à¢¶Æö6ÆRÓÓÒ''R"ò-	MâM-²"¢%VçF–Â'Ğ¢Â÷7ãà¢Ä–çW@¢G—SÒ&FFR ¢6Æ74æÖSÒ&‚Ó’rÖgVÆÂFW‡B×‡2 ¢fÇVS×¶—FVÒæVæDFFRóò"'Ğ¢öä6†ævS×²†R’Óâ†æFÆU&V7W'&–ætVæDFFT6†ævR†—FVÒæ–BÂRçF&vWBçfÇVR—Ğ¢óà¢;ï[h‘éì¶»§q«^t       <p className="mt-2 text-xs text-muted-foreground">
                     {locale === "ru" ? "Ğ¤Ğ¾ĞºÑƒÑ: " : "Focus: "}
                     <span className="font-medium text-foreground">{debtFocus.name}</span>
                     {debtFocus.ratePct ? ` Â· ${debtFocus.ratePct}%` : ""}
