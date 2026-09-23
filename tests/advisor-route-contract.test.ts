@@ -89,3 +89,5 @@ test("advisor route returns safe user error when cards are missing", async () =>
     "Не удалось отправить вопрос. Обновите страницу и попробуйте ещё раз.",
   );
 });
+
+

@@ -75,6 +75,18 @@ export type FinancialAdviserBrief = {
     requiredAmount: number;
     timeline: string[];
   };
+  goalPlan?: {
+    targetAmount: number;
+    savedAmount: number;
+    remainingAmount: number;
+    monthlyContribution: number;
+    monthsAtCurrentContribution: number | null;
+    scenarios: Array<{
+      label: string;
+      monthlyContribution: number;
+      months: number;
+    }>;
+  } | null;
   purchaseAnalysis?: {
     targetAmount: number;
     safeNowAmount: number;
@@ -262,6 +274,7 @@ function buildBaseBrief(args: {
         .map((goal) => goal.deadline as string)
         .slice(0, 5),
     },
+    goalPlan: null,
     purchaseAnalysis: null,
     scenarioAnalysis: null,
   };
@@ -484,28 +497,75 @@ function analyzeExpenseControl(args: {
 function analyzeGoalPlanning(args: {
   context: AdvisorFinancialContext;
   classification: AdvisorQuestionClassification;
-}): Pick<FinancialAdviserBrief, "summary" | "recommendedActions" | "evidence" | "missingInputs"> {
-  const requiredAmount = parseGoalTargetAmount(args.classification.amountRub, args.context);
-  const missingInputs = ["Нужен срок цели.", "Нужно понять, сколько уже отложено отдельно на эту цель.", "Нужен комфортный ежемесячный взнос."];
+}): Pick<FinancialAdviserBrief, "summary" | "recommendedActions" | "evidence" | "missingInputs" | "goalPlan"> {
+  const targetAmount = parseGoalTargetAmount(args.classification.amountRub, args.context);
+  const matchingGoal = args.context.goals.find(
+    (goal) => Math.round(goal.targetAmount) === targetAmount,
+  );
+  const savedAmount = Math.max(0, Math.round(matchingGoal?.currentAmount ?? 0));
+  const remainingAmount = Math.max(0, targetAmount - savedAmount);
+  const monthlyContribution = Math.max(0, Math.round(buildCashFlow(args.context).freeCashFlow));
+  const monthsAtCurrentContribution =
+    monthlyContribution > 0 ? Math.ceil(remainingAmount / monthlyContribution) : null;
+  const scenarios =
+    monthlyContribution > 0
+      ? [
+          { label: "Текущий темп", multiplier: 1 },
+          { label: "Ускоренный темп", multiplier: 1.25 },
+          { label: "Амбициозный темп", multiplier: 1.5 },
+        ].map((scenario) => {
+          const contribution = Math.round(monthlyContribution * scenario.multiplier);
+          return {
+            label: scenario.label,
+            monthlyContribution: contribution,
+            months: Math.ceil(remainingAmount / contribution),
+          };
+        })
+      : [];
+  const missingInputs = [
+    ...(matchingGoal ? [] : ["Нужно подтвердить, сколько уже отложено на эту цель."]),
+    "Нужен желаемый срок цели.",
+  ];
+
   return {
     summary: {
-      headline: "Для точного плана по цели сначала нужно уточнить срок и стартовую точку",
+      headline:
+        monthlyContribution > 0
+          ? "Цель достижима только при регулярном взносе и понятном сроке"
+          : "Для плана по цели сначала нужно высвободить ежемесячный взнос",
       currentBalance: Math.round(args.context.balances.currentBalance),
       plannedFreeMoney: Math.round(args.context.balances.plannedFreeMoney),
       periodEndDate: args.context.balances.periodEndDate,
       forecastRisk: resolveRiskLevel(args.context),
     },
+    goalPlan: {
+      targetAmount,
+      savedAmount,
+      remainingAmount,
+      monthlyContribution,
+      monthsAtCurrentContribution,
+      scenarios,
+    },
     missingInputs,
     recommendedActions: [
       {
         priority: 1,
+        action: "build_purchase_plan",
+        reason:
+          monthlyContribution > 0
+            ? "Начните с регулярного взноса в темпе, который подтверждён текущим планом."
+            : "Сначала нужно найти устойчивый источник ежемесячного взноса без риска для обязательных платежей.",
+      },
+      {
+        priority: 2,
         action: "clarify_goal_inputs",
-        reason: "Без срока и стартовых накоплений советник не должен обещать путь к цели.",
+        reason: "После выбора срока можно проверить, хватает ли выбранного темпа и что нужно изменить.",
       },
     ],
     evidence: [
-      `Свободно по текущему плану: ${Math.round(args.context.balances.plannedFreeMoney)} ₽.`,
-      `Сумма цели для расчёта: ${requiredAmount} ₽.`,
+      `Цель для расчёта: ${targetAmount} ₽.`,
+      `Уже отложено: ${savedAmount} ₽. Осталось: ${remainingAmount} ₽.`,
+      `Подтверждённый текущим планом ежемесячный темп: ${monthlyContribution} ₽.`,
     ],
   };
 }
