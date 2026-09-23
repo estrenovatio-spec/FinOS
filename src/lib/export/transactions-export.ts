@@ -94,10 +94,7 @@ function escapeXmlCell(value: string | number): string {
     .replace(/"/g, "&quot;");
 }
 
-function businessKindLabel(
-  kind: BusinessTransaction["kind"],
-  locale: Locale,
-): string {
+function businessKindLabel(kind: BusinessTransaction["kind"], locale: Locale): string {
   const isRu = locale === "ru";
   switch (kind) {
     case "operating_income":
@@ -118,13 +115,7 @@ function sum(values: number[]): number {
 }
 
 function sheetName(name: string): string {
-  return (
-    name
-      .replace(/[\[\]:*?/\\]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 31) || "Sheet"
-  );
+  return name.replace(/[\[\]:*?/\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || "Sheet";
 }
 
 function worksheetXml(rows: (string | number)[][]): string {
@@ -167,10 +158,7 @@ function dosDateTime(date = new Date()): { date: number; time: number } {
   const year = Math.max(1980, date.getFullYear());
   return {
     date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
-    time:
-      (date.getHours() << 11) |
-      (date.getMinutes() << 5) |
-      Math.floor(date.getSeconds() / 2),
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
   };
 }
 
@@ -264,9 +252,7 @@ function buildZip(files: { path: string; content: string }[]): Uint8Array {
   return concatZipParts([...parts, central, end]);
 }
 
-function buildXlsxWorkbook(
-  sheets: { name: string; rows: (string | number)[][] }[],
-): Uint8Array {
+function buildXlsxWorkbook(sheets: { name: string; rows: (string | number)[][] }[]): Uint8Array {
   const normalized = sheets.map((sheet, index) => ({
     ...sheet,
     name: sheetName(sheet.name) || `Sheet ${index + 1}`,
@@ -350,9 +336,7 @@ export function buildBudgetExcelWorkbook(params: {
     scope = "combined",
   } = params;
   const isRu = locale === "ru";
-  const businessUnitsById = new Map(
-    businessUnits.map((unit) => [unit.id, unit]),
-  );
+  const businessUnitsById = new Map(businessUnits.map((unit) => [unit.id, unit]));
   const allBusinessUnitIds = Array.from(
     new Set([
       ...businessUnits.map((unit) => unit.id),
@@ -360,89 +344,54 @@ export function buildBudgetExcelWorkbook(params: {
       ...businessAssets.map((asset) => asset.unitId),
     ]),
   );
-  const exportBusinessUnits: BusinessUnit[] = allBusinessUnitIds.map(
-    (unitId, index) => {
-      const unit = businessUnitsById.get(unitId);
-      if (unit) return unit;
-      return {
-        id: unitId,
-        name: isRu ? `Бизнес ${index + 1}` : `Business ${index + 1}`,
-        color: "#6366f1",
-        createdAt: "",
-      };
-    },
-  );
+  const exportBusinessUnits: BusinessUnit[] = allBusinessUnitIds.map((unitId, index) => {
+    const unit = businessUnitsById.get(unitId);
+    if (unit) return unit;
+    return {
+      id: unitId,
+      name: isRu ? `Бизнес ${index + 1}` : `Business ${index + 1}`,
+      color: "#6366f1",
+      createdAt: "",
+    };
+  });
   const unitName = (unitId: string) =>
-    exportBusinessUnits.find((unit) => unit.id === unitId)?.name ??
-    (isRu ? "Бизнес" : "Business");
-  const familyIncome = sum(
-    transactions.filter((tx) => tx.type === "income").map((tx) => tx.amount),
-  );
-  const familyExpense = sum(
-    transactions.filter((tx) => tx.type === "expense").map((tx) => tx.amount),
-  );
+    exportBusinessUnits.find((unit) => unit.id === unitId)?.name ?? (isRu ? "Бизнес" : "Business");
+  const familyIncome = sum(transactions.filter((tx) => tx.type === "income").map((tx) => tx.amount));
+  const familyExpense = sum(transactions.filter((tx) => tx.type === "expense").map((tx) => tx.amount));
   const businessIncome = sum(
-    businessTransactions
-      .filter((tx) => tx.kind === "operating_income")
-      .map((tx) => tx.amount),
+    businessTransactions.filter((tx) => tx.kind === "operating_income").map((tx) => tx.amount),
   );
   const businessExpense = sum(
-    businessTransactions
-      .filter((tx) => tx.kind === "operating_expense")
-      .map((tx) => tx.amount),
+    businessTransactions.filter((tx) => tx.kind === "operating_expense").map((tx) => tx.amount),
   );
   const reserveDeposits = sum(
-    businessTransactions
-      .filter((tx) => tx.kind === "cushion_deposit")
-      .map((tx) => tx.amount),
+    businessTransactions.filter((tx) => tx.kind === "cushion_deposit").map((tx) => tx.amount),
   );
   const taxDeposits = sum(
-    businessTransactions
-      .filter((tx) => tx.kind === "tax_deposit")
-      .map((tx) => tx.amount),
+    businessTransactions.filter((tx) => tx.kind === "tax_deposit").map((tx) => tx.amount),
   );
   const familyWithdrawals = sum(
-    businessTransactions
-      .filter((tx) => tx.kind === "family_withdrawal")
-      .map((tx) => tx.amount),
+    businessTransactions.filter((tx) => tx.kind === "family_withdrawal").map((tx) => tx.amount),
   );
   const businessSummaryRows = exportBusinessUnits.flatMap((unit) => {
     const rows = businessTransactions.filter((tx) => tx.unitId === unit.id);
     const assets = businessAssets.filter((asset) => asset.unitId === unit.id);
-    const unitIncome = sum(
-      rows
-        .filter((tx) => tx.kind === "operating_income")
-        .map((tx) => tx.amount),
-    );
-    const unitExpense = sum(
-      rows
-        .filter((tx) => tx.kind === "operating_expense")
-        .map((tx) => tx.amount),
-    );
-    const unitReserve = sum(
-      rows.filter((tx) => tx.kind === "cushion_deposit").map((tx) => tx.amount),
-    );
-    const unitTax = sum(
-      rows.filter((tx) => tx.kind === "tax_deposit").map((tx) => tx.amount),
-    );
-    const unitWithdrawal = sum(
-      rows
-        .filter((tx) => tx.kind === "family_withdrawal")
-        .map((tx) => tx.amount),
-    );
-    return [
-      [
-        unit.name,
-        unitIncome,
-        unitExpense,
-        unitIncome - unitExpense,
-        unitReserve,
-        unitTax,
-        unitWithdrawal,
-        rows.length,
-        assets.length,
-      ],
-    ];
+    const unitIncome = sum(rows.filter((tx) => tx.kind === "operating_income").map((tx) => tx.amount));
+    const unitExpense = sum(rows.filter((tx) => tx.kind === "operating_expense").map((tx) => tx.amount));
+    const unitReserve = sum(rows.filter((tx) => tx.kind === "cushion_deposit").map((tx) => tx.amount));
+    const unitTax = sum(rows.filter((tx) => tx.kind === "tax_deposit").map((tx) => tx.amount));
+    const unitWithdrawal = sum(rows.filter((tx) => tx.kind === "family_withdrawal").map((tx) => tx.amount));
+    return [[
+      unit.name,
+      unitIncome,
+      unitExpense,
+      unitIncome - unitExpense,
+      unitReserve,
+      unitTax,
+      unitWithdrawal,
+      rows.length,
+      assets.length,
+    ]];
   });
 
   const familyRows: (string | number)[][] = [
@@ -452,36 +401,13 @@ export function buildBudgetExcelWorkbook(params: {
     ...(transactions.length
       ? transactions.map((tx) => [
           tx.date,
-          tx.type === "income"
-            ? isRu
-              ? "Доход"
-              : "Income"
-            : isRu
-              ? "Расход"
-              : "Expense",
+          tx.type === "income" ? (isRu ? "Доход" : "Income") : isRu ? "Расход" : "Expense",
           tx.amount,
           getCategoryLabel(tx.categoryId, categories, locale),
           tx.note ?? "",
-          tx.owner === "partner"
-            ? isRu
-              ? "Партнёр"
-              : "Partner"
-            : isRu
-              ? "Я"
-              : "Me",
+          tx.owner === "partner" ? (isRu ? "Партнёр" : "Partner") : isRu ? "Я" : "Me",
         ])
-      : [
-          [
-            isRu
-              ? "Нет семейных операций за выбранный период"
-              : "No family entries for selected period",
-            "",
-            "",
-            "",
-            "",
-            "",
-          ],
-        ]),
+      : [[isRu ? "Нет семейных операций за выбранный период" : "No family entries for selected period", "", "", "", "", ""]]),
   ];
 
   const businessRows: (string | number)[][] = [
@@ -496,37 +422,13 @@ export function buildBudgetExcelWorkbook(params: {
           tx.amount,
           tx.note ?? "",
         ])
-      : [
-          [
-            isRu
-              ? "Нет бизнес-операций за выбранный период"
-              : "No business entries for selected period",
-            "",
-            "",
-            "",
-            "",
-          ],
-        ]),
+      : [[isRu ? "Нет бизнес-операций за выбранный период" : "No business entries for selected period", "", "", "", ""]]),
   ];
 
   const projectRows: (string | number)[][] = [
     isRu
-      ? [
-          "Бизнес",
-          "Проект/актив",
-          "Тип",
-          "Капитал",
-          "Плановый доход в месяц",
-          "Часов в месяц",
-        ]
-      : [
-          "Business",
-          "Project/asset",
-          "Type",
-          "Capital",
-          "Planned monthly income",
-          "Hours per month",
-        ],
+      ? ["Бизнес", "Проект/актив", "Тип", "Капитал", "Плановый доход в месяц", "Часов в месяц"]
+      : ["Business", "Project/asset", "Type", "Capital", "Planned monthly income", "Hours per month"],
     ...(businessAssets.length
       ? businessAssets.map((asset) => [
           unitName(asset.unitId),
@@ -536,59 +438,16 @@ export function buildBudgetExcelWorkbook(params: {
           asset.monthlyNet,
           asset.hoursPerMonth ?? "",
         ])
-      : [
-          [
-            isRu
-              ? "Проекты и активы пока не добавлены"
-              : "No projects/assets yet",
-            "",
-            "",
-            "",
-            "",
-            "",
-          ],
-        ]),
+      : [[isRu ? "Проекты и активы пока не добавлены" : "No projects/assets yet", "", "", "", "", ""]]),
   ];
 
   const businessSummary: (string | number)[][] = [
     isRu
-      ? [
-          "Бизнес",
-          "Выручка",
-          "Расходы",
-          "Прибыль",
-          "В резерв",
-          "На налоговый счёт",
-          "Выведено в семью",
-          "Операций",
-          "Проектов/активов",
-        ]
-      : [
-          "Business",
-          "Revenue",
-          "Expenses",
-          "Profit",
-          "To reserve",
-          "To tax account",
-          "Withdrawn to family",
-          "Entries",
-          "Projects/assets",
-        ],
+      ? ["Бизнес", "Выручка", "Расходы", "Прибыль", "В резерв", "На налоговый счёт", "Выведено в семью", "Операций", "Проектов/активов"]
+      : ["Business", "Revenue", "Expenses", "Profit", "To reserve", "To tax account", "Withdrawn to family", "Entries", "Projects/assets"],
     ...(businessSummaryRows.length
       ? businessSummaryRows
-      : [
-          [
-            isRu ? "Бизнесы пока не добавлены" : "No businesses yet",
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-          ],
-        ]),
+      : [[isRu ? "Бизнесы пока не добавлены" : "No businesses yet", 0, 0, 0, 0, 0, 0, 0, 0]]),
   ];
 
   const metaRows: (string | number)[][] = [
@@ -598,30 +457,13 @@ export function buildBudgetExcelWorkbook(params: {
     [isRu ? "Расходы семьи" : "Family expenses", familyExpense],
     [isRu ? "Итог семьи" : "Family net", familyIncome - familyExpense],
     [isRu ? "Бизнесов" : "Businesses", exportBusinessUnits.length],
-    [
-      isRu ? "Бизнес-операций" : "Business entries",
-      businessTransactions.length,
-    ],
+    [isRu ? "Бизнес-операций" : "Business entries", businessTransactions.length],
     [isRu ? "Выручка бизнеса" : "Business revenue", businessIncome],
     [isRu ? "Расходы бизнеса" : "Business expenses", businessExpense],
-    [
-      isRu ? "Прибыль бизнеса" : "Business profit",
-      businessIncome - businessExpense,
-    ],
-    [
-      isRu ? "Переложено в резерв бизнеса" : "Moved to business reserve",
-      reserveDeposits,
-    ],
-    [
-      isRu ? "Переложено на налоговый счёт" : "Moved to tax account",
-      taxDeposits,
-    ],
-    [
-      isRu
-        ? "Выведено из бизнеса в семью"
-        : "Withdrawn from business to family",
-      familyWithdrawals,
-    ],
+    [isRu ? "Прибыль бизнеса" : "Business profit", businessIncome - businessExpense],
+    [isRu ? "Переложено в резерв бизнеса" : "Moved to business reserve", reserveDeposits],
+    [isRu ? "Переложено на налоговый счёт" : "Moved to tax account", taxDeposits],
+    [isRu ? "Выведено из бизнеса в семью" : "Withdrawn from business to family", familyWithdrawals],
     [isRu ? "Проектов/активов" : "Projects/assets", businessAssets.length],
     [
       isRu ? "Что входит в файл" : "What is included",
@@ -646,10 +488,7 @@ export function buildBudgetExcelWorkbook(params: {
       ],
     ];
     return buildXlsxWorkbook([
-      {
-        name: isRu ? "Личный итог" : "Personal summary",
-        rows: personalMetaRows,
-      },
+      { name: isRu ? "Личный итог" : "Personal summary", rows: personalMetaRows },
       { name: isRu ? "Личные операции" : "Personal entries", rows: familyRows },
     ]);
   }
@@ -683,9 +522,7 @@ function dataUrlBytes(dataUrl: string): Uint8Array {
   return bytes;
 }
 
-function buildImagePdf(
-  pages: { jpeg: Uint8Array; width: number; height: number }[],
-): Blob {
+function buildImagePdf(pages: { jpeg: Uint8Array; width: number; height: number }[]): Blob {
   const enc = new TextEncoder();
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [0];
@@ -714,9 +551,7 @@ function buildImagePdf(
   push("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
 
   startObject(2);
-  push(
-    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>\nendobj\n`,
-  );
+  push(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>\nendobj\n`);
 
   pages.forEach((page, index) => {
     const pageId = pageIds[index];
@@ -726,21 +561,15 @@ function buildImagePdf(
     const content = `q\n${pageW} 0 0 ${pageH} 0 0 cm\n/${imageName} Do\nQ\n`;
 
     startObject(pageId);
-    push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /${imageName} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>\nendobj\n`,
-    );
+    push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /${imageName} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>\nendobj\n`);
 
     startObject(imageId);
-    push(
-      `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.jpeg.length} >>\nstream\n`,
-    );
+    push(`<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.jpeg.length} >>\nstream\n`);
     push(page.jpeg);
     push("\nendstream\nendobj\n");
 
     startObject(contentId);
-    push(
-      `<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream\nendobj\n`,
-    );
+    push(`<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream\nendobj\n`);
   });
 
   const xrefAt = cursor;
@@ -749,9 +578,7 @@ function buildImagePdf(
   for (let i = 1; i <= objectCount; i++) {
     push(`${String(offsets[i] ?? 0).padStart(10, "0")} 00000 n \n`);
   }
-  push(
-    `trailer\n<< /Size ${objectCount + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`,
-  );
+  push(`trailer\n<< /Size ${objectCount + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`);
 
   const bytes = concatBytes(chunks);
   const pdfBuffer = bytes.buffer.slice(
@@ -761,11 +588,7 @@ function buildImagePdf(
   return new Blob([pdfBuffer], { type: "application/pdf" });
 }
 
-function ellipsize(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-): string {
+function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let out = text;
   while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) {
@@ -808,8 +631,7 @@ export function buildTransactionsPdfBlob(params: {
   } = params;
   const isRu = locale === "ru";
   const unitName = (unitId: string) =>
-    businessUnits.find((unit) => unit.id === unitId)?.name ??
-    (isRu ? "Бизнес" : "Business");
+    businessUnits.find((unit) => unit.id === unitId)?.name ?? (isRu ? "Бизнес" : "Business");
   const rows = [
     ...transactions.map((tx) => ({
       date: formatIsoDate(tx.date, locale),
@@ -845,12 +667,10 @@ export function buildTransactionsPdfBlob(params: {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
     ctx.fillStyle = "#111827";
-    ctx.font =
-      "700 38px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.font = "700 38px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.fillText(title, margin, 86);
     ctx.fillStyle = "#4b5563";
-    ctx.font =
-      "24px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.font = "24px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.fillText(
       `${formatIsoDate(periodStart, locale)} — ${formatIsoDate(periodEnd, locale)} · ${rows.length} ${isRu ? "операций" : "entries"}`,
       margin,
@@ -863,20 +683,10 @@ export function buildTransactionsPdfBlob(params: {
     ctx.fillStyle = "#111827";
     drawCell(ctx, isRu ? "Дата" : "Date", margin + 16, top - 11, 150, true);
     drawCell(ctx, isRu ? "Сумма" : "Amount", margin + 180, top - 11, 180, true);
-    drawCell(
-      ctx,
-      isRu ? "Категория" : "Category",
-      margin + 380,
-      top - 11,
-      260,
-      true,
-    );
+    drawCell(ctx, isRu ? "Категория" : "Category", margin + 380, top - 11, 260, true);
     drawCell(ctx, isRu ? "Заметка" : "Note", margin + 660, top - 11, 480, true);
 
-    const pageRows = rows.slice(
-      pageIndex * perPage,
-      pageIndex * perPage + perPage,
-    );
+    const pageRows = rows.slice(pageIndex * perPage, pageIndex * perPage + perPage);
     pageRows.forEach((row, i) => {
       const y = top + i * rowH;
       ctx.strokeStyle = "#e5e7eb";
@@ -892,18 +702,9 @@ export function buildTransactionsPdfBlob(params: {
     });
 
     ctx.fillStyle = "#6b7280";
-    ctx.font =
-      "20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText(
-      `Просто Бюджет · ${pageIndex + 1}/${pageCount}`,
-      margin,
-      height - 42,
-    );
-    pages.push({
-      jpeg: dataUrlBytes(canvas.toDataURL("image/jpeg", 0.92)),
-      width,
-      height,
-    });
+    ctx.font = "20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(`Просто Бюджет · ${pageIndex + 1}/${pageCount}`, margin, height - 42);
+    pages.push({ jpeg: dataUrlBytes(canvas.toDataURL("image/jpeg", 0.92)), width, height });
   }
 
   return buildImagePdf(pages);
@@ -931,9 +732,7 @@ async function shareBlobFile(filename: string, blob: Blob): Promise<boolean> {
     share?: (data: ShareData) => Promise<void>;
   };
   if (!nav.share || typeof File === "undefined") return false;
-  const file = new File([blob], filename, {
-    type: blob.type || "application/octet-stream",
-  });
+  const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
   try {
     if (nav.canShare && !nav.canShare({ files: [file] })) return false;
     await nav.share({ files: [file], title: filename });
@@ -985,11 +784,7 @@ export async function saveBlobFile(
   return "failed";
 }
 
-export function downloadTextFile(
-  filename: string,
-  content: string,
-  mime: string,
-): void {
+export function downloadTextFile(filename: string, content: string, mime: string): void {
   downloadBlobFile(filename, new Blob([content], { type: mime }));
 }
 
@@ -1001,8 +796,7 @@ export function openTransactionsPdfPrint(params: {
   periodEnd: string;
   title: string;
 }): void {
-  const { transactions, categories, locale, periodStart, periodEnd, title } =
-    params;
+  const { transactions, categories, locale, periodStart, periodEnd, title } = params;
   const rows = transactions
     .map((tx) => {
       const type = tx.type === "income" ? "+" : "−";

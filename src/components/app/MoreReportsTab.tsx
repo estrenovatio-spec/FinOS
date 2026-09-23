@@ -43,36 +43,33 @@ function AiReportHistory({
   const filtered = reports.filter((r) => r.kind === kind);
   const [openId, setOpenId] = useState<string | null>(null);
   const dateLocale = locale === "ru" ? "ru-RU" : "en-GB";
-  const grouped = filtered.reduce<
-    Array<{ key: string; label: string; reports: AiReportRecord[] }>
-  >((acc, report) => {
-    const createdAt = new Date(report.createdAt);
-    const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}-${createdAt.getDate()}`;
-    let group = acc.find((item) => item.key === key);
+  const grouped = filtered.reduce<Array<{ key: string; label: string; reports: AiReportRecord[] }>>(
+    (acc, report) => {
+      const createdAt = new Date(report.createdAt);
+      const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}-${createdAt.getDate()}`;
+      let group = acc.find((item) => item.key === key);
 
-    if (!group) {
-      group = {
-        key,
-        label: new Intl.DateTimeFormat(dateLocale, {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }).format(createdAt),
-        reports: [],
-      };
-      acc.push(group);
-    }
+      if (!group) {
+        group = {
+          key,
+          label: new Intl.DateTimeFormat(dateLocale, {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          }).format(createdAt),
+          reports: [],
+        };
+        acc.push(group);
+      }
 
-    group.reports.push(report);
-    return acc;
-  }, []);
+      group.reports.push(report);
+      return acc;
+    },
+    [],
+  );
 
   if (loading) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {t(locale, "moreReportsHistoryLoading")}
-      </p>
-    );
+    return <p className="text-xs text-muted-foreground">{t(locale, "moreReportsHistoryLoading")}</p>;
   }
 
   if (filtered.length === 0) {
@@ -99,9 +96,7 @@ function AiReportHistory({
                 <button
                   type="button"
                   className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-                  onClick={() =>
-                    setOpenId((current) => (current === r.id ? null : r.id))
-                  }
+                  onClick={() => setOpenId((current) => (current === r.id ? null : r.id))}
                 >
                   <span className="min-w-0">
                     <span className="block text-xs font-semibold text-foreground">
@@ -112,9 +107,7 @@ function AiReportHistory({
                     </span>
                     <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                       {formatIsoPeriod(r.periodStart, r.periodEnd, locale)}
-                      {r.fallback
-                        ? ` · ${t(locale, "moreReportsFallback")}`
-                        : ""}
+                      {r.fallback ? ` · ${t(locale, "moreReportsFallback")}` : ""}
                     </span>
                   </span>
                   <ChevronDown
@@ -128,10 +121,7 @@ function AiReportHistory({
                 {openId === r.id ? (
                   <ul className="space-y-1 px-3 pb-3 text-xs leading-snug">
                     {r.tips.map((tip, i) => (
-                      <li
-                        key={`${r.id}-${i}`}
-                        className="rounded bg-primary/5 px-2 py-1"
-                      >
+                      <li key={`${r.id}-${i}`} className="rounded bg-primary/5 px-2 py-1">
                         {tip}
                       </li>
                     ))}
@@ -155,9 +145,7 @@ export function MoreReportsTab() {
   const [reports, setReports] = useState<AiReportRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [tableReady, setTableReady] = useState(true);
-  const [historyKind, setHistoryKind] = useState<"weekly" | "monthly">(
-    "weekly",
-  );
+  const [historyKind, setHistoryKind] = useState<"weekly" | "monthly">("weekly");
   const [preparedFile, setPreparedFile] = useState<{
     type: "xlsx" | "pdf";
     url: string;
@@ -197,9 +185,7 @@ export function MoreReportsTab() {
     return () => window.clearInterval(id);
   }, [loadHistory]);
 
-  const showSaveResult = (
-    result: "shared" | "downloaded" | "opened" | "failed",
-  ) => {
+  const showSaveResult = (result: "shared" | "downloaded" | "opened" | "failed") => {
     if (result === "failed") {
       toast(
         locale === "ru"
@@ -260,10 +246,7 @@ export function MoreReportsTab() {
     }
   };
 
-  const downloadPreparedBlob = async (
-    filename: string,
-    blob: Blob,
-  ): Promise<boolean> => {
+  const downloadPreparedBlob = async (filename: string, blob: Blob): Promise<boolean> => {
     const tg = window.Telegram?.WebApp;
     if (!tg?.downloadFile) return false;
     const prepared = await prepareBlobFile(filename, blob);
@@ -282,11 +265,7 @@ export function MoreReportsTab() {
           accepted ? "success" : "default",
         );
         if (!accepted) {
-          setPreparedFile({
-            type: filename.endsWith(".pdf") ? "pdf" : "xlsx",
-            url,
-            fileName,
-          });
+          setPreparedFile({ type: filename.endsWith(".pdf") ? "pdf" : "xlsx", url, fileName });
           window.open(url, "_blank", "noopener,noreferrer");
         }
       });
@@ -385,11 +364,7 @@ export function MoreReportsTab() {
         /* fallback below */
       }
     }
-    const opened = window.open(
-      preparedFile.url,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const opened = window.open(preparedFile.url, "_blank", "noopener,noreferrer");
     if (!opened) window.location.href = preparedFile.url;
   };
 
@@ -419,9 +394,13 @@ export function MoreReportsTab() {
     );
     if (await downloadPreparedBlob(fileName, blob)) return;
 
-    const result = await saveBlobFile(fileName, blob, {
-      openBlobInWebView: false,
-    });
+    const result = await saveBlobFile(
+      fileName,
+      blob,
+      {
+        openBlobInWebView: false,
+      },
+    );
     if (result === "failed" && openServerExport("xlsx")) return;
     showSaveResult(result);
   };
@@ -449,11 +428,7 @@ export function MoreReportsTab() {
     const fileName = `prosto-budget-${period.from}_${period.to}.pdf`;
     const prepared = await prepareBlobFile(fileName, pdf);
     if (prepared) {
-      setPreparedFile({
-        type: "pdf",
-        url: prepared.url,
-        fileName: prepared.fileName,
-      });
+      setPreparedFile({ type: "pdf", url: prepared.url, fileName: prepared.fileName });
       toast(
         locale === "ru"
           ? "PDF готов. Если файл не открылся сам — нажмите кнопку ниже."
@@ -476,37 +451,26 @@ export function MoreReportsTab() {
     const result = await saveBlobFile(fileName, pdf, {
       openBlobInWebView: false,
     });
-    if (result === "failed" && (await downloadPreparedBlob(fileName, pdf)))
-      return;
+    if (result === "failed" && (await downloadPreparedBlob(fileName, pdf))) return;
     showSaveResult(result);
   };
 
   return (
     <div className="space-y-5 py-1">
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold">
-          {t(locale, "moreReportsExportSection")}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {t(locale, "moreReportsExportHint")}
-        </p>
+        <h3 className="text-sm font-semibold">{t(locale, "moreReportsExportSection")}</h3>
+        <p className="text-xs text-muted-foreground">{t(locale, "moreReportsExportHint")}</p>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] text-muted-foreground">
-              {t(locale, "moreReportsFrom")}
-            </label>
+            <label className="text-[10px] text-muted-foreground">{t(locale, "moreReportsFrom")}</label>
             <Input
               type="date"
               value={period.from}
-              onChange={(e) =>
-                setPeriod((p) => ({ ...p, from: e.target.value }))
-              }
+              onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground">
-              {t(locale, "moreReportsTo")}
-            </label>
+            <label className="text-[10px] text-muted-foreground">{t(locale, "moreReportsTo")}</label>
             <Input
               type="date"
               value={period.to}
@@ -580,24 +544,17 @@ export function MoreReportsTab() {
           {t(locale, "moreReportsAiSection")}
         </h3>
         {!token ? (
-          <p className="text-xs text-muted-foreground">
-            {t(locale, "moreReportsCloudRequired")}
-          </p>
+          <p className="text-xs text-muted-foreground">{t(locale, "moreReportsCloudRequired")}</p>
         ) : !tableReady ? (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
             {t(locale, "moreReportsDbMigrate")}
           </p>
         ) : null}
 
-        <Tabs
-          value={historyKind}
-          onValueChange={(v) => setHistoryKind(v as "weekly" | "monthly")}
-        >
+        <Tabs value={historyKind} onValueChange={(v) => setHistoryKind(v as "weekly" | "monthly")}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="weekly">{t(locale, "aiTabWeekly")}</TabsTrigger>
-            <TabsTrigger value="monthly">
-              {t(locale, "aiTabMonthly")}
-            </TabsTrigger>
+            <TabsTrigger value="monthly">{t(locale, "aiTabMonthly")}</TabsTrigger>
           </TabsList>
           <TabsContent value="weekly">
             <AiReportHistory
@@ -617,12 +574,7 @@ export function MoreReportsTab() {
           </TabsContent>
         </Tabs>
 
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => void loadHistory()}
-        >
+        <Button type="button" size="sm" variant="ghost" onClick={() => void loadHistory()}>
           {t(locale, "moreReportsRefreshHistory")}
         </Button>
       </section>
