@@ -30,7 +30,7 @@ function sanitizeValidationIssues(issues: z.ZodIssue[]) {
   }));
 }
 
-export function sanitizeAdvisorReply(reply: string): string {
+function sanitizeAdvisorReply(reply: string): string {
   return reply
     .replaceAll("*", "")
     .replaceAll("\u0060", "")
