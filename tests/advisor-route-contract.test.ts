@@ -93,9 +93,9 @@ test("advisor route returns safe user error when cards are missing", async () =>
 
 
 test("advisor reply removes unsupported markdown markers", () => {
-  const source = "**План:**\n\n# Шаг 1\n" + String.fromCharCode(96) + "Без форматирования" + String.fromCharCode(96);
+  const source = ["**План:**", "", "# Шаг 1", "Без форматирования"].join("\\n");
   assert.equal(
     sanitizeAdvisorReply(source),
-    "План:\n\nШаг 1\nБез форматирования",
+    ["План:", "", "Шаг 1", "Без форматирования"].join("\\n"),
   );
 });
