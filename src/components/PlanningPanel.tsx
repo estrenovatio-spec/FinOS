@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialChart } from "@/components/FinancialChart";
 import { AiAnalysisTab } from "@/components/AiAnalysisTab";
+import { useToast } from "@/components/ui/toast";
 import {
   getCategoriesByType,
   getCategoryLabel,
@@ -277,6 +278,7 @@ export function PlanningPanel({
   focusEntityId?: string | null;
 } = {}) {
   const locale = useStore((s) => s.locale);
+  const { toast } = useToast();
   const transactions = useTransactions();
   const categories = useCategories();
   const savingsGoals = useStore((s) => s.savingsGoals);
@@ -602,6 +604,12 @@ export function PlanningPanel({
       setRecEndMode("never");
       setRecEndDate("");
       setRecDurationMonths("12");
+      toast(
+        locale === "ru"
+          ? `Операция «${title}» на ${formatMoney(amount, locale)} создана.`
+          : `“${title}” for ${formatMoney(amount, locale)} was created.`,
+        "success",
+      );
       return;
     }
     const start = new Date(`${effectiveRecStartDate}T12:00:00`);
@@ -636,6 +644,12 @@ export function PlanningPanel({
     setRecEndMode("never");
     setRecEndDate("");
     setRecDurationMonths("12");
+    toast(
+      locale === "ru"
+        ? `Регулярный ${recType === "income" ? "доход" : "платёж"} «${title}» на ${formatMoney(amount, locale)} создан.`
+        : `Recurring ${recType === "income" ? "income" : "payment"} “${title}” for ${formatMoney(amount, locale)} was created.`,
+      "success",
+    );
   };
 
   const handleAddDebt = () => {
