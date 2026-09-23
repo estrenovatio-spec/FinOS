@@ -42,6 +42,7 @@ export function MonthlyAnalysisTab({ active }: MonthlyAnalysisTabProps) {
   const categories = useCategories();
   const savingsGoals = useStore((s) => s.savingsGoals);
   const categoryBudgets = useStore((s) => s.categoryBudgets);
+  const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
 
   const [report, setReport] = useState<string[]>([]);
   const [chat, setChat] = useState<MonthlyChatMessage[]>([]);
@@ -57,10 +58,13 @@ export function MonthlyAnalysisTab({ active }: MonthlyAnalysisTabProps) {
 
   const summary = useMemo(
     () =>
-      buildMonthlySummary(transactions, trackingStartedAt, (id) =>
-        getCategoryLabel(id, categories, locale),
+      buildMonthlySummary(
+        transactions,
+        trackingStartedAt,
+        (id) => getCategoryLabel(id, categories, locale),
+        budgetMonthStartDay,
       ),
-    [categories, locale, transactions, trackingStartedAt],
+    [budgetMonthStartDay, categories, locale, transactions, trackingStartedAt],
   );
 
   const gate = useMemo(
