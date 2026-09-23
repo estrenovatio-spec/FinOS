@@ -45,6 +45,9 @@ test("advisor prompt contains the fixed behavior rules and response format", () 
   assert.match(prompt, /причинно-следственную связь/i);
   assert.match(prompt, /Приоритет рекомендаций всегда идёт сверху вниз/);
   assert.match(prompt, /Ответ должен быть компактным для мобильного экрана/);
+  assert.match(prompt, /Готовый маршрут к цели/);
+  assert.match(prompt, /четырёх коротких блоках/);
+  assert.match(prompt, /Никогда не используй Markdown/);
 });
 
 test("advisor prompt avoids the banned technical English words in Russian copy", () => {
