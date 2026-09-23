@@ -7,12 +7,12 @@ export function OperationsTab() {
   const locale = useStore((s) => s.locale);
 
   return (
-    <div className="space-y-3 py-1">
+    <div className="space-y-5 py-3">
       <div>
-        <h2 className="text-lg font-bold">
+        <h2 className="finos-page-title">
           {locale === "ru" ? "Операции" : "Operations"}
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="finos-page-subtitle">
           {locale === "ru"
             ? "Полная история доходов и расходов."
             : "Full history of income and expenses."}

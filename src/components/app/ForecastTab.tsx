@@ -135,12 +135,12 @@ export function ForecastTab({
   }, [focus?.eventId, snapshot.forecast.events]);
 
   return (
-    <div className="space-y-3 py-1">
+    <div className="space-y-5 py-3">
       <div>
-        <h2 className="text-lg font-bold">
+        <h2 className="finos-page-title">
           {locale === "ru" ? "Прогноз" : "Forecast"}
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="finos-page-subtitle">
           {locale === "ru"
             ? `Горизонт: ${formatHorizonMonths(horizonMonths, locale)} · прогноз до ${snapshot.forecast.horizonEndDate}.`
             : `Horizon: ${formatHorizonMonths(horizonMonths, locale)} · forecast until ${snapshot.forecast.horizonEndDate}.`}

@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 import type { TodayHeroView } from "@/components/today/today-screen-presenter";
 
 const HERO_TONE_STYLES = {
-  calm: "border-emerald-500/12 bg-emerald-500/[0.03]",
-  risk: "border-amber-500/18 bg-amber-500/[0.045]",
-  action: "border-primary/12 bg-primary/[0.035]",
-  setup: "border-sky-500/12 bg-sky-500/[0.04]",
+  calm: "border-border/60 bg-card/95",
+  risk: "border-amber-500/12 bg-[#fbefdc]",
+  action: "border-border/60 bg-card/95",
+  setup: "border-border/60 bg-card/95",
 } as const;
 
 export function TodayHero({
@@ -37,23 +37,23 @@ export function TodayHero({
   return (
     <section
       className={cn(
-        "space-y-3 rounded-[24px] border px-4 py-4 shadow-none backdrop-blur-sm",
+        "space-y-4 rounded-[30px] border px-5 py-5 shadow-[var(--surface-shadow-soft)] backdrop-blur-sm",
         HERO_TONE_STYLES[hero.tone],
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-background/85 px-3 py-1 text-[10px] font-medium tracking-[0.14em] text-foreground/70">
+        <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/70">
           <StatusIcon className="h-3.5 w-3.5" />
           {hero.statusLabel}
         </span>
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           Ближайшее действие
         </p>
         <div className="space-y-1.5">
-          <p className="text-[1.2rem] font-semibold leading-tight tracking-tight text-foreground sm:text-[1.35rem]">
+          <p className="text-[1.38rem] font-semibold leading-tight tracking-tight text-foreground sm:text-[1.5rem]">
             {hero.title}
           </p>
           {hero.amount ? (

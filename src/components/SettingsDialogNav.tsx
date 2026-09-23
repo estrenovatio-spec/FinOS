@@ -247,7 +247,7 @@ export function SettingsDialogNav({
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-5 flex items-center gap-2 pt-3">
         {screen !== "menu" ? (
           <Button
             type="button"
@@ -260,7 +260,7 @@ export function SettingsDialogNav({
             <ChevronLeft className="h-4 w-4" />
           </Button>
         ) : null}
-        <h2 className="min-w-0 break-words text-lg font-semibold leading-tight">{dialogTitle}</h2>
+        <h2 className="finos-page-title min-w-0 break-words">{dialogTitle}</h2>
       </div>
 
       {screen === "menu" ? (

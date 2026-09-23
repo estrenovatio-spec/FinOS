@@ -601,16 +601,16 @@ function TodayPrimaryMoneyBlock({
   const Chevron = expanded ? ChevronUp : ChevronDown;
 
   return (
-    <section className="space-y-4 px-1 pt-1">
+    <section className="space-y-4 rounded-[30px] border border-border/60 bg-card px-5 py-5 shadow-[var(--surface-shadow-soft)]">
       <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
         <PiggyBank className="h-4 w-4 shrink-0" />
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em]">{item.label}</p>
+        <p className="text-sm font-medium">{item.label}</p>
       </div>
 
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
-            <p className="text-[3.4rem] font-semibold leading-[0.92] tracking-[-0.05em] text-foreground sm:text-[4.4rem]">
+            <p className="font-serif text-[3.2rem] font-normal leading-[0.92] tracking-[-0.05em] text-foreground sm:text-[4.1rem]">
               {item.value}
             </p>
             {item.valueNote ? (

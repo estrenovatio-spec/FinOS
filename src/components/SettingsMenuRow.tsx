@@ -24,10 +24,10 @@ export function SettingsMenuRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors",
+        "flex w-full items-center gap-3 rounded-[1.35rem] border px-5 py-4 text-left transition-colors",
         danger
           ? "border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
-          : "border-border/80 bg-card hover:bg-muted/40",
+          : "border-border/70 bg-card shadow-[var(--surface-shadow-soft)] hover:bg-muted/40",
       )}
     >
       <div className="min-w-0 flex-1">
