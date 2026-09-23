@@ -1,6 +1,7 @@
 "use client";
 
 import { PreviewAppShell } from "@/components/app/PreviewAppShell";
+import { AppSplashScreen } from "@/components/AppSplashScreen";
 import { useRecurringProcessor } from "@/hooks/useRecurringProcessor";
 import { HouseholdCloudBootstrap } from "@/components/HouseholdCloudBootstrap";
 import { FirstLaunchOnboardingDialog } from "@/components/FirstLaunchOnboardingDialog";
@@ -170,6 +171,7 @@ export default function HomePage() {
       ].join(" ")}
       lang={locale}
     >
+      <AppSplashScreen />
       <HouseholdCloudBootstrap />
       <FirstLaunchOnboardingDialog onNavigate={onAppViewChange} />
       <PaymentReturnRefresh />

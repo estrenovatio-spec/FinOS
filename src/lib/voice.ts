@@ -783,6 +783,30 @@ export async function parseVoiceTranscripts(
 
   const mergedCategories = sanitizeCategories(categories);
 
+  // A quick entry should appear immediately. The local parser covers ordinary
+  // phrases and avoids waiting for an LLM round trip before updating the UI.
+  const local = fallbackParseMany(text, parseLocale, mergedCategories);
+  if (local.length > 0) {
+    const ownerOpts = normalizeOwnerDetectOptions(
+      typeof ownerCtx === "string" ? { partnerName: ownerCtx, locale } : { ...ownerCtx, locale },
+      locale,
+    );
+    if (ownerOpts.hasPartner === undefined) {
+      ownerOpts.hasPartner = hasPartnerBudget(
+        ownerOpts.partnerName,
+        ownerOpts.partnerKeywords,
+      );
+    }
+    const clauses = splitTranscriptClauses(text);
+    const itemClauses = local.map(
+      (item, index) => clauses[index]?.trim() || item.note?.trim() || text,
+    );
+    return {
+      items: applyDetectedOwnersWithCarry(local, itemClauses, ownerOpts, "me"),
+      usedFallback: true,
+    };
+  }
+
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 10_000);
@@ -858,25 +882,6 @@ export async function parseVoiceTranscripts(
     /* локальный разбор ниже */
   }
 
-  const local = fallbackParseMany(text, parseLocale, mergedCategories);
-  if (local.length > 0) {
-    const ownerOpts = normalizeOwnerDetectOptions(
-      typeof ownerCtx === "string" ? { partnerName: ownerCtx, locale } : { ...ownerCtx, locale },
-      locale,
-    );
-    if (ownerOpts.hasPartner === undefined) {
-      ownerOpts.hasPartner = hasPartnerBudget(
-        ownerOpts.partnerName,
-        ownerOpts.partnerKeywords,
-      );
-    }
-    const clauses = splitTranscriptClauses(text);
-    const itemClauses = local.map(
-      (item, index) => clauses[index]?.trim() || item.note?.trim() || text,
-    );
-    const items = applyDetectedOwnersWithCarry(local, itemClauses, ownerOpts, "me");
-    return { items, usedFallback: true };
-  }
   return null;
 }
 
