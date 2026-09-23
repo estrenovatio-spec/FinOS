@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#053F35" />
+  <rect width="1024" height="1024" rx="224" fill="#F7F1EA" />
   <g transform="translate(128 128) scale(0.75)">
     <path
       d="M 779 702 A 300 300 0 1 1 779 322"
       fill="none"
-      stroke="#FFFFFF"
+      stroke="#24211E"
       stroke-width="58"
       stroke-linecap="square"
     />
     <path
       d="M 407 300 H 692 L 648 358 H 465 V 483 H 624 L 581 541 H 465 V 756 H 407 Z"
-      fill="#FFFFFF"
+      fill="#24211E"
     />
   </g>
 </svg>
