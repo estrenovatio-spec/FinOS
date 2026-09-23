@@ -13,10 +13,10 @@ export function PlanTab({
   onSectionChange: (section: PlanSection) => void;
 }) {
   return (
-    <div className="space-y-3 py-1">
+    <div className="space-y-5 py-3">
       <div>
-        <h2 className="text-lg font-bold">План</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <h2 className="finos-page-title">План</h2>
+        <p className="finos-page-subtitle">
           Доходы, платежи, цели и бюджеты на будущее.
         </p>
       </div>

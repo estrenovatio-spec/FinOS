@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Target,
-  ChartColumn,
-  House,
-  ReceiptText,
-  Settings,
+  CircleDollarSign,
+  Ellipsis,
+  Flag,
+  Layers3,
+  List,
   type LucideIcon,
 } from "lucide-react";
 import type { AppTabId } from "@/lib/app-bottom-nav";
@@ -22,11 +22,11 @@ export const APP_BOTTOM_NAV_TABS: {
     | "appTabBusiness"
     | "appTabMore";
 }[] = [
-  { id: "today", icon: House, labelKey: "appTabHome" },
-  { id: "operations", icon: ReceiptText, labelKey: "appTabSummary" },
-  { id: "forecast", icon: ChartColumn, labelKey: "appTabAdvisor" },
-  { id: "plan", icon: Target, labelKey: "appTabBusiness" },
-  { id: "settings", icon: Settings, labelKey: "appTabMore" },
+  { id: "today", icon: Layers3, labelKey: "appTabHome" },
+  { id: "operations", icon: List, labelKey: "appTabSummary" },
+  { id: "forecast", icon: Flag, labelKey: "appTabAdvisor" },
+  { id: "plan", icon: CircleDollarSign, labelKey: "appTabBusiness" },
+  { id: "settings", icon: Ellipsis, labelKey: "appTabMore" },
 ];
 
 export function AppBottomNav({
@@ -40,7 +40,7 @@ export function AppBottomNav({
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/92 backdrop-blur-xl supports-[backdrop-filter]:bg-background/84"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/95 shadow-[0_-8px_24px_rgba(70,53,37,0.025)] backdrop-blur-xl supports-[backdrop-filter]:bg-card/88"
       style={{
         minHeight: "calc(var(--app-bottom-nav-height) + max(env(safe-area-inset-bottom), 0px))",
         paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
@@ -58,7 +58,7 @@ export function AppBottomNav({
               className={[
                 "flex min-h-[var(--app-bottom-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium leading-tight transition-all duration-150 sm:px-1.5",
                 selected
-                  ? "bg-foreground/[0.04] text-foreground"
+                  ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",
               ].join(" ")}
               aria-current={selected ? "page" : undefined}

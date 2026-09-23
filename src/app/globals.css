@@ -4,32 +4,32 @@
 
 @layer base {
   :root {
-    --background: 48 22% 97%;
-    --foreground: 210 20% 14%;
-    --card: 0 0% 100%;
-    --card-foreground: 210 20% 14%;
-    --primary: 150 61% 34%;
+    --background: 34 32% 95%;
+    --foreground: 30 12% 13%;
+    --card: 40 43% 99%;
+    --card-foreground: 30 12% 13%;
+    --primary: 158 47% 28%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 48 18% 94%;
-    --secondary-foreground: 210 18% 18%;
-    --muted: 45 18% 94%;
-    --muted-foreground: 215 10% 45%;
-    --accent: 48 18% 93%;
-    --accent-foreground: 210 18% 18%;
+    --secondary: 38 24% 91%;
+    --secondary-foreground: 30 12% 13%;
+    --muted: 38 22% 92%;
+    --muted-foreground: 28 8% 46%;
+    --accent: 38 26% 90%;
+    --accent-foreground: 30 12% 13%;
     --destructive: 2 72% 55%;
     --destructive-foreground: 0 0% 98%;
-    --border: 210 16% 86%;
-    --input: 210 18% 84%;
-    --ring: 150 61% 34%;
-    --radius: 1.125rem;
-    --tg-bg: #f8f7f3;
-    --tg-text: #0a0a0a;
-    --tg-secondary: #f1efe9;
+    --border: 30 18% 86%;
+    --input: 30 16% 84%;
+    --ring: 158 47% 28%;
+    --radius: 1.45rem;
+    --tg-bg: #f7f1ea;
+    --tg-text: #24211e;
+    --tg-secondary: #efe8df;
     --tg-viewport-height: 100dvh;
     --app-viewport-height: var(--tg-viewport-height, 100dvh);
     --app-bottom-nav-height: 4.5rem;
-    --surface-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(15, 23, 42, 0.03);
-    --surface-shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.03);
+    --surface-shadow: 0 2px 4px rgba(70, 53, 37, 0.025), 0 16px 34px rgba(70, 53, 37, 0.045);
+    --surface-shadow-soft: 0 1px 2px rgba(70, 53, 37, 0.025), 0 8px 20px rgba(70, 53, 37, 0.025);
   }
 
   html,
@@ -63,11 +63,16 @@
     text-rendering: optimizeLegibility;
   }
 
-  h1,
-  h2,
-  h3,
-  h4 {
-    letter-spacing: -0.02em;
+    h1,
+    h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 400;
+      letter-spacing: -0.035em;
+    }
+
+    h3,
+    h4 {
+      letter-spacing: -0.02em;
   }
 
   input,
@@ -96,5 +101,22 @@
   input::placeholder,
   textarea::placeholder {
     color: hsl(var(--muted-foreground) / 0.85);
+  }
+}
+
+@layer components {
+  .finos-page-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2rem, 7vw, 2.55rem);
+    font-weight: 400;
+    line-height: 1.02;
+    letter-spacing: -0.045em;
+  }
+
+  .finos-page-subtitle {
+    margin-top: 0.45rem;
+    font-size: 0.98rem;
+    line-height: 1.4;
+    color: hsl(var(--muted-foreground));
   }
 }

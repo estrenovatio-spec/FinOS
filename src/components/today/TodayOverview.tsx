@@ -72,14 +72,14 @@ export function TodayOverview({
           return (
             <section
               key={item.id}
-              className={`space-y-4 rounded-[30px] border border-border/45 bg-card/90 px-5 py-5 shadow-none ${
+              className={`space-y-4 rounded-[30px] border border-border/60 bg-card px-5 py-5 shadow-[var(--surface-shadow-soft)] ${
                 item.layout === "wide" ? "w-full" : ""
               }`}
             >
               <div className="space-y-2">
                 <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
                   <Icon className="h-4 w-4 shrink-0" />
-                  <p className="text-[11px] font-medium uppercase tracking-[0.16em]">
+                  <p className="text-sm font-medium">
                     {item.label}
                   </p>
                 </div>
