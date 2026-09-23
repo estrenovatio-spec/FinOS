@@ -88,6 +88,13 @@ export const advisorFinancialContextSchema = z.object({
     recurring: z.array(advisorRecurringExpenseSchema).max(24),
     plannedBudgetsTotal: z.number(),
     budgets: z.array(advisorBudgetSchema).max(24),
+    spending: z.array(
+      z.object({
+        category: z.string().min(1).max(120),
+        amount: z.number(),
+        transactions: z.number().int().min(1),
+      }),
+    ).max(24).optional().default([]),
     debtPaymentsTotal: z.number(),
     otherMandatoryPaymentsTotal: z.number(),
   }),

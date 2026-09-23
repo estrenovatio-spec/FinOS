@@ -133,3 +133,76 @@ test("advisor context passes the financial picture instead of raw transactions",
   assert.match(prompt, /Регулярные доходы:/);
   assert.match(prompt, /Лимиты:/);
 });
+
+test("advisor context includes confirmed current-period spending by category", () => {
+  const state = makeState({
+    transactions: [
+      {
+        id: "entertainment-1",
+        type: "expense",
+        amount: 4200,
+        categoryId: "entertainment",
+        currency: "RUB",
+        note: "Кино и кафе",
+        date: "2026-07-05",
+        owner: "me",
+        confirmed: true,
+      },
+      {
+        id: "entertainment-2",
+        type: "expense",
+        amount: 1800,
+        categoryId: "entertainment",
+        currency: "RUB",
+        note: "Концерт",
+        date: "2026-07-10",
+        owner: "me",
+        confirmed: true,
+      },
+      {
+        id: "ignored-draft",
+        type: "expense",
+        amount: 9000,
+        categoryId: "entertainment",
+        currency: "RUB",
+        note: "Черновик",
+        date: "2026-07-12",
+        owner: "me",
+        confirmed: false,
+      },
+    ],
+  });
+  const snapshot = decisionCoreSnapshot(state);
+  const plannedFreeMoney = calculatePlannedFreeMoneyUntilPeriodEnd(state, snapshot);
+  const context = buildAdvisorContext({
+    locale: "ru",
+    today: state.today,
+    currentBalance: state.balances.me,
+    decision: snapshot,
+    recurringTransactions: state.recurringTransactions,
+    goals: [],
+    debts: [],
+    categoryBudgets: state.categoryBudgets,
+    plannedFreeMoney,
+    categories: state.categories,
+    budgetMonthStartDay: state.budgetMonthStartDay,
+    transactions: state.transactions,
+    expectedEventReminderStates: state.moneySetup.expectedEventReminderStates,
+  });
+  const entertainment = context.financialContext.expenses.spending?.find(
+    (item) => item.category === "Развлечения",
+  );
+  const prompt = getAdvisorSystemPrompt({
+    locale: "ru",
+    cards: context.cards,
+    financialContext: context.financialContext,
+  });
+
+  assert.deepEqual(entertainment, {
+    category: "Развлечения",
+    amount: 6000,
+    transactions: 2,
+  });
+  assert.match(prompt, /Фактические расходы текущего периода по категориям/);
+  assert.match(prompt, /Развлечения: 6000 RUB за текущий период \(2 операций\)/);
+});
