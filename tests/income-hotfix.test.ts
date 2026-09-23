@@ -7,7 +7,7 @@ import {
 } from "@/components/today/income-sources-helpers";
 import { decisionCoreSnapshot } from "@/lib/decision-core";
 import { getDefaultCategories } from "@/lib/categories";
-import { emptyMoneySetup } from "@/lib/money-setup";
+import { emptyMoneySetup, resolveMoneySetupIncomeSources } from "@/lib/money-setup";
 import type { DecisionCoreState } from "@/lib/decision-core/types";
 
 function buildState(overrides?: Partial<DecisionCoreState>): DecisionCoreState {
@@ -155,6 +155,38 @@ test("saving income sources preserves hidden recurrence fields for cloud persist
   assert.equal(payload.incomeSources[0]?.intervalMonths, 2);
   assert.equal(payload.incomeSources[0]?.dayOfMonth, 25);
   assert.equal(payload.incomeSources[0]?.endDate, "2026-11-25");
+});
+
+test("editing a monthly income date also changes every future forecast occurrence", () => {
+  const payload = buildIncomeSetupSavePayload({
+    showIncomeSources: true,
+    nextIncomeDate: "2026-09-04",
+    expectedIncomeAmount: "26000",
+    incomeSources: [
+      {
+        id: "studio-left",
+        label: "Левая студия",
+        expectedDate: "2026-09-04",
+        expectedAmount: "26000",
+        kind: "rent",
+        recurrence: "monthly",
+        intervalMonths: 1,
+        // A stale hidden value used to keep the old 20th-day schedule.
+        dayOfMonth: 20,
+        endDate: "",
+        isPrimary: true,
+      },
+    ],
+  });
+
+  assert.equal(payload.incomeSources[0]?.dayOfMonth, 4);
+  const sources = resolveMoneySetupIncomeSources({
+    moneySetup: { ...emptyMoneySetup(), ...payload },
+    confirmedTransactions: [],
+    today: "2026-11-01",
+  });
+  assert(sources.some((source) => source.occurrenceDate === "2026-11-04"));
+  assert(!sources.some((source) => source.occurrenceDate === "2026-11-20"));
 });
 
 test("switching an income source to one-time clears monthly-only schedule fields", () => {

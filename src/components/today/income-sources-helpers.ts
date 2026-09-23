@@ -156,10 +156,9 @@ export function buildIncomeSetupSavePayload(args: {
           : null,
       dayOfMonth:
         item.recurrence === "monthly"
-          ? item.dayOfMonth ??
-            (item.expectedDate
+          ? (item.expectedDate
               ? Number.parseInt(item.expectedDate.slice(8, 10), 10) || null
-              : null)
+              : item.dayOfMonth)
           : null,
       endDate:
         item.recurrence === "monthly"
