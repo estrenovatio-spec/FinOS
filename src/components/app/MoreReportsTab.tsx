@@ -4,7 +4,6 @@ import { ChevronDown, FileSpreadsheet, FileText, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiListAiReports, type AiReportRecord } from "@/lib/cloud/client";
 import {
   buildBudgetExcelWorkbook,
@@ -13,19 +12,19 @@ import {
   saveBlobFile,
 } from "@/lib/export/transactions-export";
 import { formatIsoPeriod } from "@/lib/format-date";
+import { getCurrentBudgetPeriod } from "@/lib/budget-period";
 import { t } from "@/lib/i18n";
 import { useCloudStore } from "@/store/useCloudStore";
 import { useCategories, useStore, useTransactions } from "@/store/useStore";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-function defaultPeriod(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 30);
+function defaultPeriod(monthStartDay: number): { from: string; to: string } {
+  const today = new Date();
+  const period = getCurrentBudgetPeriod(monthStartDay, today);
   return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
+    from: period.from,
+    to: today.toISOString().slice(0, 10),
   };
 }
 
@@ -36,7 +35,7 @@ function AiReportHistory({
   loading,
 }: {
   locale: "ru" | "en";
-  kind: "weekly" | "monthly";
+  kind: "monthly";
   reports: AiReportRecord[];
   loading: boolean;
 }) {
@@ -140,18 +139,22 @@ export function MoreReportsTab() {
   const locale = useStore((s) => s.locale);
   const transactions = useTransactions();
   const categories = useCategories();
+  const budgetMonthStartDay = useStore((s) => s.budgetMonthStartDay);
   const token = useCloudStore((s) => s.token);
-  const [period, setPeriod] = useState(defaultPeriod);
+  const [period, setPeriod] = useState(() => defaultPeriod(budgetMonthStartDay));
   const [reports, setReports] = useState<AiReportRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [tableReady, setTableReady] = useState(true);
-  const [historyKind, setHistoryKind] = useState<"weekly" | "monthly">("weekly");
   const [preparedFile, setPreparedFile] = useState<{
     type: "xlsx" | "pdf";
     url: string;
     fileName: string;
   } | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setPeriod(defaultPeriod(budgetMonthStartDay));
+  }, [budgetMonthStartDay]);
 
   const periodTxs = useMemo(
     () => filterTransactionsByPeriod(transactions, period.from, period.to),
@@ -551,28 +554,12 @@ export function MoreReportsTab() {
           </p>
         ) : null}
 
-        <Tabs value={historyKind} onValueChange={(v) => setHistoryKind(v as "weekly" | "monthly")}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="weekly">{t(locale, "aiTabWeekly")}</TabsTrigger>
-            <TabsTrigger value="monthly">{t(locale, "aiTabMonthly")}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="weekly">
-            <AiReportHistory
-              locale={locale}
-              kind="weekly"
-              reports={reports}
-              loading={historyLoading}
-            />
-          </TabsContent>
-          <TabsContent value="monthly">
-            <AiReportHistory
-              locale={locale}
-              kind="monthly"
-              reports={reports}
-              loading={historyLoading}
-            />
-          </TabsContent>
-        </Tabs>
+        <AiReportHistory
+          locale={locale}
+          kind="monthly"
+          reports={reports}
+          loading={historyLoading}
+        />
 
         <Button type="button" size="sm" variant="ghost" onClick={() => void loadHistory()}>
           {t(locale, "moreReportsRefreshHistory")}
