@@ -34,8 +34,8 @@ export function sanitizeAdvisorReply(reply: string): string {
   return reply
     .replaceAll("*", "")
     .replaceAll("\u0060", "")
-    .replace(/^\\s*#{1,6}\\s*/gm, "")
-    .replace(/\\n{3,}/g, "\\n\\n")
+    .replace(/^\s*#{1,6}\s*/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
