@@ -7,7 +7,6 @@ import { CategoryManager } from "@/components/CategoryManager";
 import { HouseholdCloudPanel } from "@/components/HouseholdCloudPanel";
 import { SettingsMenuRow } from "@/components/SettingsMenuRow";
 import { SettingsSection } from "@/components/SettingsSection";
-import { UpdateAppButton } from "@/components/UpdateAppButton";
 import { MoreReportsTab } from "@/components/app/MoreReportsTab";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -89,8 +88,8 @@ export function SettingsDialogNav({
       title: locale === "ru" ? "О приложении" : "About the app",
       description:
         locale === "ru"
-          ? "Что умеет FIN OS и как обновить приложение."
-          : "What FIN OS does and how to update it.",
+          ? "Что умеет FIN OS."
+          : "What FIN OS does.",
     },
   ];
 
@@ -223,7 +222,6 @@ export function SettingsDialogNav({
             {confirmClear ? t(locale, "clearDataConfirmAgain") : t(locale, "clearData")}
           </Button>
         </div>
-        <UpdateAppButton />
       </div>
     ),
     export: <MoreReportsTab />,
@@ -240,7 +238,6 @@ export function SettingsDialogNav({
               : "FIN OS helps you track current money, see upcoming payments, and understand what you can afford under your plan."}
           </p>
         </div>
-        <UpdateAppButton />
       </div>
     ),
   };
@@ -276,14 +273,7 @@ export function SettingsDialogNav({
             <HouseholdCloudPanel embedded />
           </SettingsSection>
 
-          <SettingsSection
-            title={locale === "ru" ? "Приложение" : "App"}
-            description={
-              locale === "ru"
-                ? "Язык, финансовый период и горизонт прогноза."
-                : "Language, financial period, and forecast horizon."
-            }
-          >
+          <SettingsSection>
             <div className="space-y-3">
               <div className="space-y-2">
                 <p className="text-sm font-semibold">
