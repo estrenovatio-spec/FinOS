@@ -80,6 +80,11 @@ export type AdvisorFinancialContext = {
       spent: number;
       remaining: number;
     }>;
+    spending: Array<{
+      category: string;
+      amount: number;
+      transactions: number;
+    }>;
     debtPaymentsTotal: number;
     otherMandatoryPaymentsTotal: number;
   };
@@ -266,6 +271,38 @@ function collectBudgetBreakdown(args: {
     .sort((left, right) => right.limit - left.limit);
 }
 
+function collectActualSpending(args: {
+  transactions?: Transaction[];
+  categories?: CategoryDefinition[];
+  periodStartDate: string;
+  today: string;
+}) {
+  const totals = new Map<string, { amount: number; transactions: number }>();
+  for (const transaction of args.transactions ?? []) {
+    if (
+      transaction.type !== "expense" ||
+      transaction.confirmed === false ||
+      transaction.date < args.periodStartDate ||
+      transaction.date > args.today
+    ) {
+      continue;
+    }
+    const category = getCategoryLabel(transaction.categoryId, args.categories);
+    const current = totals.get(category) ?? { amount: 0, transactions: 0 };
+    totals.set(category, {
+      amount: current.amount + Math.max(0, transaction.amount),
+      transactions: current.transactions + 1,
+    });
+  }
+  return Array.from(totals, ([category, summary]) => ({
+    category,
+    amount: roundAmount(summary.amount),
+    transactions: summary.transactions,
+  }))
+    .sort((left, right) => right.amount - left.amount)
+    .slice(0, 5);
+}
+
 function calculateForecastMinimumBalance(snapshot: DecisionCoreSnapshot): number {
   if (!snapshot.forecast.days || snapshot.forecast.days.length === 0) return 0;
   return Math.round(
@@ -335,6 +372,16 @@ export function buildAdvisorContext(args: {
     transactions: args.transactions,
   });
   const forecastMinimumBalance = calculateForecastMinimumBalance(args.decision);
+  const currentBudgetPeriod = getCurrentBudgetPeriod(
+    args.budgetMonthStartDay ?? 1,
+    new Date(`${today}T12:00:00`),
+  );
+  const actualSpending = collectActualSpending({
+    transactions: args.transactions,
+    categories: args.categories,
+    periodStartDate: currentBudgetPeriod.from,
+    today,
+  });
 
   const financialContext: AdvisorFinancialContext = {
     asOfDate: today,
@@ -420,6 +467,7 @@ export function buildAdvisorContext(args: {
       recurring: recurringExpenseItems,
       plannedBudgetsTotal: roundAmount(plannedBreakdown?.essentialPlannedSpending),
       budgets: budgetBreakdown,
+      spending: actualSpending,
       debtPaymentsTotal: roundAmount(
         args.debts.reduce((sum, debt) => sum + Math.max(debt.minPayment, 0), 0),
       ),
