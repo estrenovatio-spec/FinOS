@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Loader2, Send } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getAdvisorConfig } from "@/lib/advisor-config";
 import { formatIsoDate } from "@/lib/format-date";
@@ -53,8 +53,6 @@ export function MonthlyAnalysisTab({ active }: MonthlyAnalysisTabProps) {
   const [usedFallback, setUsedFallback] = useState(false);
   const [isFullReport, setIsFullReport] = useState(false);
   const [chatLimitHit, setChatLimitHit] = useState(false);
-
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const summary = useMemo(
     () =>
@@ -207,12 +205,6 @@ export function MonthlyAnalysisTab({ active }: MonthlyAnalysisTabProps) {
     if (!active) return;
     void loadReport(false);
   }, [active, loadReport]);
-
-  useEffect(() => {
-    if (active) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [active, chat, loadingChat]);
 
   const sendQuestion = useCallback(async () => {
     const q = question.trim();
@@ -376,7 +368,6 @@ export function MonthlyAnalysisTab({ active }: MonthlyAnalysisTabProps) {
                 {t(locale, "monthlyChatThinking")}
               </p>
             )}
-            <div ref={chatEndRef} />
           </div>
           {(chatLimitHit || userMessageCount >= MONTHLY_CHAT_MAX_USER_MESSAGES) && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
