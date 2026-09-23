@@ -199,12 +199,12 @@ export const financialAdviserBriefSchema = z.object({
     savedAmount: z.number(),
     remainingAmount: z.number(),
     monthlyContribution: z.number(),
-    monthsAtCurrentContribution: z.number().int().positive().nullable(),
+    monthsAtCurrentContribution: z.number().int().nonnegative().nullable(),
     scenarios: z.array(
       z.object({
         label: z.string().min(1).max(80),
         monthlyContribution: z.number(),
-        months: z.number().int().positive(),
+        months: z.number().int().nonnegative(),
       }),
     ).max(3),
   }).nullable().optional(),
