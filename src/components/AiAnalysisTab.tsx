@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageCircleQuestion, Sparkles, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageCircleQuestion, Sparkles, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AiWeeklyMissionTab } from "@/components/AiWeeklyMissionTab";
 import { MonthlyAnalysisTab } from "@/components/MonthlyAnalysisTab";
@@ -39,6 +39,7 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
   const balances = useHouseholdBalances();
   const transactions = useViewerMappedTransactions(false);
   const [subTab, setSubTab] = useState<AiSubTab>(reportsOnly ? "monthly" : "questions");
+  const [suggestedQuestionsOpen, setSuggestedQuestionsOpen] = useState(false);
   const [draftQuestion, setDraftQuestion] = useState("");
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const [sendingQuestion, setSendingQuestion] = useState(false);
@@ -298,32 +299,54 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-            <div className="flex items-start gap-2">
-              <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
-              <div>
-                <p className="text-sm font-medium text-foreground">
+          <div className="rounded-2xl border border-border/70 bg-muted/20 p-3">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+              onClick={() => setSuggestedQuestionsOpen((open) => !open)}
+              aria-expanded={suggestedQuestionsOpen}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                <span className="text-sm font-medium text-foreground">
                   {locale === "ru" ? "О чём можно спросить" : "What you can ask"}
-                </p>
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
+                {locale === "ru"
+                  ? suggestedQuestionsOpen ? "Свернуть" : "Развернуть"
+                  : suggestedQuestionsOpen ? "Collapse" : "Expand"}
+                {suggestedQuestionsOpen ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </span>
+            </button>
+            {suggestedQuestionsOpen ? (
+              <>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {locale === "ru"
                     ? "Эти вопросы уже опираются на текущие деньги, сумму на траты, цели, лимиты и регулярные платежи."
                     : "These starter questions already rely on your balance, forecast, goals, limits, and recurring payments."}
                 </p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {advisorContext.suggestedQuestions.map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  onClick={() => setDraftQuestion(question)}
-                  className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {advisorContext.suggestedQuestions.map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      onClick={() => {
+                        setDraftQuestion(question);
+                        setSuggestedQuestionsOpen(false);
+                      }}
+                      className="rounded-full border border-border/70 bg-background px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border border-border/70 bg-background p-4">
