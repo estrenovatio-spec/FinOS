@@ -194,6 +194,20 @@ export const financialAdviserBriefSchema = z.object({
     requiredAmount: z.number(),
     timeline: z.array(z.string()).max(12),
   }),
+  goalPlan: z.object({
+    targetAmount: z.number(),
+    savedAmount: z.number(),
+    remainingAmount: z.number(),
+    monthlyContribution: z.number(),
+    monthsAtCurrentContribution: z.number().int().positive().nullable(),
+    scenarios: z.array(
+      z.object({
+        label: z.string().min(1).max(80),
+        monthlyContribution: z.number(),
+        months: z.number().int().positive(),
+      }),
+    ).max(3),
+  }).nullable().optional(),
   purchaseAnalysis: z.object({
     targetAmount: z.number(),
     safeNowAmount: z.number(),
