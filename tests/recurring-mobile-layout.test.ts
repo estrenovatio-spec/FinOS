@@ -15,14 +15,14 @@ test("recurring form keeps one outer card while stacking select rows on mobile",
   );
   assert.match(
     planningPanelSource,
-    /rounded-\[28px\] border border-border\/70 bg-background\/95 p-5 pb-\[calc\(10rem\+env\(safe-area-inset-bottom\)\)\]/,
+    /rounded-\[24px\] border border-border\/70 bg-background\/95 p-4 pb-\[calc\(8rem\+env\(safe-area-inset-bottom\)\)\]/,
   );
 });
 
 test("select-like fields reserve room for icon, label, and chevron", () => {
   assert.match(
     planningPanelSource,
-    /grid h-12 w-full min-w-0 grid-cols-\[auto_minmax\(0,1fr\)_auto\] items-center gap-3 rounded-\[20px\]/,
+    /grid h-12 w-full min-w-0 grid-cols-\[auto_minmax\(0,1fr\)_auto\] items-center gap-2 rounded-\[16px\]/,
   );
   assert.match(planningPanelSource, /<ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" \/>/);
   assert.match(planningPanelSource, /className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"/);
@@ -36,6 +36,7 @@ test("recurring labels use compact mobile-friendly wording", () => {
 
 test("duration cards stay compact in one row on mobile", () => {
   assert.match(planningPanelSource, /mt-2 grid grid-cols-3 gap-2/);
+  assert.match(planningPanelSource, /min-h-\[92px\] flex-col items-start rounded-\[16px\]/);
   assert.match(
     planningPanelSource,
     /rounded-\[22px\] border border-border\/50 bg-background\/96 p-1 shadow-sm shadow-black\/5/,
