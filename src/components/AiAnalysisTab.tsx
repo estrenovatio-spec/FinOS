@@ -302,18 +302,6 @@ export function AiAnalysisTab({ active, reportsOnly = false }: AiAnalysisTabProp
             </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            {advisorContext.cards.map((card) => (
-              <div key={card.id} className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  {card.label}
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{card.value}</p>
-                <p className="mt-1 text-xs leading-snug text-muted-foreground">{card.note}</p>
-              </div>
-            ))}
-          </div>
-
           <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
             <div className="flex items-start gap-2">
               <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
