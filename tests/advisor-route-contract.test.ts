@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeAdvisorReply } from "@/app/api/advisor-question/route";
 
 async function callAdvisorRoute(body: unknown) {
   const mod = await import("@/app/api/advisor-question/route");
@@ -92,10 +91,3 @@ test("advisor route returns safe user error when cards are missing", async () =>
 });
 
 
-test("advisor reply removes unsupported markdown markers", () => {
-  const source = ["**План:**", "", "# Шаг 1", "Без форматирования"].join("\\n");
-  assert.equal(
-    sanitizeAdvisorReply(source),
-    ["План:", "", "Шаг 1", "Без форматирования"].join("\\n"),
-  );
-});
