@@ -41,5 +41,13 @@ test("duration cards stay compact in one row on mobile", () => {
     planningPanelSource,
     /rounded-\[22px\] border border-border\/50 bg-background\/96 p-1 shadow-sm shadow-black\/5/,
   );
-  assert.match(planningPanelSource, /className="h-\[52px\] w-full rounded-\[18px\] px-4 text-base font-semibold/);
+  assert.match(planningPanelSource, /className="h-\[52px\] w-full rounded-\[18px\] px-4 text-sm font-semibold/);
+});
+
+test("recurring form avoids extra helper headings above compact fields", () => {
+  assert.doesNotMatch(planningPanelSource, /Что создаём\?/);
+  assert.doesNotMatch(planningPanelSource, /Название операции/);
+  assert.doesNotMatch(planningPanelSource, /Детали операции/);
+  assert.doesNotMatch(planningPanelSource, /Например: Аренда/);
+  assert.match(planningPanelSource, /"Аренда, интернет, зарплата"/);
 });

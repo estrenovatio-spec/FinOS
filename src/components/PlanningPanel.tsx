@@ -2228,14 +2228,8 @@ export function PlanningPanel({
 
                 <div className="rounded-[24px] border border-border/70 bg-background/95 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] shadow-sm shadow-black/5">
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {locale === "ru" ? "Что создаём?" : "What are we creating?"}
-                    </p>
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                      <div className="min-w-0 space-y-2">
-                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          {locale === "ru" ? "Тип операции" : "Operation type"}
-                        </span>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="min-w-0">
                         <div className="relative min-w-0">
                           <div className="grid h-12 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-[16px] border border-input bg-background px-2.5 pr-3">
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
@@ -2268,10 +2262,7 @@ export function PlanningPanel({
                         </div>
                       </div>
 
-                      <div className="min-w-0 space-y-2">
-                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          {t(locale, "planningRecurringAmount")}
-                        </span>
+                      <div className="min-w-0">
                         <div className="relative">
                           <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
                             <BadgeDollarSign className="h-5 w-5 shrink-0" />
@@ -2293,18 +2284,15 @@ export function PlanningPanel({
                   </div>
 
                   <div className="mt-3 border-t border-border/60 pt-3">
-                    <p className="text-sm font-medium text-foreground">
-                      {locale === "ru" ? "Название операции" : "Operation name"}
-                    </p>
-                    <div className="mt-2 relative">
+                    <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
                         <Tag className="h-5 w-5 shrink-0" />
                       </span>
                       <Input
                         placeholder={
                           locale === "ru"
-                            ? "Например: Аренда квартиры, Интернет, Зарплата, ОСАГО"
-                            : "For example: Rent, Internet, Salary, Insurance"
+                            ? "Аренда, интернет, зарплата"
+                            : "Rent, internet, salary"
                         }
                         className="h-12 rounded-[16px] border-input pl-14 text-sm"
                         value={recNote}
@@ -2314,14 +2302,8 @@ export function PlanningPanel({
                   </div>
 
                   <div className="mt-3 border-t border-border/60 pt-3">
-                    <p className="text-sm font-medium text-foreground">
-                      {locale === "ru" ? "Детали операции" : "Operation details"}
-                    </p>
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                      <div className="min-w-0 space-y-2">
-                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          {locale === "ru" ? "Категория" : "Category"}
-                        </span>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="min-w-0">
                         <div className="relative min-w-0">
                           <div className="grid h-12 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-[16px] border border-input bg-background px-2.5 pr-3">
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
@@ -2347,10 +2329,7 @@ export function PlanningPanel({
                         </div>
                       </div>
 
-                      <div className="min-w-0 space-y-2">
-                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          {locale === "ru" ? "Повторение" : "Repeat"}
-                        </span>
+                      <div className="min-w-0">
                         <div className="relative min-w-0">
                           <div className="grid h-12 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-[16px] border border-input bg-background px-2.5 pr-3">
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800 shadow-sm shadow-emerald-900/5">
