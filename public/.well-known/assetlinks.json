@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.finos.mobile",
+      "sha256_cert_fingerprints": [
+        "18:89:67:EC:CE:19:C8:DD:6C:41:58:C0:20:E2:BA:30:79:E4:EC:3D:D7:77:E7:0B:A0:5D:D4:97:EE:10:13:6C"
+      ]
+    }
+  }
+]
