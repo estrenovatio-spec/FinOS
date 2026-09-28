@@ -17,6 +17,9 @@
 # misc
 .DS_Store
 *.pem
+*.jks
+*.keystore
+keystore.properties
 .node/
 
 # playwright (локальные тесты)
@@ -45,3 +48,11 @@ yarn-error.log*
 next-env.d.ts
 .vercel
 .aider*
+
+# Android / Bubblewrap
+/android/**/.gradle/
+/android/**/build/
+/android/**/app-release-signed.apk
+/android/**/app-release-bundle.aab
+/android/**/app-release-unsigned-aligned.apk
+/.secrets/

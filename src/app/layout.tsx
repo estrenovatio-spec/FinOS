@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DeployResilience } from "@/components/DeployResilience";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { TelegramInit } from "@/components/TelegramInit";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
@@ -52,6 +53,7 @@ export default function RootLayout({
         <ToastProvider>
           <ErrorBoundary>
             <DeployResilience />
+            <ServiceWorkerRegistration />
             <TelegramInit />
             {children}
           </ErrorBoundary>
